@@ -29,6 +29,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".slnItems", ".slnItems", "{
 		Directory.Packages.props = Directory.Packages.props
 		global.json = global.json
 		Directory.Version.props = Directory.Version.props
+		..\README.md = ..\README.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer.Benchmarks", "Extensions.System.Text.Json.Observer.Benchmarks\Extensions.System.Text.Json.Observer.Benchmarks.csproj", "{DBB134BA-636C-4F6F-8644-3A548728F627}"

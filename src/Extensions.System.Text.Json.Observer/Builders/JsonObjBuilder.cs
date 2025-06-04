@@ -11,7 +11,7 @@ namespace Extensions.System.Text.Json.Observer.Builders;
 /// </remarks>
 public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TContext>? builderDefaultValuePolicy)
 {
-    private readonly List<JsonObserveringItem<TContext>> _policies = [];
+    private readonly List<JsonObserverItem<TContext>> _policies = [];
 
     /// <summary>
     /// Matches property names by specific condition.
@@ -28,7 +28,7 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         new(this, new PropertyPathMatch(match), builderDefaultValuePolicy);
 
     internal static JsonObserverDelegate<TContext> Build(JsonObjBuilder<TContext> builder) => builder.Build();
-    private JsonObserverDelegate<TContext> Build() => JsonObserveringItem<TContext>.ApplyObjPolicy([.. _policies], builderDefaultValuePolicy);
+    private JsonObserverDelegate<TContext> Build() => JsonObserverItem<TContext>.ApplyObjPolicy([.. _policies], builderDefaultValuePolicy);
 
     private JsonObjBuilder<TContext> AddValue(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy) =>
         Add((int depth, ref PropertyPath path, JsonTokenType type) =>
@@ -45,7 +45,7 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
 
     private JsonObjBuilder<TContext> Add(JsonPropertyMatchDelegate propMatch, JsonObserverDelegate<TContext> policy)
     {
-        var item = new JsonObserveringItem<TContext>(propMatch, policy);
+        var item = new JsonObserverItem<TContext>(propMatch, policy);
         _policies.Add(item);
         return this;
     }
@@ -73,14 +73,14 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> MaskStr(StringMaskingStrategy<TContext> strategy) =>
-            MaskValue(JsonObserveringItem<TContext>.ApplyValueStringPolicy(strategy, builderDefaultValuePolicy));
+            MaskValue(JsonObserverItem<TContext>.ApplyValueStringPolicy(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Reads value <see cref="JsonTokenType.String"/>
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> ReadStr(Action<string?, TContext> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueStringPolicy((v, c) =>
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueStringPolicy((v, c) =>
             {
                 strategy(v, c);
                 return v;
@@ -91,14 +91,14 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> MaskInt(Func<int?, TContext, string?> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueIntPolicy(strategy, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueIntPolicy(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Reads value <see cref="JsonTokenType.Number"/>
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> ReadInt(Action<int?, TContext> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueIntPolicy((v, c) =>
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueIntPolicy((v, c) =>
             {
                 strategy(v, c);
                 return v?.ToString();
@@ -109,14 +109,14 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> MaskLong(Func<long?, TContext, string?> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueLongPolicy(strategy, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueLongPolicy(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Reads for value <see cref="JsonTokenType.Number"/>
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> ReadLong(Action<long?, TContext> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueLongPolicy((v, c) =>
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueLongPolicy((v, c) =>
             {
                 strategy(v, c);
                 return v?.ToString();
@@ -127,14 +127,14 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> MaskDecimal(Func<decimal?, TContext, string?> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueDecimalPolicy(strategy, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueDecimalPolicy(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Reads value <see cref="JsonTokenType.Number"/>
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> ReadDecimal(Action<decimal?, TContext> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueDecimalPolicy((v, c) =>
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueDecimalPolicy((v, c) =>
             {
                 strategy(v, c);
                 return v?.ToString();
@@ -145,14 +145,14 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> MaskBool(Func<bool?, TContext, string?> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueBoolPolicy(strategy, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueBoolPolicy(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Reads value <see cref="JsonTokenType.True"/> or <see cref="JsonTokenType.False"/>.
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> ReadBool(Action<bool?, TContext> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueBoolPolicy((v, c) =>
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueBoolPolicy((v, c) =>
             {
                 strategy(v, c);
                 return v?.ToString();
@@ -163,14 +163,14 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> MaskRawValue(Func<string?, TContext, string?> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueRawPolicy(strategy, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueRawPolicy(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Reads any value as string.
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonObjBuilder<TContext> ReadRaw(Action<string?, TContext> strategy)
-            => MaskValue(JsonObserveringItem<TContext>.ApplyValueRawPolicy((v, c) =>
+            => MaskValue(JsonObserverItem<TContext>.ApplyValueRawPolicy((v, c) =>
             {
                 strategy(v, c);
                 return v?.ToString();
@@ -209,7 +209,7 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         public JsonObjBuilder<TContext> Obj(
             Action<JsonObjBuilder<TContext>> init,
             JsonObserverValueDelegate<TContext>? defaultValuePolicy = null) =>
-            Obj(JsonObserveringItem<TContext>.Obj(init, defaultValuePolicy ?? builderDefaultValuePolicy));
+            Obj(JsonObserverItem<TContext>.Obj(init, defaultValuePolicy ?? builderDefaultValuePolicy));
 
         /// <summary>
         /// Masking rule for JSON object property.
@@ -238,7 +238,7 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         public JsonObjBuilder<TContext> Array(
             Action<JsonArrayBuilder<TContext>> init,
             JsonObserverValueDelegate<TContext>? defaultValuePolicy = null) =>
-            Array(JsonObserveringItem<TContext>.Array(init, defaultValuePolicy ?? builderDefaultValuePolicy));
+            Array(JsonObserverItem<TContext>.Array(init, defaultValuePolicy ?? builderDefaultValuePolicy));
 
         /// <summary>
         /// Masking rule for JSON object property.

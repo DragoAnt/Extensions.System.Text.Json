@@ -26,7 +26,7 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
         public string? User { get; set; }
     }
 
-    private static readonly JsonObservering<ReadContext> MaskDeclaration = JsonObservering.Obj(
+    private static readonly JsonObserver<ReadContext> MaskDeclaration = JsonObserver.Obj(
         //Direct paths
         builder => builder
             .Match("routing").Obj(routingBuilder => routingBuilder
@@ -34,10 +34,9 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
                 .Match("contractId2").ReadRaw((v, c) => c.ContractId2 = v)
                 .Match("method").ReadStr((v, c) => c.Method = v))
             .Match("session", "user", "entered").ReadStr((v, c) => c.User = v),
-        JsonObserverValuePolicies<ReadContext>.CustomPropertyPolicy(
-            builder => builder
-                .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)
-                .Match(PropMatches.Contains("ipAddress")).ReadStr((v, c) => c.Ip = v)));
+        JsonObserverValuePolicies<ReadContext>.RelativePolicy(builder => builder
+            .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)
+            .Match(PropMatches.Contains("ipAddress")).ReadStr((v, c) => c.Ip = v)));
 
     private static readonly Dictionary<string, string> SensitiveValues = new()
     {
@@ -59,24 +58,23 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
         { "address", F.Person.Address.City },
     };
 
+    //language=json
     private static readonly string TestJson =
-        //language=json
         $$"""
           {
             "routing": {
-              "contractId": 285,
-              "contractId2": 285,
-              "method": "interac"
+              "contractId": 2,
+              "contractId2": 2,
+              "method": "test"
             },
             "session": {
-              "id": "61c7b91d-6cfe-41c1-9370-76194ee5e297",
-              "returnUrl": "https://localhost:7086/facade-api/61c7b91d-6cfe-41c1-9370-76194ee5e297/apm/payment/confirm",
-              "method": "interac",
+              "id": "1",
+              "method": "test",
               "accountNumber": "{{SensitiveValues["accountNumber"]}}",
               "merchant": {
-                "id": "213",
+                "id": "4",
                 "terminal": {
-                  "contractId": 285,
+                  "contractId": 2,
                   "businessActivityType": null
                 }
               },
@@ -109,8 +107,8 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
                 "birthDate": "{{SensitiveValues["customerBirth"]}}"
               },
               "order": {
-                "id": "899361d0-b5ea-430b-97d1-78b6597f3223",
-                "currency": "CAD",
+                "id": "222",
+                "currency": "RSD",
                 "amount": 10000,
                 "description": "{{SensitiveValues["orderDescription"]}}"
               }
@@ -120,12 +118,13 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
 
     private static readonly byte[] TestJsonUtf8Bytes = Encoding.UTF8.GetBytes(TestJson);
 
-    private ReadContext Read(string testValue, JsonObservering<ReadContext> mask)
+    private ReadContext Read(string testValue, JsonObserver<ReadContext> mask)
     {
         outputHelper.WriteLine($"Before: {Environment.NewLine}{testValue}{Environment.NewLine}");
         var context = new ReadContext();
         mask.Read(testValue, context);
-        outputHelper.WriteLine($"Read context: {Environment.NewLine}{JsonSerializer.Serialize(context, new JsonSerializerOptions { WriteIndented = true })}");
+        outputHelper.WriteLine(
+            $"Read context: {Environment.NewLine}{JsonSerializer.Serialize(context, new JsonSerializerOptions { WriteIndented = true })}");
         return context;
     }
 
@@ -137,8 +136,8 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
 
         // Assert
         readContext.Should().NotBeNull();
-        readContext.ContractId.Should().Be(285);
-        readContext.ContractId2.Should().Be("285");
+        readContext.ContractId.Should().Be(2);
+        readContext.ContractId2.Should().Be("2");
         readContext.SavedCardValue.Should().Be(SensitiveValues["cardId"]);
         readContext.Ip.Should().Be(SensitiveValues["ip"]);
         readContext.User.Should().Be(SensitiveValues["userEntered"]);
@@ -148,8 +147,8 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
 
         // Assert 2
         readContext2.Should().NotBeNull();
-        readContext2.ContractId.Should().Be(285);
-        readContext2.ContractId2.Should().Be("285");
+        readContext2.ContractId.Should().Be(2);
+        readContext2.ContractId2.Should().Be("2");
         readContext2.SavedCardValue.Should().Be(SensitiveValues["cardId"]);
         readContext2.Ip.Should().Be(SensitiveValues["ip"]);
         readContext2.User.Should().Be(SensitiveValues["userEntered"]);
@@ -159,13 +158,13 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Read_ForAllRules_Debug()
     {
-        var requestMasking = JsonObservering.Obj(
+        var requestMasking = JsonObserver.Obj(
             //Direct paths
             builder => builder
                 .Match("routing").Obj(routingBuilder => routingBuilder
                     .Match("contractId").ReadInt((v, c) => c.ContractId = v))
                 .Match("session", "user", "entered").ReadStr((v, c) => c.User = v),
-            JsonObserverValuePolicies<ReadContext>.CustomPropertyPolicy(builder => builder
+            JsonObserverValuePolicies<ReadContext>.RelativePolicy(builder => builder
                 .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)));
 
         // Act
@@ -173,14 +172,12 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
 
         // Assert
         readContext.Should().NotBeNull();
-        readContext.ContractId.Should().Be(285);
+        readContext.ContractId.Should().Be(2);
 
         var readContext2 = Read(TestJson, requestMasking);
 
         // Assert 2
         readContext2.Should().NotBeNull();
-        readContext2.ContractId.Should().Be(285);
+        readContext2.ContractId.Should().Be(2);
     }
-
-
 }
