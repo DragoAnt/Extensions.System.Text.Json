@@ -1,0 +1,121 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{8B00D029-D67E-48DE-9ACB-EB91F98BC333}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".msbuild", ".msbuild", "{480E2280-65D2-4000-B90F-C015E0D3DFC6}"
+	ProjectSection(SolutionItems) = preProject
+		.msbuild\package.icon.png = .msbuild\package.icon.png
+		.msbuild\local.secrets.targets = .msbuild\local.secrets.targets
+		.msbuild\local.cs.files.targets = .msbuild\local.cs.files.targets
+		.msbuild\local.directory.secrets.props = .msbuild\local.directory.secrets.props
+		.msbuild\packageAsProj.routine.targets = .msbuild\packageAsProj.routine.targets
+		.msbuild\local.directory.secrets.targets = .msbuild\local.directory.secrets.targets
+		.msbuild\local.secrets.props = .msbuild\local.secrets.props
+		.msbuild\local.directory.secrets.cleanup.targets = .msbuild\local.directory.secrets.cleanup.targets
+		.msbuild\local.secrets.cleanup.targets = .msbuild\local.secrets.cleanup.targets
+		.msbuild\project.global.usings.targets = .msbuild\project.global.usings.targets
+		.msbuild\version.props = .msbuild\version.props
+		.msbuild\init.props = .msbuild\init.props
+		.msbuild\init.targets = .msbuild\init.targets
+		.msbuild\local.cs.files.props = .msbuild\local.cs.files.props
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer", "Extensions.System.Text.Json.Observer\Extensions.System.Text.Json.Observer.csproj", "{C9620AB8-AAEC-4E22-9001-3E2386DB78F4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".slnItems", ".slnItems", "{109E4B6D-70BD-4C0E-B8B7-2AC4BCD2955D}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Build.props = Directory.Build.props
+		Directory.Build.targets = Directory.Build.targets
+		Directory.Packages.props = Directory.Packages.props
+		global.json = global.json
+		Directory.Version.props = Directory.Version.props
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer.Benchmarks", "Extensions.System.Text.Json.Observer.Benchmarks\Extensions.System.Text.Json.Observer.Benchmarks.csproj", "{DBB134BA-636C-4F6F-8644-3A548728F627}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer.Tests", "Extensions.System.Text.Json.Observer.Tests\Extensions.System.Text.Json.Observer.Tests.csproj", "{20E26122-0741-42A2-8A21-351B4BF1CEB1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer.Tests.Shared", "Extensions.System.Text.Json.Observer.Tests.Shared\Extensions.System.Text.Json.Observer.Tests.Shared.csproj", "{1DA4F760-8880-49FE-B380-37BCF6D29BE4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{66705AF8-77B5-4CED-9463-5B233412A846}"
+	ProjectSection(SolutionItems) = preProject
+		.msbuild\common\product.props = .msbuild\common\product.props
+		.msbuild\common\ci.gitlab.props = .msbuild\common\ci.gitlab.props
+		.msbuild\common\package.targets = .msbuild\common\package.targets
+		.msbuild\common\git.routine.props = .msbuild\common\git.routine.props
+		.msbuild\common\init.common.props = .msbuild\common\init.common.props
+		.msbuild\common\code.analyzer.props = .msbuild\common\code.analyzer.props
+		.msbuild\common\init.common.targets = .msbuild\common\init.common.targets
+		.msbuild\common\tfm.constants.props = .msbuild\common\tfm.constants.props
+		.msbuild\common\code.analyzer.targets = .msbuild\common\code.analyzer.targets
+		.msbuild\common\code.coverage.targets = .msbuild\common\code.coverage.targets
+		.msbuild\common\secrets.directory.props = .msbuild\common\secrets.directory.props
+		.msbuild\common\secrets.project.targets = .msbuild\common\secrets.project.targets
+		.msbuild\common\init.common.final.targets = .msbuild\common\init.common.final.targets
+		.msbuild\common\private.assets.references.targets = .msbuild\common\private.assets.references.targets
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "checks", "checks", "{C06D56F2-2266-420C-819E-E2FCE091C3BA}"
+	ProjectSection(SolutionItems) = preProject
+		.msbuild\checks\init.checks.props = .msbuild\checks\init.checks.props
+		.msbuild\checks\init.checks.targets = .msbuild\checks\init.checks.targets
+		.msbuild\checks\check.shared.properties.props = .msbuild\checks\check.shared.properties.props
+		.msbuild\checks\check.shared.properties.targets = .msbuild\checks\check.shared.properties.targets
+		.msbuild\checks\check.prerelease.packages.targets = .msbuild\checks\check.prerelease.packages.targets
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{47434A6B-E584-490B-AC29-68029DAF54FB}"
+	ProjectSection(SolutionItems) = preProject
+		.msbuild\tests\tests.project.props = .msbuild\tests\tests.project.props
+		.msbuild\tests\tests.project.targets = .msbuild\tests\tests.project.targets
+		.msbuild\tests\tests.project.code.coverage.targets = .msbuild\tests\tests.project.code.coverage.targets
+		.msbuild\tests\tests.project.xunit.v3.routine.props = .msbuild\tests\tests.project.xunit.v3.routine.props
+		.msbuild\tests\tests.project.xunit.v3.routine.targets = .msbuild\tests\tests.project.xunit.v3.routine.targets
+		.msbuild\tests\test.project.internalsVisibleTo.targets = .msbuild\tests\test.project.internalsVisibleTo.targets
+		.msbuild\tests\tests.project.lib.global.usings.targets = .msbuild\tests\tests.project.lib.global.usings.targets
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "utils", "utils", "{BBD3FC53-AD15-4D3D-A8EA-128EA6762798}"
+	ProjectSection(SolutionItems) = preProject
+		.msbuild\utils\readMetadata.targets = .msbuild\utils\readMetadata.targets
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".pipeline", ".pipeline", "{D990CD3A-6098-4AA9-986D-DF8EF9951BF7}"
+	ProjectSection(SolutionItems) = preProject
+		..\.github\workflows\build_and_publish_nuget.yml = ..\.github\workflows\build_and_publish_nuget.yml
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C9620AB8-AAEC-4E22-9001-3E2386DB78F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9620AB8-AAEC-4E22-9001-3E2386DB78F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9620AB8-AAEC-4E22-9001-3E2386DB78F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9620AB8-AAEC-4E22-9001-3E2386DB78F4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DBB134BA-636C-4F6F-8644-3A548728F627}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DBB134BA-636C-4F6F-8644-3A548728F627}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DBB134BA-636C-4F6F-8644-3A548728F627}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DBB134BA-636C-4F6F-8644-3A548728F627}.Release|Any CPU.Build.0 = Release|Any CPU
+		{20E26122-0741-42A2-8A21-351B4BF1CEB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{20E26122-0741-42A2-8A21-351B4BF1CEB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{20E26122-0741-42A2-8A21-351B4BF1CEB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{20E26122-0741-42A2-8A21-351B4BF1CEB1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1DA4F760-8880-49FE-B380-37BCF6D29BE4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1DA4F760-8880-49FE-B380-37BCF6D29BE4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1DA4F760-8880-49FE-B380-37BCF6D29BE4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1DA4F760-8880-49FE-B380-37BCF6D29BE4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{DBB134BA-636C-4F6F-8644-3A548728F627} = {8B00D029-D67E-48DE-9ACB-EB91F98BC333}
+		{20E26122-0741-42A2-8A21-351B4BF1CEB1} = {8B00D029-D67E-48DE-9ACB-EB91F98BC333}
+		{1DA4F760-8880-49FE-B380-37BCF6D29BE4} = {8B00D029-D67E-48DE-9ACB-EB91F98BC333}
+		{66705AF8-77B5-4CED-9463-5B233412A846} = {480E2280-65D2-4000-B90F-C015E0D3DFC6}
+		{C06D56F2-2266-420C-819E-E2FCE091C3BA} = {480E2280-65D2-4000-B90F-C015E0D3DFC6}
+		{47434A6B-E584-490B-AC29-68029DAF54FB} = {480E2280-65D2-4000-B90F-C015E0D3DFC6}
+		{BBD3FC53-AD15-4D3D-A8EA-128EA6762798} = {480E2280-65D2-4000-B90F-C015E0D3DFC6}
+		{D990CD3A-6098-4AA9-986D-DF8EF9951BF7} = {109E4B6D-70BD-4C0E-B8B7-2AC4BCD2955D}
+	EndGlobalSection
+EndGlobal

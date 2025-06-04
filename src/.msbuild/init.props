@@ -1,0 +1,59 @@
+<Project>
+
+  <PropertyGroup>
+
+    <!-- Company name, avoid use " -->
+    <ManufacturerName>DragoAnt</ManufacturerName>
+    <!-- Full company name, avoid use " -->
+    <FullManufacturerName>DragoAnt</FullManufacturerName>
+
+    <NoWarn>xUnit1051;$(NoWarn)</NoWarn>
+
+    <IsGitHubCI>True</IsGitHubCI>
+    <IsStableBranchRegex Condition="'$(IsStableBranchRegex)'==''">^(main).*$</IsStableBranchRegex>
+
+    <!--
+    Calculated assembly version version
+     * DateBased(Default) - yyyy.M.d.$([MSBuild]::Modulo($(CIPipelineId), $(MaxBuildNumber)))(-pre-release) (eg. 2025.5.30.1234, 2025.5.30.1234-pre-release)
+     * SemVer - Semantic version with build number based on $(CIPipelineId). https://semver.org/ (eg. 1.0.0, 1.0.0-pre-release.<buildNumber>)
+     * SemVer4 - Kinda semantic version with build number based on $(CIPipelineId). (eg. 1.0.0.<buildNumber>, 1.0.0-pre-release.<buildNumber>)
+  -->
+    <IncrementVersionType Condition="'$(IncrementVersionType)'==''">DateBased</IncrementVersionType>
+
+    <!--  Make internal members visible for tests -->
+    <TestsDir>$(MSBuildThisFileDirectory)..\</TestsDir>
+
+    <SkipCheck_TargetFrameworkRestriction>False</SkipCheck_TargetFrameworkRestriction>
+    <SkipCheck_TreatWarningsAsErrors>True</SkipCheck_TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)common\init.common.props" />
+
+  <!--  After init common properties-->
+  <PropertyGroup>
+    <SlnSecretsCleanUp Condition="'$(SlnSecretsCleanUp)'=='' AND '$(IsDevEnv)'!='True'">True</SlnSecretsCleanUp>
+    <SecretsCleanUp Condition="'$(SecretsCleanUp)'=='' AND '$(IsDevEnv)'!='True'">True</SecretsCleanUp>
+  </PropertyGroup>
+
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\Directory.Version.props')"
+          Project="$(MSBuildThisFileDirectory)..\Directory.Version.props" />
+
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)version.props')"
+          Project="$(MSBuildThisFileDirectory)version.props" />
+
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)tests\tests.project.props')"
+          Project="$(MSBuildThisFileDirectory)tests\tests.project.props" />
+
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)local.directory.secrets.props')"
+          Project="$(MSBuildThisFileDirectory)local.directory.secrets.props" />
+
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)local.cs.files.props')"
+          Project="$(MSBuildThisFileDirectory)local.cs.files.props" />
+
+  <!--  Final imports-->
+
+  <!--  Always last-->
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)checks\init.checks.props')"
+          Project="$(MSBuildThisFileDirectory)checks\init.checks.props" />
+
+</Project>

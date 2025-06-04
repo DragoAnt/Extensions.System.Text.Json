@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>False</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Extensions.System.Text.Json.Observer.Tests.Shared\Extensions.System.Text.Json.Observer.Tests.Shared.csproj" />
+    <ProjectReference Include="..\Extensions.System.Text.Json.Observer\Extensions.System.Text.Json.Observer.csproj" />
+  </ItemGroup>
+
+</Project>
