@@ -22,7 +22,7 @@ env:
   BUILD_CONFIGURATION: Release
   GITHUB_RUN_ID: ${{ github.run_id }}
   GITHUB_RUN_NUMBER: ${{ github.run_number }}
-  BRANCH: ${{ github.ref_name }}
+  BRANCH: main # temporary const
 
 jobs:
   build_publish_nuget:
