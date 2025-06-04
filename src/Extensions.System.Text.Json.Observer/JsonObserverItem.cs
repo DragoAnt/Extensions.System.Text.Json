@@ -10,7 +10,7 @@ namespace Extensions.System.Text.Json.Observer;
 /// </summary>
 /// <param name="propMatch">Property name matching delegate.</param>
 /// <param name="masking">Masking policy delegate.</param>
-internal sealed class JsonObserveringItem<TContext>(JsonPropertyMatchDelegate propMatch, JsonObserverDelegate<TContext> masking)
+internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propMatch, JsonObserverDelegate<TContext> masking)
 {
     /// <summary>
     /// Any payload object or array.
@@ -319,7 +319,7 @@ internal sealed class JsonObserveringItem<TContext>(JsonPropertyMatchDelegate pr
     /// </summary>
     /// <param name="policies">Property masking policies.</param>
     /// <param name="valuePolicy">Value masking delegate.</param>
-    public static JsonObserverDelegate<TContext> ApplyValuePolicy(JsonObserveringItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
+    public static JsonObserverDelegate<TContext> ApplyValuePolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
     {
         var defaultPolicy = GetApplyDefaultPolicy(policies, valuePolicy);
 
@@ -356,7 +356,7 @@ internal sealed class JsonObserveringItem<TContext>(JsonPropertyMatchDelegate pr
         };
     }
 
-    internal static JsonObserverDelegate<TContext> ApplyObjPolicy(JsonObserveringItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
+    internal static JsonObserverDelegate<TContext> ApplyObjPolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
     {
         var defaultPolicy = GetApplyDefaultPolicy(policies, valuePolicy);
 
@@ -419,7 +419,7 @@ internal sealed class JsonObserveringItem<TContext>(JsonPropertyMatchDelegate pr
         };
     }
 
-    internal static JsonObserverDelegate<TContext> ApplyArrayPolicy(JsonObserveringItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
+    internal static JsonObserverDelegate<TContext> ApplyArrayPolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
     {
         var defaultPolicy = GetApplyDefaultPolicy(policies, valuePolicy);
 
@@ -475,7 +475,7 @@ internal sealed class JsonObserveringItem<TContext>(JsonPropertyMatchDelegate pr
         };
     }
 
-    private static JsonObserverDelegate<TContext> GetApplyDefaultPolicy(JsonObserveringItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
+    private static JsonObserverDelegate<TContext> GetApplyDefaultPolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
     {
         JsonObserverDelegate<TContext>? objPolicy = null;
         JsonObserverDelegate<TContext>? arrayPolicy = null;
@@ -525,8 +525,8 @@ internal sealed class JsonObserveringItem<TContext>(JsonPropertyMatchDelegate pr
         };
     }
 
-    private static (JsonObserveringItem<TContext>?, int depth) MatchPolicy(
-        JsonObserveringItem<TContext>[] policies,
+    private static (JsonObserverItem<TContext>?, int depth) MatchPolicy(
+        JsonObserverItem<TContext>[] policies,
         int depth,
         ref PropertyPath path,
         JsonTokenType tokenType)

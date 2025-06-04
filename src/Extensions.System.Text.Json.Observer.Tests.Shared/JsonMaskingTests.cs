@@ -1,6 +1,7 @@
 using System.Globalization;
 using Bogus;
 using Extensions.System.Text.Json.Observer.Strategies;
+using static Extensions.System.Text.Json.Observer.JsonObserverValuePolicies;
 
 namespace Extensions.System.Text.Json.Observer.Tests.Shared;
 
@@ -18,51 +19,46 @@ public class JsonMaskingTests
 
     private static readonly Faker F = new();
 
-    private readonly JsonObservering _requestMasking = GetRequestMasking(JsonObserverValuePolicies.BlockList);
+    private readonly JsonObserver _requestMasking = GetRequestMasking(BlockList);
 
 
-    private static JsonObservering GetRequestMasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
+    private static JsonObserver GetRequestMasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
     {
-        return JsonObservering.Obj(
-            JsonObserverValuePolicies.CustomPropertyPolicy(
-                policyBuilder => policyBuilder
-                    .Match(PropMatches.EndsWith("card"), "saved", "id").MaskStr(MaskingRules.CustomerId)
-                    .Match("card", "number").MaskStr(MaskingRules.CardNumber)
-                    .Match("user", "entered").MaskStr((_, _) => string.Empty)
-                    .Match("recurringTemplate", "id").MaskStr(MaskingRules.RecurringTemplateId)
-                    .Match(PropMatches.Contains("cardHolder")).MaskStr(MaskingRules.FullName)
-                    .Match(PropMatches.StartsWith("order"), "description").MaskStr(MaskingRules.OrderDescription)
-                    .Match(PropMatches.StartsWith("customer"), "id").MaskStr(MaskingRules.CustomerId)
-                    .Match(PropMatches.StartsWith("customer"), "birthDate").MaskStr(MaskingRules.BirthDate)
-                    .Match(PropMatches.Contains("ipAddress")).MaskStr(MaskingRules.Ip)
-                    .Match(PropMatches.Contains("email")).MaskStr(MaskingRules.Email)
-                    .Match(PropMatches.Contains("phone")).MaskStr(MaskingRules.Phone)
-                    .Match(PropMatches.Contains("documentNumber")).MaskStr(MaskingRules.DocumentNumber)
-                    .Match(PropMatches.Contains("firstName")).MaskStr(MaskingRules.Name)
-                    .Match(PropMatches.Contains("lastName")).MaskStr(MaskingRules.Name)
-                    .Match(PropMatches.Contains("address")).MaskStr(MaskingRules.Full)
-                    .Match(PropMatches.Contains("accountNumber")).MaskStr(MaskingRules.AccountNumber)
-                ,
-                defaultValuePolicy));
+        return JsonObserver.Obj(RelativePolicy(policyBuilder => policyBuilder
+                .Match(PropMatches.EndsWith("card"), "saved", "id").MaskStr(MaskingRules.CustomerId)
+                .Match("card", "number").MaskStr(MaskingRules.CardNumber)
+                .Match("user", "entered").MaskStr((_, _) => string.Empty)
+                .Match("recurringTemplate", "id").MaskStr(MaskingRules.RecurringTemplateId)
+                .Match(PropMatches.Contains("cardHolder")).MaskStr(MaskingRules.FullName)
+                .Match(PropMatches.StartsWith("order"), "description").MaskStr(MaskingRules.OrderDescription)
+                .Match(PropMatches.StartsWith("customer"), "id").MaskStr(MaskingRules.CustomerId)
+                .Match(PropMatches.StartsWith("customer"), "birthDate").MaskStr(MaskingRules.BirthDate)
+                .Match(PropMatches.Contains("ipAddress")).MaskStr(MaskingRules.Ip)
+                .Match(PropMatches.Contains("email")).MaskStr(MaskingRules.Email)
+                .Match(PropMatches.Contains("phone")).MaskStr(MaskingRules.Phone)
+                .Match(PropMatches.Contains("documentNumber")).MaskStr(MaskingRules.DocumentNumber)
+                .Match(PropMatches.Contains("firstName")).MaskStr(MaskingRules.Name)
+                .Match(PropMatches.Contains("lastName")).MaskStr(MaskingRules.Name)
+                .Match(PropMatches.Contains("address")).MaskStr(MaskingRules.Full)
+                .Match(PropMatches.Contains("accountNumber")).MaskStr(MaskingRules.AccountNumber)
+            ,
+            defaultValuePolicy));
     }
 
-    private readonly JsonObservering _ignoreNullsRequestMasking = GetRequestUnmasking(JsonObserverValuePolicies.NullList);
+    private readonly JsonObserver _ignoreNullsRequestMasking = GetRequestUnmasking(NullList);
 
-    private static JsonObservering GetRequestUnmasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
+    private static JsonObserver GetRequestUnmasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
     {
-        return JsonObservering.Obj(b => b
-                .Match("routing").Obj(sb => sb
-                    .Match("method").Unmasked()),
-            JsonObserverValuePolicies.CustomPropertyPolicy(
-                policyBuilder => policyBuilder
+        return JsonObserver.Obj(b => b
+                .Match("routing").Obj(sb => sb.Match("method").Unmasked()),
+            RelativePolicy(policyBuilder => policyBuilder
                     .Match(PropMatches.EndsWith("card"), "saved", "id").Unmasked()
                     .Match("card", "number").Unmasked()
                     .Match(PropMatches.Contains("cardHolder")).Unmasked()
                     .Match(PropMatches.StartsWith("customer"), "id").Unmasked()
                     .Match(PropMatches.StartsWith("customer"), "birthDate").Unmasked()
                     .Match(PropMatches.Contains("ipAddress")).Unmasked()
-                    .Match(PropMatches.Contains("email")).Unmasked()
-                ,
+                    .Match(PropMatches.Contains("email")).Unmasked(),
                 defaultValuePolicy));
     }
 
@@ -86,18 +82,18 @@ public class JsonMaskingTests
         { "address", F.Person.Address.City },
     };
 
+    //language=json
     private static readonly string TestJson =
         $$"""
           {
             // Comment
             "routing": {
-              "method": "interac",
-              "contractId": 285
+              "method": "test",
+              "contractId": 2
             },
             "session": {
-              "id": "61c7b91d-6cfe-41c1-9370-76194ee5e297",
-              "returnUrl": "https://localhost:7086/facade-api/61c7b91d-6cfe-41c1-9370-76194ee5e297/apm/payment/confirm",
-              "method": "interac",
+              "id": "1",
+              "method": "test",
               "accountNumber": "{{SensitiveValues["accountNumber"]}}",
               "merchant": {
                 "id": "213",
@@ -135,8 +131,8 @@ public class JsonMaskingTests
                 "birthDate": "{{SensitiveValues["customerBirth"]}}"
               },
               "order": {
-                "id": "899361d0-b5ea-430b-97d1-78b6597f3223",
-                "currency": "CAD",
+                "id": "333",
+                "currency": "RSD",
                 "amount": 10000,
                 "description": "{{SensitiveValues["orderDescription"]}}"
               }
@@ -144,7 +140,7 @@ public class JsonMaskingTests
           }
           """;
 
-    private string? Mask(string testValue, JsonObservering mask, bool ignoreNulls = false, bool ignoreComments = false)
+    private string? Mask(string testValue, JsonObserver mask, bool ignoreNulls = false, bool ignoreComments = false)
     {
         _outputHelper.WriteLine($"Before: {Environment.NewLine}{testValue}{Environment.NewLine}");
         var maskedJson = mask.Mask(testValue, new JsonReaderOptions

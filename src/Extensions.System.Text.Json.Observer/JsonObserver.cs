@@ -6,9 +6,9 @@ using Extensions.System.Text.Json.Observer.Builders;
 
 namespace Extensions.System.Text.Json.Observer;
 
-public sealed class JsonObservering
+public sealed class JsonObserver
 {
-    private readonly JsonObservering<JsonObserveringEmptyContext> _masking;
+    private readonly JsonObserver<JsonObserveringEmptyContext> _masking;
 
     /// <summary>
     /// Mask any - object or array.
@@ -16,7 +16,7 @@ public sealed class JsonObservering
     /// <param name="initObj">Init masking for object.</param>
     /// <param name="initArray">Init masking for array.</param>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering Any(
+    public static JsonObserver Any(
         Action<JsonObjBuilder<JsonObserveringEmptyContext>> initObj,
         Action<JsonArrayBuilder<JsonObserveringEmptyContext>> initArray,
         JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking = null) =>
@@ -26,7 +26,7 @@ public sealed class JsonObservering
     /// Mask object.
     /// </summary>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering Obj(JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking) =>
+    public static JsonObserver Obj(JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking) =>
         new(Obj<JsonObserveringEmptyContext>(defaultMasking));
 
     /// <summary>
@@ -34,7 +34,7 @@ public sealed class JsonObservering
     /// </summary>
     /// <param name="init">Init masking.</param>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering Obj(
+    public static JsonObserver Obj(
         Action<JsonObjBuilder<JsonObserveringEmptyContext>> init,
         JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking = null) =>
         new(Obj<JsonObserveringEmptyContext>(init, defaultMasking));
@@ -43,7 +43,7 @@ public sealed class JsonObservering
     /// Mask array.
     /// </summary>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering Array(JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking) =>
+    public static JsonObserver Array(JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking) =>
         new(Array<JsonObserveringEmptyContext>(defaultMasking));
 
     /// <summary>
@@ -51,7 +51,7 @@ public sealed class JsonObservering
     /// </summary>
     /// <param name="init">Init masking.</param>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering Array(
+    public static JsonObserver Array(
         Action<JsonArrayBuilder<JsonObserveringEmptyContext>> init,
         JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking = null) =>
         new(Array<JsonObserveringEmptyContext>(init, defaultMasking));
@@ -62,47 +62,47 @@ public sealed class JsonObservering
     /// <param name="initObj">Init masking for object.</param>
     /// <param name="initArray">Init masking for array.</param>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering<TContext> Any<TContext>(
+    public static JsonObserver<TContext> Any<TContext>(
         Action<JsonObjBuilder<TContext>> initObj,
         Action<JsonArrayBuilder<TContext>> initArray,
         JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserveringItem<TContext>.Any(initObj, initArray, defaultMasking));
+        new(JsonObserverItem<TContext>.Any(initObj, initArray, defaultMasking));
 
     /// <summary>
     /// Mask object.
     /// </summary>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering<TContext> Obj<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
-        new(JsonObserveringItem<TContext>.Obj(_ => { }, defaultMasking));
+    public static JsonObserver<TContext> Obj<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
+        new(JsonObserverItem<TContext>.Obj(_ => { }, defaultMasking));
 
     /// <summary>
     /// Mask object.
     /// </summary>
     /// <param name="init">Init masking.</param>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering<TContext> Obj<TContext>(
+    public static JsonObserver<TContext> Obj<TContext>(
         Action<JsonObjBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserveringItem<TContext>.Obj(init, defaultMasking));
+        new(JsonObserverItem<TContext>.Obj(init, defaultMasking));
 
     /// <summary>
     /// Mask array.
     /// </summary>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering<TContext> Array<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
-        new(JsonObserveringItem<TContext>.Array(_ => { }, defaultMasking));
+    public static JsonObserver<TContext> Array<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
+        new(JsonObserverItem<TContext>.Array(_ => { }, defaultMasking));
 
     /// <summary>
     /// Mask array.
     /// </summary>
     /// <param name="init">Init masking.</param>
     /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
-    public static JsonObservering<TContext> Array<TContext>(
+    public static JsonObserver<TContext> Array<TContext>(
         Action<JsonArrayBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserveringItem<TContext>.Array(init, defaultMasking));
+        new(JsonObserverItem<TContext>.Array(init, defaultMasking));
 
-    private JsonObservering(JsonObservering<JsonObserveringEmptyContext> masking)
+    private JsonObserver(JsonObserver<JsonObserveringEmptyContext> masking)
     {
         _masking = masking;
     }
@@ -125,12 +125,12 @@ public sealed class JsonObservering
         => _masking.Mask(value, JsonObserveringEmptyContext.Instance, readerOptions, writerOptions, ignoreNulls, ignoreComments);
 }
 
-public sealed class JsonObservering<TContext>
+public sealed class JsonObserver<TContext>
 {
     private readonly JsonObserverDelegate<TContext> _maskDelegate;
     private int _maxDepth = 6;
 
-    internal JsonObservering(JsonObserverDelegate<TContext> maskDelegate)
+    internal JsonObserver(JsonObserverDelegate<TContext> maskDelegate)
     {
         _maskDelegate = maskDelegate;
     }

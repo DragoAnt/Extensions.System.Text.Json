@@ -29,10 +29,10 @@ public static class JsonObserverValuePolicies
     /// <remarks>
     /// Initializes policies for any property with or without considering depth.
     /// </remarks>
-    public static JsonObserverValueDelegate<JsonObserveringEmptyContext> CustomPropertyPolicy(
+    public static JsonObserverValueDelegate<JsonObserveringEmptyContext> RelativePolicy(
         Action<JsonValuePolicyBuilder<JsonObserveringEmptyContext>> init,
         JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultValuePolicy = null)
-        => JsonObserverValuePolicies<JsonObserveringEmptyContext>.CustomPropertyPolicy(init, defaultValuePolicy);
+        => JsonObserverValuePolicies<JsonObserveringEmptyContext>.RelativePolicy(init, defaultValuePolicy);
 }
 
 /// <summary>
@@ -43,14 +43,14 @@ public static class JsonObserverValuePolicies<TContext>
     public static readonly JsonObserverValueDelegate<TContext> Default = AllowList;
 
     /// <summary>
-    /// Initialize custom property value masking policy.
+    /// Initialize relative property value masking policy.
     /// </summary>
     /// <param name="init">Policy building action.</param>
     /// <param name="defaultValuePolicy">Default policy.</param>
     /// <remarks>
     /// Initializes policies for any property with or without considering depth.
     /// </remarks>
-    public static JsonObserverValueDelegate<TContext> CustomPropertyPolicy(
+    public static JsonObserverValueDelegate<TContext> RelativePolicy(
         Action<JsonValuePolicyBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultValuePolicy = null)
     {
