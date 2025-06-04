@@ -1,0 +1,9 @@
+<Project>
+
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)check.shared.properties.targets')"
+          Project="$(MSBuildThisFileDirectory)check.shared.properties.targets" />
+
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)check.prerelease.packages.targets')"
+          Project="$(MSBuildThisFileDirectory)check.prerelease.packages.targets" />
+
+</Project>

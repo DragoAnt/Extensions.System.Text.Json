@@ -1,0 +1,6 @@
+<Project>
+
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)check.shared.properties.props')"
+          Project="$(MSBuildThisFileDirectory)check.shared.properties.props" />
+
+</Project>
