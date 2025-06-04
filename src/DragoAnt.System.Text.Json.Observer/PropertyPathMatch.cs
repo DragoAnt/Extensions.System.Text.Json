@@ -1,6 +1,6 @@
-﻿using Extensions.System.Text.Json.Observer.Strategies;
+﻿using DragoAnt.System.Text.Json.Observer.Strategies;
 
-namespace Extensions.System.Text.Json.Observer;
+namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
 /// Property path matching class.

@@ -1,4 +1,4 @@
-﻿using Extensions.System.Text.Json.Observer.Benchmarks;
+﻿using DragoAnt.System.Text.Json.Observer.Benchmarks;
 
 BenchmarkRunner.Run<ReadBenchmark>();
 

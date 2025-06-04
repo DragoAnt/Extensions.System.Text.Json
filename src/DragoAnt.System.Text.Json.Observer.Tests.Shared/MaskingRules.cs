@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace Extensions.System.Text.Json.Observer.Tests.Shared;
+namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 /// <summary>
 /// Masking regular expressions.

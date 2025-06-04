@@ -1,4 +1,4 @@
-﻿namespace Extensions.System.Text.Json.Observer.Tests;
+﻿namespace DragoAnt.System.Text.Json.Observer.Tests;
 
 public class VerifyChecksTests
 {

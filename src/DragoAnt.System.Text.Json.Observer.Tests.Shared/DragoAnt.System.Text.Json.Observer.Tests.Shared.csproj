@@ -10,7 +10,7 @@
     <PackageReference Include="Verify.DiffPlex" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Extensions.System.Text.Json.Observer\Extensions.System.Text.Json.Observer.csproj" />
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Remove="package.readme.md" />

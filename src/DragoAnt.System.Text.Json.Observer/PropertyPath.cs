@@ -1,6 +1,6 @@
 ﻿using System.Buffers;
 
-namespace Extensions.System.Text.Json.Observer;
+namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
 /// JSON property path.

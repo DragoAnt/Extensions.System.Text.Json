@@ -10,8 +10,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Extensions.System.Text.Json.Observer.Tests.Shared\Extensions.System.Text.Json.Observer.Tests.Shared.csproj" />
-    <ProjectReference Include="..\Extensions.System.Text.Json.Observer\Extensions.System.Text.Json.Observer.csproj" />
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer.Tests.Shared\DragoAnt.System.Text.Json.Observer.Tests.Shared.csproj" />
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj" />
   </ItemGroup>
 
 </Project>

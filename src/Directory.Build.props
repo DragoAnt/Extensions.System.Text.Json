@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <RepositoryUrl>https://github.com/DragoAnt/Extensions.System.Text.Json</RepositoryUrl>
+    <RepositoryUrl>https://github.com/DragoAnt/DragoAnt.System.Text.Json</RepositoryUrl>
 
     <TargetFrameworkStrategy>TargetFrameworks</TargetFrameworkStrategy>
     <TargetFrameworks>net7.0;net8.0;net9.0</TargetFrameworks>
@@ -22,7 +22,7 @@
     <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
     <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
 
-    <SlnSecretsId>Extensions.System.Text.Json</SlnSecretsId>
+    <SlnSecretsId>DragoAnt.System.Text.Json</SlnSecretsId>
   </PropertyGroup>
 
   <Import Project="$(MSBuildThisFileDirectory).msbuild\init.props" />

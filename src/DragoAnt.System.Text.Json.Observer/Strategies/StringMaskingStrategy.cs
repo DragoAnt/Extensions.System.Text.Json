@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace Extensions.System.Text.Json.Observer.Strategies;
+namespace DragoAnt.System.Text.Json.Observer.Strategies;
 
 /// <summary>
 /// String property masking strategy

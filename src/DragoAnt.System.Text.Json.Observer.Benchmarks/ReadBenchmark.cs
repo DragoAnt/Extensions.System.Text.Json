@@ -1,6 +1,6 @@
-﻿using Extensions.System.Text.Json.Observer.Tests.Shared;
+﻿using DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
-namespace Extensions.System.Text.Json.Observer.Benchmarks;
+namespace DragoAnt.System.Text.Json.Observer.Benchmarks;
 
 [MemoryDiagnoser]
 public class ReadBenchmark
@@ -17,7 +17,7 @@ public class ReadBenchmark
         JsonReadTests.BenchmarkRead(new JsonReadTests.ReadContext());
         GC.Collect(2);
     }
-    
+
     [IterationSetup]
     public void IterationSetup()
     {

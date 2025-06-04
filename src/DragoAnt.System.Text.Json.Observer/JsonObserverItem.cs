@@ -1,9 +1,9 @@
 using System.Buffers;
 using System.Text;
-using Extensions.System.Text.Json.Observer.Builders;
+using DragoAnt.System.Text.Json.Observer.Builders;
 using static System.Text.Json.JsonTokenType;
 
-namespace Extensions.System.Text.Json.Observer;
+namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
 /// JSON masking policy.
