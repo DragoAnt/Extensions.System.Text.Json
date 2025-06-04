@@ -16,7 +16,7 @@ on:
         default: 'beta'
 
 env:
-  PROJECT_PATH: 'src/Extensions.System.Text.Json.sln'
+  PROJECT_PATH: 'src/DragoAnt.System.Text.Json.sln'
   PACKAGE_OUTPUT_DIRECTORY: '${{ github.workspace }}/output'
   NUGET_SOURCE_URL: 'https://api.nuget.org/v3/index.json'
   BUILD_CONFIGURATION: Release
