@@ -1,4 +1,4 @@
-namespace Extensions.System.Text.Json.Observer;
+namespace DragoAnt.System.Text.Json.Observer;
 
 public delegate void JsonObserverDelegate<TContext>(
     ref Utf8JsonReader reader,

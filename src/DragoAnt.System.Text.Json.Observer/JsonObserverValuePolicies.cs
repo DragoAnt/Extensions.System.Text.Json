@@ -1,8 +1,8 @@
-using Extensions.System.Text.Json.Observer.Builders;
+using DragoAnt.System.Text.Json.Observer.Builders;
 using static System.Text.Json.JsonTokenType;
-using static Extensions.System.Text.Json.Observer.JsonWriter.IgnoreNullsJsonTokenType;
+using static DragoAnt.System.Text.Json.Observer.JsonWriter.IgnoreNullsJsonTokenType;
 
-namespace Extensions.System.Text.Json.Observer;
+namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
 /// Value masking policies.

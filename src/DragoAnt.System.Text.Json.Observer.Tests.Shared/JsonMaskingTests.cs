@@ -1,9 +1,10 @@
 using System.Globalization;
 using Bogus;
-using Extensions.System.Text.Json.Observer.Strategies;
-using static Extensions.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.System.Text.Json.Observer.Strategies;
+using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
 
-namespace Extensions.System.Text.Json.Observer.Tests.Shared;
+
+namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 public class JsonMaskingTests
 {

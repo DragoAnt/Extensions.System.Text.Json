@@ -1,6 +1,6 @@
-using Extensions.System.Text.Json.Observer.Strategies;
+using DragoAnt.System.Text.Json.Observer.Strategies;
 
-namespace Extensions.System.Text.Json.Observer.Builders;
+namespace DragoAnt.System.Text.Json.Observer.Builders;
 
 /// <summary>
 /// Policy builder for JSON values

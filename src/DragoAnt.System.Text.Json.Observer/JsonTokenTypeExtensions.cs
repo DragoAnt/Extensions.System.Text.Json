@@ -1,4 +1,4 @@
-namespace Extensions.System.Text.Json.Observer;
+namespace DragoAnt.System.Text.Json.Observer;
 
 internal static class JsonTokenTypeExtensions
 {

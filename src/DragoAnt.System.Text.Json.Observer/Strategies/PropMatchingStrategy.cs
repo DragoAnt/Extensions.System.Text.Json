@@ -1,4 +1,4 @@
-﻿namespace Extensions.System.Text.Json.Observer.Strategies;
+﻿namespace DragoAnt.System.Text.Json.Observer.Strategies;
 
 /// <summary>
 /// Property matching strategy.

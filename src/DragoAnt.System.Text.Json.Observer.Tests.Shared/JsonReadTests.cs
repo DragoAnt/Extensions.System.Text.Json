@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text;
 using Bogus;
-using Extensions.System.Text.Json.Observer.Strategies;
+using DragoAnt.System.Text.Json.Observer.Strategies;
 
-namespace Extensions.System.Text.Json.Observer.Tests.Shared;
+namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 public abstract class JsonReadTests(ITestOutputHelper outputHelper)
 {

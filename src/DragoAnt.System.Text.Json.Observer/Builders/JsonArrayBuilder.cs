@@ -1,7 +1,7 @@
-using Extensions.System.Text.Json.Observer.Strategies;
+using DragoAnt.System.Text.Json.Observer.Strategies;
 using static System.Text.Json.JsonTokenType;
 
-namespace Extensions.System.Text.Json.Observer.Builders;
+namespace DragoAnt.System.Text.Json.Observer.Builders;
 
 /// <summary>
 /// Policy builder for JSON arrays.

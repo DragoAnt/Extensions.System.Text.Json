@@ -1,10 +1,10 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using Extensions.System.Text.Json.Observer.Builders;
+using DragoAnt.System.Text.Json.Observer.Builders;
 
 // ReSharper disable MemberCanBePrivate.Global
 
-namespace Extensions.System.Text.Json.Observer;
+namespace DragoAnt.System.Text.Json.Observer;
 
 public sealed class JsonObserver
 {
