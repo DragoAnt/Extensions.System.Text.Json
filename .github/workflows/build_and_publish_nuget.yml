@@ -22,6 +22,7 @@ env:
   BUILD_CONFIGURATION: Release
   GITHUB_RUN_ID: ${{ github.run_id }}
   GITHUB_RUN_NUMBER: ${{ github.run_number }}
+  BRANCH: ${{ github.ref_name }}
 
 jobs:
   build_publish_nuget:
@@ -37,13 +38,13 @@ jobs:
           global-json-file: "./src/global.json"
 
       - name: 'Restore packages'
-        run: dotnet restore ${{ env.PROJECT_PATH }} '-p:IsDevEnv=False'
+        run: dotnet restore ${{ env.PROJECT_PATH }} /p:IsDevEnv=False '/p:Branch=${{ env.BRANCH }}'
 
       - name: 'Build'
-        run: dotnet build -c ${{ env.BUILD_CONFIGURATION }} '/p:PatchNumSuffix=${{ github.event.inputs.PATCH_NUM_SUFFIX }}' /p:IsDevEnv=False ${{ env.PROJECT_PATH }}
+        run: dotnet build -c ${{ env.BUILD_CONFIGURATION }} '/p:PatchNumSuffix=${{ github.event.inputs.PATCH_NUM_SUFFIX }}' /p:IsDevEnv=False '/p:Branch=${{ env.BRANCH }}' ${{ env.PROJECT_PATH }}
 
       - name: 'Pack'
-        run: dotnet pack ${{ env.PROJECT_PATH }} --no-restore --no-build -c ${{ env.BUILD_CONFIGURATION }} -o ${{ env.PACKAGE_OUTPUT_DIRECTORY }} '/p:PatchNumSuffix=${{ github.event.inputs.PATCH_NUM_SUFFIX }}' /p:IsDevEnv=False
+        run: dotnet pack ${{ env.PROJECT_PATH }} --no-restore --no-build -c ${{ env.BUILD_CONFIGURATION }} -o ${{ env.PACKAGE_OUTPUT_DIRECTORY }} '/p:PatchNumSuffix=${{ github.event.inputs.PATCH_NUM_SUFFIX }}' /p:IsDevEnv=False' /p:Branch=${{ env.BRANCH }}'
 
       - name: 'Push packages'
         run: dotnet nuget push ${{ env.PACKAGE_OUTPUT_DIRECTORY }}/*.nupkg -k ${{ secrets.NUGET_ORG_API_KEY }} -s ${{ env.NUGET_SOURCE_URL }} --skip-duplicate
