@@ -20,7 +20,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".msbuild", ".msbuild", "{48
 		.msbuild\local.cs.files.props = .msbuild\local.cs.files.props
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer", "Extensions.System.Text.Json.Observer\Extensions.System.Text.Json.Observer.csproj", "{C9620AB8-AAEC-4E22-9001-3E2386DB78F4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DragoAnt.System.Text.Json.Observer", "DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj", "{C9620AB8-AAEC-4E22-9001-3E2386DB78F4}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".slnItems", ".slnItems", "{109E4B6D-70BD-4C0E-B8B7-2AC4BCD2955D}"
 	ProjectSection(SolutionItems) = preProject
@@ -32,11 +32,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".slnItems", ".slnItems", "{
 		..\README.md = ..\README.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer.Benchmarks", "Extensions.System.Text.Json.Observer.Benchmarks\Extensions.System.Text.Json.Observer.Benchmarks.csproj", "{DBB134BA-636C-4F6F-8644-3A548728F627}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DragoAnt.System.Text.Json.Observer.Benchmarks", "DragoAnt.System.Text.Json.Observer.Benchmarks\DragoAnt.System.Text.Json.Observer.Benchmarks.csproj", "{DBB134BA-636C-4F6F-8644-3A548728F627}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer.Tests", "Extensions.System.Text.Json.Observer.Tests\Extensions.System.Text.Json.Observer.Tests.csproj", "{20E26122-0741-42A2-8A21-351B4BF1CEB1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DragoAnt.System.Text.Json.Observer.Tests", "DragoAnt.System.Text.Json.Observer.Tests\DragoAnt.System.Text.Json.Observer.Tests.csproj", "{20E26122-0741-42A2-8A21-351B4BF1CEB1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extensions.System.Text.Json.Observer.Tests.Shared", "Extensions.System.Text.Json.Observer.Tests.Shared\Extensions.System.Text.Json.Observer.Tests.Shared.csproj", "{1DA4F760-8880-49FE-B380-37BCF6D29BE4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DragoAnt.System.Text.Json.Observer.Tests.Shared", "DragoAnt.System.Text.Json.Observer.Tests.Shared\DragoAnt.System.Text.Json.Observer.Tests.Shared.csproj", "{1DA4F760-8880-49FE-B380-37BCF6D29BE4}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{66705AF8-77B5-4CED-9463-5B233412A846}"
 	ProjectSection(SolutionItems) = preProject
