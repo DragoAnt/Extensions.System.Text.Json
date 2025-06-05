@@ -15,6 +15,10 @@ env:
   GITHUB_REF_NAME: ${{ github.ref_name }}
   GITHUB_RUN_ID: ${{ github.run_id }}
   GITHUB_RUN_NUMBER: ${{ github.run_number }}
+  GITHUB_SHA: ${{ github.sha }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
+  GITHUB_BASE_REF: ${{ github.base_ref }}
+  GITHUB_HEAD_REF: ${{ github.head_ref }}
 jobs:
   build_publish_nuget:
     name: 'Build and publish nuget packages'
@@ -37,5 +41,5 @@ jobs:
       - name: 'Pack'
         run: dotnet pack -c Release --no-build -o ${{ env.PACKAGE_OUTPUT_DIRECTORY }}
 
-      - name: 'Push packages'
-        run: dotnet nuget push ${{ env.PACKAGE_OUTPUT_DIRECTORY }}/*.nupkg -k ${{ secrets.NUGET_ORG_API_KEY }} -s ${{ env.NUGET_SOURCE_URL }} --skip-duplicate
+#      - name: 'Push packages'
+#        run: dotnet nuget push ${{ env.PACKAGE_OUTPUT_DIRECTORY }}/*.nupkg -k ${{ secrets.NUGET_ORG_API_KEY }} -s ${{ env.NUGET_SOURCE_URL }} --skip-duplicate
