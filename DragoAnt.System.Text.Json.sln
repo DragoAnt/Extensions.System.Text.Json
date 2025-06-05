@@ -84,11 +84,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "utils", "utils", "{BBD3FC53
 		.msbuild\utils\readMetadata.targets = .msbuild\utils\readMetadata.targets
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".pipeline", ".pipeline", "{D990CD3A-6098-4AA9-986D-DF8EF9951BF7}"
-	ProjectSection(SolutionItems) = preProject
-		.github\workflows\build_and_publish_nuget.yml = .github\workflows\build_and_publish_nuget.yml
-	EndProjectSection
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -120,6 +115,5 @@ Global
 		{C06D56F2-2266-420C-819E-E2FCE091C3BA} = {480E2280-65D2-4000-B90F-C015E0D3DFC6}
 		{47434A6B-E584-490B-AC29-68029DAF54FB} = {480E2280-65D2-4000-B90F-C015E0D3DFC6}
 		{BBD3FC53-AD15-4D3D-A8EA-128EA6762798} = {480E2280-65D2-4000-B90F-C015E0D3DFC6}
-		{D990CD3A-6098-4AA9-986D-DF8EF9951BF7} = {109E4B6D-70BD-4C0E-B8B7-2AC4BCD2955D}
 	EndGlobalSection
 EndGlobal
