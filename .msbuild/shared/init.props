@@ -12,7 +12,8 @@
     <SecretsTemplatesDir Condition="'$(SecretsTemplatesDir)'==''">$(MSBuildThisFileDirectory)..\..\.msbuild.templates\</SecretsTemplatesDir>
   </PropertyGroup>
 
-  <Import Project="$(MSBuildThisFileDirectory)..\init.company.specific.props" />
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\init.company.specific.props')"
+          Project="$(MSBuildThisFileDirectory)..\init.company.specific.props" />
 
   <Import Project="$(MSBuildThisFileDirectory)common\init.common.props" />
 
