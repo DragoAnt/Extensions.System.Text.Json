@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Bogus;
 using DragoAnt.System.Text.Json.Observer.Strategies;
+using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies<DragoAnt.System.Text.Json.Observer.Tests.Shared.JsonReadTests.ReadContext>;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -34,7 +35,7 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
                 .Match("contractId2").ReadRaw((v, c) => c.ContractId2 = v)
                 .Match("method").ReadStr((v, c) => c.Method = v))
             .Match("session", "user", "entered").ReadStr((v, c) => c.User = v),
-        JsonObserverValuePolicies<ReadContext>.RelativePolicy(builder => builder
+        RelativePolicy(builder => builder
             .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)
             .Match(PropMatches.Contains("ipAddress")).ReadStr((v, c) => c.Ip = v)));
 
@@ -158,13 +159,11 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Read_ForAllRules_Debug()
     {
-        var requestMasking = JsonObserver.Obj(
-            //Direct paths
-            builder => builder
-                .Match("routing").Obj(routingBuilder => routingBuilder
+        var requestMasking = JsonObserver.Obj(b => b
+                .Match("routing").Obj(routingB => routingB
                     .Match("contractId").ReadInt((v, c) => c.ContractId = v))
                 .Match("session", "user", "entered").ReadStr((v, c) => c.User = v),
-            JsonObserverValuePolicies<ReadContext>.RelativePolicy(builder => builder
+            RelativePolicy(b => b
                 .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)));
 
         // Act

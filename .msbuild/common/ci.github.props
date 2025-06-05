@@ -1,0 +1,10 @@
+<Project>
+
+  <!--  Prepare CI run variables  -->
+  <PropertyGroup>
+    <IsDevEnv Condition="'$(IsDevEnv)'=='' AND '$(GITHUB_RUN_ID)'!=''">False</IsDevEnv>
+    <CIPipelineId>$(GITHUB_RUN_ID)</CIPipelineId>
+    <Branch Condition="'$(IsDevEnv)'!='True' AND '$(Branch)'==''">$(GITHUB_REF_NAME)</Branch>
+  </PropertyGroup>
+
+</Project>
