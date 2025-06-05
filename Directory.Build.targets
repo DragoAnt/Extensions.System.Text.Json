@@ -1,5 +1,5 @@
 <Project>
 
-  <Import Project="$(MSBuildThisFileDirectory).msbuild\init.targets" />
+  <Import Project="$(MSBuildThisFileDirectory).msbuild\shared\init.targets" />
 
 </Project>

@@ -6,7 +6,7 @@
   <!--  More details https://www.daveabrock.com/2021/10/21/csharp-10-global-usings/-->
 
   <!--  Common projects and packages and global usings for all projects avoid Metrc packages-->
-  <ItemGroup Condition="'$(IsPackable)'!='True'">
+  <ItemGroup>
     <Using Include="System.Diagnostics.CodeAnalysis" />
     <Using Include="System.Runtime.CompilerServices" />
     <Using Include="System.Runtime.CompilerServices.MethodImplOptions" Static="True" />
