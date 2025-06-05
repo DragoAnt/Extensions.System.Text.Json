@@ -7,8 +7,8 @@
   <Import Condition="Exists('$(MSBuildThisFileDirectory)project.global.usings.targets')"
           Project="$(MSBuildThisFileDirectory)project.global.usings.targets" />
 
-  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\Directory.GlobalUsings.targets')"
-          Project="$(MSBuildThisFileDirectory)..\Directory.GlobalUsings.targets" />
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\..\Directory.GlobalUsings.targets')"
+          Project="$(MSBuildThisFileDirectory)..\..\Directory.GlobalUsings.targets" />
 
   <Import Condition="Exists('$(MSBuildThisFileDirectory)local.cs.files.targets')"
           Project="$(MSBuildThisFileDirectory)local.cs.files.targets" />
@@ -40,11 +40,13 @@
 
   </ImportGroup>
 
-  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\Directory.Packages.Metadata.targets')"
-          Project="$(MSBuildThisFileDirectory)..\Directory.Packages.Metadata.targets" />
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\..\Directory.Packages.Metadata.targets')"
+          Project="$(MSBuildThisFileDirectory)..\..\Directory.Packages.Metadata.targets" />
 
   <!--  Final imports-->
   <Import Project="$(MSBuildThisFileDirectory)common\init.common.final.targets" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\init.company.specific.targets" />
 
   <!--  Always last-->
   <Import Condition="Exists('$(MSBuildThisFileDirectory)checks\init.checks.targets')"

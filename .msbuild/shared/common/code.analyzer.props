@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <IsCodeAnalizerLib>True</IsCodeAnalizerLib>
+    <DisableSharedGlobalUsings>True</DisableSharedGlobalUsings>
+    <SkipCheck_TargetFrameworkRestriction>True</SkipCheck_TargetFrameworkRestriction>
 
     <Description Condition="'$(Description)'==''">Code analyzers description</Description>
 

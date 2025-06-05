@@ -1,6 +1,18 @@
 <Project>
 
-  <Import Project="$(MSBuildThisFileDirectory)init.company.specific.props" />
+  <PropertyGroup>
+    <Nullable Condition="'$(Nullable)'==''">enable</Nullable>
+    <ImplicitUsings Condition="'$(ImplicitUsings)'==''">enable</ImplicitUsings>
+    <LangVersion Condition="'$(LangVersion)'==''">latest</LangVersion>
+    <EnforceCodeStyleInBuild Condition="'$(EnforceCodeStyleInBuild)'==''">True</EnforceCodeStyleInBuild>
+
+    <GenerateDocumentationFile Condition="'$(GenerateDocumentationFile)'==''">True</GenerateDocumentationFile>
+    <DocumentationFile Condition="'$(DocumentationFile)'==''">$(OutputPath)\$(MSBuildProjectName).xml</DocumentationFile>
+    <GeneratePackageOnBuild Condition="'$(GeneratePackageOnBuild)'==''">False</GeneratePackageOnBuild>
+    <SecretsTemplatesDir Condition="'$(SecretsTemplatesDir)'==''">$(MSBuildThisFileDirectory)..\..\.msbuild.templates\</SecretsTemplatesDir>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)..\init.company.specific.props" />
 
   <Import Project="$(MSBuildThisFileDirectory)common\init.common.props" />
 
@@ -10,8 +22,8 @@
     <SecretsCleanUp Condition="'$(SecretsCleanUp)'=='' AND '$(IsDevEnv)'!='True'">True</SecretsCleanUp>
   </PropertyGroup>
 
-  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\Directory.Version.props')"
-          Project="$(MSBuildThisFileDirectory)..\Directory.Version.props" />
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\..\Directory.Version.props')"
+          Project="$(MSBuildThisFileDirectory)..\..\Directory.Version.props" />
 
   <Import Condition="Exists('$(MSBuildThisFileDirectory)version.props')"
           Project="$(MSBuildThisFileDirectory)version.props" />

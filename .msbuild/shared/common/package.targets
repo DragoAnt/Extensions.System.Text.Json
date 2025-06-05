@@ -4,7 +4,6 @@
     <PackageId Condition="'$(PackageId)'==''">$(MSBuildProjectName)</PackageId>
     <Description Condition="'$(Description)'==''">$(MSBuildProjectName)</Description>
     <PackageVersion Condition="'$(PackageVersion)'==''">$(Version)</PackageVersion>
-    <GenerateDocumentationFile Condition="'$(GenerateDocumentationFile)'==''">True</GenerateDocumentationFile>
     <IncludeSymbols Condition="'$(IncludeSymbols)'==''">false</IncludeSymbols>
 
     <PackageIcon Condition="Exists('$(MSBuildThisFileDirectory)..\package.icon.png')">icon.png</PackageIcon>
@@ -16,7 +15,7 @@
 
   <!--Packages details-->
   <ItemGroup>
-    <None Condition="Exists('$(MSBuildThisFileDirectory)..\package.icon.png')" Include="$(MSBuildThisFileDirectory)..\package.icon.png" Pack="true" PackagePath="\icon.png" Visible="false" />
+    <None Condition="Exists('$(MSBuildThisFileDirectory)..\..\package.icon.png')" Include="$(MSBuildThisFileDirectory)..\..\package.icon.png" Pack="true" PackagePath="\icon.png" Visible="false" />
     <None Include="package.readme.md" Pack="true" PackagePath="\readme.md" />
 
     <!--    Include package controlled msbuild props and targets -->

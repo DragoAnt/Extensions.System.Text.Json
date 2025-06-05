@@ -10,6 +10,6 @@
 
   </PropertyGroup>
 
-  <Import Project="$(MSBuildThisFileDirectory).msbuild\init.props" />
+  <Import Project="$(MSBuildThisFileDirectory).msbuild\shared\init.props" />
 
 </Project>

@@ -1,7 +1,0 @@
-<Project>
-
-  <PropertyGroup>
-    <LocalCompileTemplateDir Condition="'$(LocalCompileTemplateDir)'==''">$(MSBuildThisFileDirectory)../.msbuild.templates/LocalCompile/</LocalCompileTemplateDir>
-  </PropertyGroup>
-
-</Project>
