@@ -6,7 +6,6 @@
     <CIPipelineId>$(GITHUB_RUN_ID)</CIPipelineId>
     <Branch Condition="'$(IsDevEnv)'!='True' AND '$(Branch)'==''">$(GITHUB_REF_NAME)</Branch>
     <CommitSha>$(GITHUB_SHA)</CommitSha>
-    <GitHub_RepositoryPath>$(GITHUB_REPOSITORY)</GitHub_RepositoryPath>
     <BuildNumber>$(GITHUB_RUN_NUMBER)</BuildNumber>
   </PropertyGroup>
 
