@@ -25,7 +25,7 @@ public class JsonMaskingTests
 
     private static JsonObserver GetRequestMasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
     {
-        return JsonObserver.Obj(RelativePolicy(policyBuilder => policyBuilder
+        return JsonObserver.Obj(Relative(policyBuilder => policyBuilder
                 .Match(PropMatches.EndsWith("card"), "saved", "id").MaskStr(MaskingRules.CustomerId)
                 .Match("card", "number").MaskStr(MaskingRules.CardNumber)
                 .Match("user", "entered").MaskStr((_, _) => string.Empty)
@@ -52,7 +52,7 @@ public class JsonMaskingTests
     {
         return JsonObserver.Obj(b => b
                 .Match("routing").Obj(sb => sb.Match("method").Unmasked()),
-            RelativePolicy(policyBuilder => policyBuilder
+            Relative(policyBuilder => policyBuilder
                     .Match(PropMatches.EndsWith("card"), "saved", "id").Unmasked()
                     .Match("card", "number").Unmasked()
                     .Match(PropMatches.Contains("cardHolder")).Unmasked()

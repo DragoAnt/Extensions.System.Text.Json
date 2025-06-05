@@ -3,6 +3,7 @@
   <!--  This is a company specific file shared across company's repositories-->
 
   <PropertyGroup>
+    <RepositoryUrl>https://github.com/$(GitHub_RepositoryPath)</RepositoryUrl>
 
     <!-- Company name, avoid use " -->
     <ManufacturerName>DragoAnt</ManufacturerName>
@@ -31,6 +32,11 @@
 
     <SkipCheck_TargetFrameworkRestriction>False</SkipCheck_TargetFrameworkRestriction>
     <SkipCheck_TreatWarningsAsErrors>False</SkipCheck_TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_RUN_ID)'==''">
+    <RepoFolder>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\').TrimEnd('\').TrimEnd('//'))</RepoFolder>
+    <SlnSecretsId>DragoAnt.$([System.IO.Path]::GetFileName('$(RepoFolder)'))</SlnSecretsId>
   </PropertyGroup>
 
 </Project>

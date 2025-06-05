@@ -22,17 +22,17 @@ public static class JsonObserverValuePolicies
         = JsonObserverValuePolicies<JsonObserveringEmptyContext>.NullList;
 
     /// <summary>
-    /// Initialize custom property value masking policy.
+    /// Initialize relative policy.
     /// </summary>
     /// <param name="init">Policy building action.</param>
     /// <param name="defaultValuePolicy">Default policy.</param>
     /// <remarks>
     /// Initializes policies for any property with or without considering depth.
     /// </remarks>
-    public static JsonObserverValueDelegate<JsonObserveringEmptyContext> RelativePolicy(
+    public static JsonObserverValueDelegate<JsonObserveringEmptyContext> Relative(
         Action<JsonValuePolicyBuilder<JsonObserveringEmptyContext>> init,
         JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultValuePolicy = null)
-        => JsonObserverValuePolicies<JsonObserveringEmptyContext>.RelativePolicy(init, defaultValuePolicy);
+        => JsonObserverValuePolicies<JsonObserveringEmptyContext>.Relative(init, defaultValuePolicy);
 }
 
 /// <summary>
@@ -50,7 +50,7 @@ public static class JsonObserverValuePolicies<TContext>
     /// <remarks>
     /// Initializes policies for any property with or without considering depth.
     /// </remarks>
-    public static JsonObserverValueDelegate<TContext> RelativePolicy(
+    public static JsonObserverValueDelegate<TContext> Relative(
         Action<JsonValuePolicyBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultValuePolicy = null)
     {

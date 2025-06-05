@@ -1,6 +1,5 @@
 <Project>
   <PropertyGroup>
-    <RepositoryUrl>https://github.com/DragoAnt/DragoAnt.System.Text.Json</RepositoryUrl>
 
     <TargetFrameworkStrategy>TargetFrameworks</TargetFrameworkStrategy>
     <TargetFrameworks>net7.0;net8.0;net9.0</TargetFrameworks>
@@ -9,7 +8,6 @@
     <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
     <NoWarn>$(NoWarn);NETSDK1138</NoWarn>
 
-    <SlnSecretsId>DragoAnt.System.Text.Json</SlnSecretsId>
   </PropertyGroup>
 
   <Import Project="$(MSBuildThisFileDirectory).msbuild\init.props" />

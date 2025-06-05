@@ -11,8 +11,7 @@ on:
 env:
   PACKAGE_OUTPUT_DIRECTORY: '${{ github.workspace }}/output'
   NUGET_SOURCE_URL: 'https://api.nuget.org/v3/index.json'
-  BUILD_CONFIGURATION: Release  
-  MSBUILD_GITHUB_PROPERTIES: '/p:GITHUB_RUN_ID=${{ github.run_id }} /p:GITHUB_REF_NAME=${{ github.ref_name }} /p:GITHUB_RUN_NUMBER=${{ github.run_number }} /p:GITHUB_SHA=${{ github.sha }} /p:GITHUB_REPOSITORY=${{ github.repository }} /p:GITHUB_BASE_REF=${{ github.base_ref }} /p:GITHUB_HEAD_REF=${{ github.head_ref }}'
+  MSBUILD_GITHUB_PROPERTIES: '/p:GITHUB_RUN_ID=${{ github.run_id }} /p:GITHUB_RUN_NUMBER=${{ github.run_number }} /p:GITHUB_REF_NAME=${{ github.ref_name }} /p:GITHUB_SHA=${{ github.sha }} /p:GITHUB_REPOSITORY=${{ github.repository }}'
 
 jobs:
   build_publish_nuget:
