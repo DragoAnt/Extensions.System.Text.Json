@@ -3,12 +3,14 @@
   <!--  This is a company specific file shared across company's repositories-->
 
   <PropertyGroup>
-    <RepositoryUrl>https://github.com/$(GitHub_RepositoryPath)</RepositoryUrl>
-
-    <!-- Company name, avoid use " -->
     <ManufacturerName>DragoAnt</ManufacturerName>
-    <!-- Full company name, avoid use " -->
     <FullManufacturerName>DragoAnt</FullManufacturerName>
+
+    <RepositoryUrl>https://github.com/$(GitHub_RepositoryPath)</RepositoryUrl>
+    <IsGitHubCI>True</IsGitHubCI>
+
+    <IncrementVersionType Condition="'$(IncrementVersionType)'==''">VersionTag</IncrementVersionType>
+    <VersionTag>$(GITHUB_REF_NAME)</VersionTag>
 
     <IsPackable>true</IsPackable>
 
@@ -23,9 +25,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
 
-    <IsGitHubCI>True</IsGitHubCI>
-    <IsStableBranchRegex Condition="'$(IsStableBranchRegex)'==''">^(main).*$</IsStableBranchRegex>
-    <IncrementVersionType Condition="'$(IncrementVersionType)'==''">VersionTag</IncrementVersionType>
+
 
     <!--  Make internal members visible for tests -->
     <TestsDir>$(MSBuildThisFileDirectory)..\</TestsDir>
