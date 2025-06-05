@@ -6,7 +6,7 @@
     <ManufacturerName>DragoAnt</ManufacturerName>
     <FullManufacturerName>DragoAnt</FullManufacturerName>
 
-    <RepositoryUrl>https://github.com/$(GitHub_RepositoryPath)</RepositoryUrl>
+    <RepositoryUrl>https://github.com/$(GITHUB_REPOSITORY)</RepositoryUrl>
     <IsGitHubCI>True</IsGitHubCI>
 
     <IncrementVersionType Condition="'$(IncrementVersionType)'==''">VersionTag</IncrementVersionType>
