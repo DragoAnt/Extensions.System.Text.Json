@@ -5,6 +5,14 @@
     <IsDevEnv Condition="'$(IsDevEnv)'=='' AND '$(GITHUB_RUN_ID)'!=''">False</IsDevEnv>
     <CIPipelineId>$(GITHUB_RUN_ID)</CIPipelineId>
     <Branch Condition="'$(IsDevEnv)'!='True' AND '$(Branch)'==''">$(GITHUB_REF_NAME)</Branch>
+    <CommitSha>$(GITHUB_SHA)</CommitSha>
+    <Repository>$(GITHUB_REPOSITORY)</Repository>
+    <WorkflowName>$(GITHUB_WORKFLOW)</WorkflowName>
+    <BuildNumber>$(GITHUB_RUN_NUMBER)</BuildNumber>
+    <BuildTriggeredBy>$(GITHUB_ACTOR)</BuildTriggeredBy>
+    <EventName>$(GITHUB_EVENT_NAME)</EventName>
+    <BaseRef>$(GITHUB_BASE_REF)</BaseRef>
+    <HeadRef>$(GITHUB_HEAD_REF)</HeadRef>
   </PropertyGroup>
 
 </Project>
