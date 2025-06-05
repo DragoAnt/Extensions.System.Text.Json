@@ -35,5 +35,5 @@ jobs:
       - name: 'Pack'
         run: dotnet pack -c Release --no-build -o ${{ env.PACKAGE_OUTPUT_DIRECTORY }} ${{ env.MSBUILD_GITHUB_PROPERTIES }}
 
-#      - name: 'Push packages'
-#        run: dotnet nuget push ${{ env.PACKAGE_OUTPUT_DIRECTORY }}/*.nupkg -k ${{ secrets.NUGET_ORG_API_KEY }} -s ${{ env.NUGET_SOURCE_URL }} --skip-duplicate
+      - name: 'Push packages'
+        run: dotnet nuget push ${{ env.PACKAGE_OUTPUT_DIRECTORY }}/*.nupkg -k ${{ secrets.NUGET_ORG_API_KEY }} -s ${{ env.NUGET_SOURCE_URL }} --skip-duplicate
