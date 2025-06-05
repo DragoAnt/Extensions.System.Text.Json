@@ -35,7 +35,7 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
                 .Match("contractId2").ReadRaw((v, c) => c.ContractId2 = v)
                 .Match("method").ReadStr((v, c) => c.Method = v))
             .Match("session", "user", "entered").ReadStr((v, c) => c.User = v),
-        RelativePolicy(builder => builder
+        Relative(builder => builder
             .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)
             .Match(PropMatches.Contains("ipAddress")).ReadStr((v, c) => c.Ip = v)));
 
@@ -163,7 +163,7 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
                 .Match("routing").Obj(routingB => routingB
                     .Match("contractId").ReadInt((v, c) => c.ContractId = v))
                 .Match("session", "user", "entered").ReadStr((v, c) => c.User = v),
-            RelativePolicy(b => b
+            Relative(b => b
                 .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)));
 
         // Act
