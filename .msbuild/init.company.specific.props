@@ -1,0 +1,36 @@
+<Project>
+
+  <!--  This is a company specific file shared across company's repositories-->
+
+  <PropertyGroup>
+
+    <!-- Company name, avoid use " -->
+    <ManufacturerName>DragoAnt</ManufacturerName>
+    <!-- Full company name, avoid use " -->
+    <FullManufacturerName>DragoAnt</FullManufacturerName>
+
+    <IsPackable>true</IsPackable>
+
+    <NoWarn>$(NoWarn);CS1591;EF1001;xUnit1051</NoWarn>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+
+    <LangVersion>latest</LangVersion>
+    <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+
+    <IsGitHubCI>True</IsGitHubCI>
+    <IsStableBranchRegex Condition="'$(IsStableBranchRegex)'==''">^(main).*$</IsStableBranchRegex>
+    <IncrementVersionType Condition="'$(IncrementVersionType)'==''">VersionTag</IncrementVersionType>
+
+    <!--  Make internal members visible for tests -->
+    <TestsDir>$(MSBuildThisFileDirectory)..\</TestsDir>
+
+    <SkipCheck_TargetFrameworkRestriction>False</SkipCheck_TargetFrameworkRestriction>
+    <SkipCheck_TreatWarningsAsErrors>False</SkipCheck_TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

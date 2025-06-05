@@ -18,6 +18,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".msbuild", ".msbuild", "{48
 		.msbuild\init.props = .msbuild\init.props
 		.msbuild\init.targets = .msbuild\init.targets
 		.msbuild\local.cs.files.props = .msbuild\local.cs.files.props
+		.msbuild\init.company.specific.props = .msbuild\init.company.specific.props
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DragoAnt.System.Text.Json.Observer", "DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj", "{C9620AB8-AAEC-4E22-9001-3E2386DB78F4}"
@@ -28,8 +29,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".slnItems", ".slnItems", "{
 		Directory.Build.targets = Directory.Build.targets
 		Directory.Packages.props = Directory.Packages.props
 		global.json = global.json
-		Directory.Version.props = Directory.Version.props
-		..\README.md = ..\README.md
+		PackageAsProj.targets = PackageAsProj.targets
+		Directory.PackageAsProj.targets = Directory.PackageAsProj.targets
+		README.md = README.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DragoAnt.System.Text.Json.Observer.Benchmarks", "DragoAnt.System.Text.Json.Observer.Benchmarks\DragoAnt.System.Text.Json.Observer.Benchmarks.csproj", "{DBB134BA-636C-4F6F-8644-3A548728F627}"
@@ -54,6 +56,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{66705A
 		.msbuild\common\secrets.project.targets = .msbuild\common\secrets.project.targets
 		.msbuild\common\init.common.final.targets = .msbuild\common\init.common.final.targets
 		.msbuild\common\private.assets.references.targets = .msbuild\common\private.assets.references.targets
+		.msbuild\common\ci.github.props = .msbuild\common\ci.github.props
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "checks", "checks", "{C06D56F2-2266-420C-819E-E2FCE091C3BA}"
@@ -83,7 +86,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "utils", "utils", "{BBD3FC53
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".pipeline", ".pipeline", "{D990CD3A-6098-4AA9-986D-DF8EF9951BF7}"
 	ProjectSection(SolutionItems) = preProject
-		..\.github\workflows\build_and_publish_nuget.yml = ..\.github\workflows\build_and_publish_nuget.yml
+		.github\workflows\build_and_publish_nuget.yml = .github\workflows\build_and_publish_nuget.yml
 	EndProjectSection
 EndProject
 Global

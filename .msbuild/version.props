@@ -5,6 +5,7 @@
      * DateBased(Default) - yyyy.M.d.$([MSBuild]::Modulo($(CIPipelineId), $(MaxBuildNumber)))(-pre-release) (eg. 2025.5.30.1234, 2025.5.30.1234-pre-release)
      * SemVer - Semantic version with build number based on $(CIPipelineId). https://semver.org/ (eg. 1.0.0, 1.0.0-pre-release.<buildNumber>)
      * SemVer4 - Kinda semantic version with build number based on $(CIPipelineId). (eg. 1.0.0.<buildNumber>, 1.0.0-pre-release.<buildNumber>)
+     * VersionTag - Use git tag(<VersionTag>) as a version
   -->
 
   <PropertyGroup>
@@ -41,6 +42,14 @@
       <PropertyGroup>
         <VersionPrefix>$(VersionPrefix).$(BuildNumber)</VersionPrefix>
         <VersionSuffix Condition="'$(PreReleaseSuffix)'!=''">$(PreReleaseSuffix)</VersionSuffix>
+      </PropertyGroup>
+    </When>
+    <When Condition="'$(IncrementVersionType)'=='VersionTag'">
+      <PropertyGroup>
+        <VersionPrefix />
+        <Version>$(VersionTag)</Version>
+        <Version Condition="'$(VersionTag)'==''">Empty version tag</Version>
+        <BuildNumber>0</BuildNumber>
       </PropertyGroup>
     </When>
     <When Condition="'$(IncrementVersionType)'=='DevEnv'">

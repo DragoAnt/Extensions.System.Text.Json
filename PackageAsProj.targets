@@ -1,0 +1,13 @@
+<!--Add metadata to PackageReference to use ProjectReference instead of PackageReference-->
+<Project>
+  <PropertyGroup>
+    <_AsProj_DragoAnt_SystemTextJson>false</_AsProj_DragoAnt_SystemTextJson>
+    <_AsProj_DragoAnt_SystemTextJson Condition="'$(PackageAsProj_DragoAnt_SystemTextJson)'=='true'">True</_AsProj_DragoAnt_SystemTextJson>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Update="DragoAnt.System.Text.Json.Observer"
+                      ProjPath="$(MSBuildThisFileDirectory)DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj"
+                      AsProj="$(_AsProj_DragoAnt_SystemTextJson)" />
+  </ItemGroup>
+
+</Project>

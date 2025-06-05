@@ -4,23 +4,10 @@
 
     <TargetFrameworkStrategy>TargetFrameworks</TargetFrameworkStrategy>
     <TargetFrameworks>net7.0;net8.0;net9.0</TargetFrameworks>
-    <IsPackable>true</IsPackable>
 
-    <LangVersion>latest</LangVersion>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- TODO:   Remove after remove support of net7-->
     <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
     <NoWarn>$(NoWarn);NETSDK1138</NoWarn>
-
-    <NoWarn>$(NoWarn);CS1591;EF1001;xUnit1051</NoWarn>
-
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
-
-    <LangVersion>latest</LangVersion>
-    <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
-    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
 
     <SlnSecretsId>DragoAnt.System.Text.Json</SlnSecretsId>
   </PropertyGroup>
