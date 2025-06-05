@@ -46,7 +46,8 @@
   <!--  Final imports-->
   <Import Project="$(MSBuildThisFileDirectory)common\init.common.final.targets" />
 
-  <Import Project="$(MSBuildThisFileDirectory)..\init.company.specific.targets" />
+  <Import Condition="Exists('$(MSBuildThisFileDirectory)..\init.company.specific.targets')"
+          Project="$(MSBuildThisFileDirectory)..\init.company.specific.targets" />
 
   <!--  Always last-->
   <Import Condition="Exists('$(MSBuildThisFileDirectory)checks\init.checks.targets')"
