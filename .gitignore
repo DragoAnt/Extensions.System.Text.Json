@@ -400,3 +400,4 @@ FodyWeavers.xsd
 # Verify
 *.received.*
 /examples/.idea/.idea.DragoAnt.Extensions.DependencyInjection.Examples/.idea/
+*.orig
