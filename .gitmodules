@@ -1,0 +1,4 @@
+[submodule ".msbuild"]
+	path = .msbuild
+	url = ../MSBuild.Routine
+	branch = main
