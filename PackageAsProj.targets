@@ -2,7 +2,7 @@
 <Project>
   <PropertyGroup>
     <_AsProj_DragoAnt_SystemTextJson>false</_AsProj_DragoAnt_SystemTextJson>
-    <_AsProj_DragoAnt_SystemTextJson Condition="'$(PackageAsProj_DragoAnt_SystemTextJson)'=='true'">True</_AsProj_DragoAnt_SystemTextJson>
+    <_AsProj_DragoAnt_SystemTextJson Condition="'$(PackageAsProj_DragoAnt)'=='true' Or '$(PackageAsProj_DragoAnt_SystemTextJson)'=='true'">True</_AsProj_DragoAnt_SystemTextJson>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Update="DragoAnt.System.Text.Json.Observer"
