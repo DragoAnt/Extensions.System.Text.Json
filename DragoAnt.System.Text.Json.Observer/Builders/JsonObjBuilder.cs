@@ -30,6 +30,9 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
     internal static JsonObserverDelegate<TContext> Build(JsonObjBuilder<TContext> builder) => builder.Build();
     private JsonObserverDelegate<TContext> Build() => JsonObserverItem<TContext>.ApplyObjPolicy([.. _policies], builderDefaultValuePolicy);
 
+    private JsonObjBuilder<TContext> AddAny(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy) =>
+        Add((int depth, ref PropertyPath path, JsonTokenType _) => propNameMatch(depth, ref path), policy);
+
     private JsonObjBuilder<TContext> AddValue(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy) =>
         Add((int depth, ref PropertyPath path, JsonTokenType type) =>
         {
@@ -159,6 +162,22 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
             }, builderDefaultValuePolicy));
 
         /// <summary>
+        /// Masks the whole value whatever its JSON type: a string, number or boolean is passed to the strategy as text,
+        /// an object or array is skipped unread and the strategy receives <c>null</c>; a <c>null</c> value stays <c>null</c>.
+        /// </summary>
+        /// <param name="strategy">Masking strategy; a <c>null</c> result is written as <c>null</c>.</param>
+        public JsonObjBuilder<TContext> MaskAny(Func<string?, TContext, string?> strategy)
+            => MaskAny((StringMaskingStrategy<TContext>)strategy);
+
+        /// <summary>
+        /// Masks the whole value whatever its JSON type: a string, number or boolean is passed to the strategy as text,
+        /// an object or array is skipped unread and the strategy receives <c>null</c>; a <c>null</c> value stays <c>null</c>.
+        /// </summary>
+        /// <param name="strategy">Masking strategy; a <c>null</c> result is written as <c>null</c>.</param>
+        public JsonObjBuilder<TContext> MaskAny(StringMaskingStrategy<TContext> strategy)
+            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy));
+
+        /// <summary>
         /// Add masking for any value.
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
@@ -189,6 +208,9 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
         /// Masking rule for value property.
         /// </summary>
         /// <param name="policy">Masking policy.</param>
+        internal JsonObjBuilder<TContext> MaskWhole(JsonObserverDelegate<TContext> policy)
+            => builder.AddAny(propNameMatch.AbsoluteMatch, policy);
+
         public JsonObjBuilder<TContext> MaskValue(JsonObserverDelegate<TContext> policy)
             => builder.AddValue(propNameMatch.AbsoluteMatch, policy);
 

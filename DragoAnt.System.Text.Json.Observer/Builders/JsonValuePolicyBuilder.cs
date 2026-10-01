@@ -22,6 +22,14 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
 
     internal static JsonObserverDelegate<TContext> Build(JsonValuePolicyBuilder<TContext> builder) => builder.Build();
 
+    internal static JsonObserverItem<TContext>[] BuildItems(JsonValuePolicyBuilder<TContext> builder) => [.. builder._policies];
+
+    private JsonValuePolicyBuilder<TContext> AddAnyProp(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy)
+    {
+        _policies.Add(new JsonObserverItem<TContext>((int depth, ref PropertyPath path, JsonTokenType _) => propNameMatch(depth, ref path), policy));
+        return this;
+    }
+
     private JsonValuePolicyBuilder<TContext> AddValueProp(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy)
     {
         var item = new JsonObserverItem<TContext>((int depth, ref PropertyPath path, JsonTokenType type) =>
@@ -151,6 +159,22 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
             }, builderDefaultValuePolicy));
 
         /// <summary>
+        /// Masks the whole value whatever its JSON type: a string, number or boolean is passed to the strategy as text,
+        /// an object or array is skipped unread and the strategy receives <c>null</c>; a <c>null</c> value stays <c>null</c>.
+        /// </summary>
+        /// <param name="strategy">Masking strategy; a <c>null</c> result is written as <c>null</c>.</param>
+        public JsonValuePolicyBuilder<TContext> MaskAny(Func<string?, TContext, string?> strategy)
+            => MaskAny((StringMaskingStrategy<TContext>)strategy);
+
+        /// <summary>
+        /// Masks the whole value whatever its JSON type: a string, number or boolean is passed to the strategy as text,
+        /// an object or array is skipped unread and the strategy receives <c>null</c>; a <c>null</c> value stays <c>null</c>.
+        /// </summary>
+        /// <param name="strategy">Masking strategy; a <c>null</c> result is written as <c>null</c>.</param>
+        public JsonValuePolicyBuilder<TContext> MaskAny(StringMaskingStrategy<TContext> strategy)
+            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy));
+
+        /// <summary>
         /// Add masking for any value.
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
@@ -181,6 +205,9 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
                     ref PropertyPath propPath,
                     JsonObserverValueDelegate<TContext> _) =>
                 JsonObserverValuePolicies<TContext>.BlockList(ref reader, writer, context, ref propPath));
+
+        internal JsonValuePolicyBuilder<TContext> MaskWhole(JsonObserverDelegate<TContext> policy)
+            => builder.AddAnyProp(builder._relative ? propNameMatch.RelativeMatch : propNameMatch.AbsoluteMatch, policy);
 
         public JsonValuePolicyBuilder<TContext> MaskValue(JsonObserverDelegate<TContext> policy)
             => builder.AddValueProp(builder._relative ? propNameMatch.RelativeMatch : propNameMatch.AbsoluteMatch, policy);

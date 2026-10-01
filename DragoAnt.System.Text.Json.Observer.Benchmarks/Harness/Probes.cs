@@ -17,6 +17,7 @@ public static class Probes
         {
             ("MaskStr", Wrap(BuildObserver(raw: false))),
             ("MaskRawValue", Wrap(BuildObserver(raw: true))),
+            ("MaskAny", Wrap(BuildMaskAnyObserver())),
             ("Read-mode mask+extract", MaskAndExtract),
         };
 
@@ -70,6 +71,11 @@ public static class Probes
         public int? Id { get; set; }
         public bool? Active { get; set; }
     }
+
+    private static JsonObserver BuildMaskAnyObserver() =>
+        JsonObserver.Any(_ => { }, _ => { }, JsonObserverValuePolicies.Relative(
+            b => b.Match(Strategies.PropMatches.OneOf("password", "pin")).MaskAny("***"),
+            JsonObserverValuePolicies.BlockList));
 
     private static JsonObserver BuildObserver(bool raw)
     {

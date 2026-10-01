@@ -138,6 +138,51 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     }
 
     /// <summary>
+    /// Masks a value of any JSON type; a container is skipped and reported to the rule as <c>null</c>.
+    /// </summary>
+    /// <param name="maskingRule">Property masking rule.</param>
+    public static JsonObserverDelegate<TContext> ApplyAnyPolicy(Func<string?, TContext, string?> maskingRule)
+    {
+        return (
+            ref Utf8JsonReader reader,
+            JsonWriter writer,
+            TContext context,
+            int _,
+            ref PropertyPath propPath,
+            JsonObserverValueDelegate<TContext> __) =>
+        {
+            string? value;
+            switch (reader.TokenType)
+            {
+                case Null:
+                    writer.WriteNullValue();
+                    return;
+                case StartObject:
+                case StartArray:
+                    reader.Skip();
+                    value = null;
+                    break;
+                case JsonTokenType.String:
+                    value = reader.GetString();
+                    break;
+                default:
+                    value = Encoding.UTF8.GetString(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan);
+                    break;
+            }
+
+            var result = maskingRule(value, context);
+            if (result is null)
+            {
+                writer.WriteNullValue();
+            }
+            else
+            {
+                writer.WriteStringValue(result);
+            }
+        };
+    }
+
+    /// <summary>
     /// Apply masking policy for value string.
     /// </summary>
     /// <param name="maskingRule">Property masking rule.</param>
@@ -518,9 +563,19 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             switch (reader.TokenType)
             {
                 case StartObject:
+                    if (effective.Target is RelativeValuePolicy<TContext> relativeObj && relativeObj.TryApplyContainer(ref reader, writer, context, ref propPath))
+                    {
+                        break;
+                    }
+
                     unknown.Obj(ref reader, writer, context, depth, ref propPath, effective);
                     break;
                 case StartArray:
+                    if (effective.Target is RelativeValuePolicy<TContext> relativeArray && relativeArray.TryApplyContainer(ref reader, writer, context, ref propPath))
+                    {
+                        break;
+                    }
+
                     unknown.Array(ref reader, writer, context, depth, ref propPath, effective);
                     break;
                 case Comment:
@@ -528,13 +583,9 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                     break;
                 case JsonTokenType.String:
                 case Number:
-                    effective(ref reader, writer, context, ref propPath);
-                    break;
                 case True:
-                    writer.WriteBooleanValue(true);
-                    break;
                 case False:
-                    writer.WriteBooleanValue(false);
+                    effective(ref reader, writer, context, ref propPath);
                     break;
                 case Null:
                     writer.WriteNullValue();
@@ -549,7 +600,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
         };
     }
 
-    private static (JsonObserverItem<TContext>?, int depth) MatchPolicy(
+    internal static (JsonObserverItem<TContext>?, int depth) MatchPolicy(
         JsonObserverItem<TContext>[] policies,
         int depth,
         ref PropertyPath path,
@@ -571,7 +622,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
 
     private (bool success, int depth) Match(int depth, ref PropertyPath propPath, JsonTokenType token) => propMatch(depth, ref propPath, token);
 
-    private void Apply(
+    internal void Apply(
         ref Utf8JsonReader reader,
         JsonWriter writer,
         TContext context,

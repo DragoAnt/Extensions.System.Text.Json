@@ -55,11 +55,12 @@ public static class JsonObserverValuePolicies<TContext>
     {
         var builder = new JsonValuePolicyBuilder<TContext>(true, defaultValuePolicy);
         init(builder);
-        var policy = JsonValuePolicyBuilder<TContext>.Build(builder);
-        defaultValuePolicy ??= Default;
+        var relative = new RelativeValuePolicy<TContext>(
+            JsonValuePolicyBuilder<TContext>.Build(builder),
+            JsonValuePolicyBuilder<TContext>.BuildItems(builder),
+            defaultValuePolicy ?? Default);
 
-        return (ref Utf8JsonReader reader, JsonWriter writer, TContext context, ref PropertyPath propPath)
-            => policy(ref reader, writer, context, 0, ref propPath, defaultValuePolicy);
+        return relative.Invoke;
     }
 
     /// <summary>

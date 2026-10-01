@@ -48,7 +48,7 @@ public abstract class NameMatchingTests
 
         observer.Mask("""{"a\u0062":1,"c":[2]}""");
 
-        names.Should().Equal("ab", null);
+        names.Should().Equal("ab", "c", null);
     }
 
     [Fact]
