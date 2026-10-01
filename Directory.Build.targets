@@ -2,4 +2,9 @@
 
   <Import Project="$(MSBuildThisFileDirectory).msbuild\shared\init.targets" />
 
+  <!-- DynamicallyAccessedMemberTypes.None collides with the statically imported JsonTokenType.None. -->
+  <ItemGroup>
+    <Using Remove="System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes" />
+  </ItemGroup>
+
 </Project>
