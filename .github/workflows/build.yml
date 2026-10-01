@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 'Build and test'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: 'Install dotnet'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+          global-json-file: './global.json'
+
+      - name: 'Restore packages'
+        run: dotnet restore
+
+      - name: 'Build'
+        run: dotnet build -c Release --no-restore
+
+      - name: 'Test'
+        run: dotnet test --solution DragoAnt.System.Text.Json.sln -c Release --no-build --no-progress
