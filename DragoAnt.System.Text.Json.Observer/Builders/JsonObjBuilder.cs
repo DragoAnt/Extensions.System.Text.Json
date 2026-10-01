@@ -158,6 +158,14 @@ public readonly struct JsonObjBuilder<TContext>(JsonObserverValueDelegate<TConte
             => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy));
 
         /// <summary>
+        /// Masks the whole value whatever its JSON type with the <see cref="Utf8MaskStrategy"/> of the call,
+        /// which receives <paramref name="tag"/>; a <c>null</c> value stays <c>null</c>.
+        /// </summary>
+        /// <param name="tag">How the strategy masks the value.</param>
+        public JsonObjBuilder<TContext> MaskAny(MaskTag tag)
+            => MaskWhole(JsonObserverItem<TContext>.ApplyTagPolicy(tag));
+
+        /// <summary>
         /// Add masking for any value.
         /// </summary>
         /// <param name="strategy">Masking strategy</param>

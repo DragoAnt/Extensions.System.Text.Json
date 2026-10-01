@@ -58,6 +58,11 @@ public abstract class JsonWriter
     public virtual void WriteRawValue(ReadOnlySpan<byte> utf8Json) =>
         throw new NotSupportedException($"{GetType().Name} does not support raw values.");
 
+    /// <summary>
+    /// Options of the current call; rules with a <see cref="Strategies.MaskTag"/> read their strategy and hash key here.
+    /// </summary>
+    internal virtual JsonObserverOptions Options => JsonObserverOptions.Default;
+
     internal void CopyStringValue(ref Utf8JsonReader reader)
     {
         if (ReferenceEquals(this, Empty))

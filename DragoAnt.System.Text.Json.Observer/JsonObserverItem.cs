@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer.Builders;
+using DragoAnt.System.Text.Json.Observer.Strategies;
 using static System.Text.Json.JsonTokenType;
 
 namespace DragoAnt.System.Text.Json.Observer;
@@ -218,6 +219,65 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                     break;
             }
         };
+    }
+
+    /// <summary>
+    /// Masks a value of any JSON type with the call's <see cref="Utf8MaskStrategy"/>; a container is skipped.
+    /// </summary>
+    /// <param name="tag">Tag handed to the strategy.</param>
+    public static JsonObserverDelegate<TContext> ApplyTagPolicy(MaskTag tag)
+    {
+        return (
+            ref Utf8JsonReader reader,
+            JsonWriter writer,
+            TContext _,
+            int __,
+            ref PropertyPath propPath,
+            JsonObserverValueDelegate<TContext> ___) =>
+        {
+            var tokenType = reader.TokenType;
+            if (tokenType is Null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            var options = writer.Options;
+            var strategy = options.MaskStrategy ?? Utf8MaskStrategy.Default;
+            switch (tokenType)
+            {
+                case StartObject:
+                case StartArray:
+                    strategy.Mask(default, tokenType, tag, writer, options);
+                    if (!reader.TrySkip())
+                    {
+                        propPath.Stop();
+                    }
+
+                    return;
+                case JsonTokenType.String when reader.HasValueSequence || reader.ValueIsEscaped:
+                    MaskEscapedString(ref reader, strategy, tag, writer, options);
+                    return;
+                default:
+                    strategy.Mask(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan, tokenType, tag, writer, options);
+                    return;
+            }
+        };
+
+        static void MaskEscapedString(ref Utf8JsonReader reader, Utf8MaskStrategy strategy, MaskTag tag, JsonWriter writer, JsonObserverOptions options)
+        {
+            var length = reader.HasValueSequence ? checked((int)reader.ValueSequence.Length) : reader.ValueSpan.Length;
+            var buffer = ArrayPool<byte>.Shared.Rent(length);
+            try
+            {
+                var written = reader.CopyString(buffer);
+                strategy.Mask(buffer.AsSpan(0, written), JsonTokenType.String, tag, writer, options);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+            }
+        }
     }
 
     /// <summary>

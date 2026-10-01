@@ -23,6 +23,7 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
 
     public BoundedJsonWriter(JsonObserverOptions options)
     {
+        Options = options;
         _maxOutputBytes = Math.Max(options.MaxOutputBytes, 0);
         _maxValueBytes = Math.Max(options.MaxValueBytes, 0);
         _buffer = new PooledBufferWriter();
@@ -34,6 +35,8 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
     }
 
     public bool Exhausted { get; private set; }
+
+    internal override JsonObserverOptions Options { get; }
 
     private int Length => checked((int)(_writer.BytesCommitted + _writer.BytesPending));
 
