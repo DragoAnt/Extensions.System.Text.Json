@@ -11,17 +11,14 @@
     <DragoAntSharedVersion>9.0.0</DragoAntSharedVersion>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(IsNET7)'=='True'">
-    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">8.0.5</MicrosoftExtensionsVersion>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET8)'=='True'">
-    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">8.0.5</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">8.0.6</MicrosoftExtensionsVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET9)'=='True'">
-    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">9.0.5</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">9.0.20</MicrosoftExtensionsVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET10)'=='True'">
-    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">10.0.0</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">10.0.12</MicrosoftExtensionsVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET11)'=='True'">
     <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">11.0.0</MicrosoftExtensionsVersion>
@@ -37,7 +34,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <PackageVersion Include="DragoAnt.Shared" Version="$(DragoAntSharedVersion)" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageVersion Include="Bogus" Version="35.6.3" />
@@ -46,7 +42,6 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="FluentAssertions" Version="7.2.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-    <PackageVersion Include="System.Text.Json" Version="$(MicrosoftExtensionsVersion)" />
     <PackageVersion Include="Verify.DiffPlex" Version="3.1.2" />
     <PackageVersion Include="Verify" Version="30.1.0" />
     <PackageVersion Include="Verify.XunitV3" Version="28.13.0" />

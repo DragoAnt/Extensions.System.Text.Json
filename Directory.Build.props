@@ -2,11 +2,7 @@
   <PropertyGroup>
 
     <TargetFrameworkStrategy>TargetFrameworks</TargetFrameworkStrategy>
-    <TargetFrameworks>net7.0;net8.0;net9.0</TargetFrameworks>
-
-    <!-- TODO:   Remove after remove support of net7-->
-    <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
-    <NoWarn>$(NoWarn);NETSDK1138</NoWarn>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
 
   </PropertyGroup>
 
