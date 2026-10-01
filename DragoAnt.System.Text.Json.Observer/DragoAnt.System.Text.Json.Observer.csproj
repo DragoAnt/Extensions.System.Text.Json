@@ -1,6 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Mask or extract JSON values by property-path rules in a single streaming pass from Utf8JsonReader to Utf8JsonWriter, without deserialization or a DOM.</Description>
     <PackageTags>json;system.text.json;utf8jsonreader;masking;redaction;pii;extraction;streaming;logging</PackageTags>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="DragoAnt.System.Text.Json.Observer.Tests.Shared" />
+  </ItemGroup>
 </Project>

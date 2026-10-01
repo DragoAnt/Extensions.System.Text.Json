@@ -101,7 +101,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
             if (reader.TokenType is
                 not JsonTokenType.String and
                 not Number and
@@ -109,7 +109,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 not False and
                 not Null)
             {
-                valuePolicy.Invoke(ref reader, writer, context, ref propPath);
+                effective.Invoke(ref reader, writer, context, ref propPath);
                 return;
             }
 
@@ -152,10 +152,10 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
             if (reader.TokenType is not JsonTokenType.String and not Null)
             {
-                valuePolicy.Invoke(ref reader, writer, context, ref propPath);
+                effective.Invoke(ref reader, writer, context, ref propPath);
                 return;
             }
 
@@ -187,10 +187,10 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
             if (reader.TokenType is not True and not False and not Null)
             {
-                valuePolicy.Invoke(ref reader, writer, context, ref propPath);
+                effective.Invoke(ref reader, writer, context, ref propPath);
                 return;
             }
 
@@ -222,10 +222,10 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
             if (reader.TokenType is not Number and not Null)
             {
-                valuePolicy.Invoke(ref reader, writer, context, ref propPath);
+                effective.Invoke(ref reader, writer, context, ref propPath);
                 return;
             }
 
@@ -257,10 +257,10 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
             if (reader.TokenType is not Number and not Null)
             {
-                valuePolicy.Invoke(ref reader, writer, context, ref propPath);
+                effective.Invoke(ref reader, writer, context, ref propPath);
                 return;
             }
 
@@ -294,10 +294,10 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
             if (reader.TokenType is not Number and not Null)
             {
-                valuePolicy.Invoke(ref reader, writer, context, ref propPath);
+                effective.Invoke(ref reader, writer, context, ref propPath);
                 return;
             }
 
@@ -321,7 +321,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// <param name="valuePolicy">Value masking delegate.</param>
     public static JsonObserverDelegate<TContext> ApplyValuePolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
     {
-        var defaultPolicy = GetApplyDefaultPolicy(policies, valuePolicy);
+        var defaultPolicy = GetApplyDefaultPolicy(valuePolicy, UnknownContainers.Create(policies));
 
         return (
             ref Utf8JsonReader reader,
@@ -357,8 +357,17 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     }
 
     internal static JsonObserverDelegate<TContext> ApplyObjPolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
+        => ApplyObjPolicy(policies, valuePolicy, UnknownContainers.Create(policies));
+
+    internal static JsonObserverDelegate<TContext> ApplyArrayPolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
+        => ApplyArrayPolicy(policies, valuePolicy, UnknownContainers.Create(policies));
+
+    private static JsonObserverDelegate<TContext> ApplyObjPolicy(
+        JsonObserverItem<TContext>[] policies,
+        JsonObserverValueDelegate<TContext>? valuePolicy,
+        UnknownContainers unknown)
     {
-        var defaultPolicy = GetApplyDefaultPolicy(policies, valuePolicy);
+        var defaultPolicy = GetApplyDefaultPolicy(valuePolicy, unknown);
 
         return (
             ref Utf8JsonReader reader,
@@ -368,7 +377,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
 
             if (reader.TokenType != StartObject)
             {
@@ -392,7 +401,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                         var policyMethod = matchPolicy is not null ? matchPolicy.Apply : defaultPolicy;
 
                         writer.WritePropertyName(propertyName);
-                        policyMethod(ref reader, writer, context, nextDepth, ref propPath, valuePolicy);
+                        policyMethod(ref reader, writer, context, nextDepth, ref propPath, effective);
 
                         propPath.RemovePropertyName();
 
@@ -419,9 +428,12 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
         };
     }
 
-    internal static JsonObserverDelegate<TContext> ApplyArrayPolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
+    private static JsonObserverDelegate<TContext> ApplyArrayPolicy(
+        JsonObserverItem<TContext>[] policies,
+        JsonObserverValueDelegate<TContext>? valuePolicy,
+        UnknownContainers unknown)
     {
-        var defaultPolicy = GetApplyDefaultPolicy(policies, valuePolicy);
+        var defaultPolicy = GetApplyDefaultPolicy(valuePolicy, unknown);
 
         return (
             ref Utf8JsonReader reader,
@@ -431,7 +443,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
             if (reader.TokenType != StartArray)
             {
                 throw new JsonObserverException("Wrong path");
@@ -456,7 +468,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                         var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
                         var policyMethod = matchPolicy is not null ? matchPolicy.Apply : defaultPolicy;
 
-                        policyMethod(ref reader, writer, context, nextDepth, ref propPath, valuePolicy);
+                        policyMethod(ref reader, writer, context, nextDepth, ref propPath, effective);
                         propPath.RemovePropertyName();
                         break;
                     case Comment:
@@ -475,11 +487,8 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
         };
     }
 
-    private static JsonObserverDelegate<TContext> GetApplyDefaultPolicy(JsonObserverItem<TContext>[] policies, JsonObserverValueDelegate<TContext>? valuePolicy)
+    private static JsonObserverDelegate<TContext> GetApplyDefaultPolicy(JsonObserverValueDelegate<TContext>? valuePolicy, UnknownContainers unknown)
     {
-        JsonObserverDelegate<TContext>? objPolicy = null;
-        JsonObserverDelegate<TContext>? arrayPolicy = null;
-
         return (
             ref Utf8JsonReader reader,
             JsonWriter writer,
@@ -488,23 +497,21 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
         {
-            valuePolicy ??= defaultValuePolicy;
+            var effective = valuePolicy ?? defaultValuePolicy;
             switch (reader.TokenType)
             {
                 case StartObject:
-                    objPolicy ??= ApplyObjPolicy(policies, null);
-                    objPolicy(ref reader, writer, context, depth, ref propPath, valuePolicy);
+                    unknown.Obj(ref reader, writer, context, depth, ref propPath, effective);
                     break;
                 case StartArray:
-                    arrayPolicy ??= ApplyArrayPolicy(policies, null);
-                    arrayPolicy(ref reader, writer, context, depth, ref propPath, valuePolicy);
+                    unknown.Array(ref reader, writer, context, depth, ref propPath, effective);
                     break;
                 case Comment:
                     writer.WriteCommentValue(reader.GetComment());
                     break;
                 case JsonTokenType.String:
                 case Number:
-                    defaultValuePolicy(ref reader, writer, context, ref propPath);
+                    effective(ref reader, writer, context, ref propPath);
                     break;
                 case True:
                     writer.WriteBooleanValue(true);
@@ -555,4 +562,21 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
         ref PropertyPath propPath,
         JsonObserverValueDelegate<TContext> defaultValue) =>
         masking(ref reader, writer, context, depth, ref propPath, defaultValue);
+
+    /// <summary>
+    /// Policies for containers no rule matched, built once so that no delegate mutates captured state at call time.
+    /// </summary>
+    private sealed class UnknownContainers
+    {
+        public JsonObserverDelegate<TContext> Obj { get; private set; } = null!;
+        public JsonObserverDelegate<TContext> Array { get; private set; } = null!;
+
+        public static UnknownContainers Create(JsonObserverItem<TContext>[] policies)
+        {
+            var unknown = new UnknownContainers();
+            unknown.Obj = ApplyObjPolicy(policies, null, unknown);
+            unknown.Array = ApplyArrayPolicy(policies, null, unknown);
+            return unknown;
+        }
+    }
 }
