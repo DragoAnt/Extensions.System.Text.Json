@@ -43,6 +43,18 @@ public abstract class NestingTests
     }
 
     [Fact]
+    public void Mask_When10000Levels_ReturnsInvalid()
+    {
+        var utf8 = Encoding.UTF8.GetBytes(Nested(10_000));
+
+        var result = Observer.Mask(utf8, new ArrayBufferWriter<byte>());
+        var deep = Observer.Mask(utf8, new ArrayBufferWriter<byte>(), new JsonObserverOptions(MaxDepth: 20_000));
+
+        result.Status.Should().Be(MaskStatus.Invalid);
+        deep.Status.Should().BeOneOf(MaskStatus.Invalid, MaskStatus.Masked);
+    }
+
+    [Fact]
     public void PropertyPath_ReturnsRentedArray()
     {
         var pool = ArrayPool<PropertyPath.Segment>.Shared;

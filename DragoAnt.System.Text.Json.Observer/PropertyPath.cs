@@ -44,6 +44,13 @@ public ref struct PropertyPath
     internal readonly int CurrentDepth => Depth;
 
     /// <summary>
+    /// The input ended inside a value: every rule must stop reading.
+    /// </summary>
+    internal bool Stopped { get; private set; }
+
+    internal void Stop() => Stopped = true;
+
+    /// <summary>
     /// Adds the property name the reader stands on.
     /// </summary>
     internal void AddPropertyName(ref Utf8JsonReader reader)

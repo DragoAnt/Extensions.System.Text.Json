@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer.Builders;
 using static System.Text.Json.JsonTokenType;
@@ -241,7 +242,6 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                     return;
                 case StartObject:
                 case StartArray:
-                    reader.Skip();
                     value = null;
                     break;
                 case JsonTokenType.String:
@@ -260,6 +260,11 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             else
             {
                 writer.WriteStringValue(result);
+            }
+
+            if (reader.TokenType is StartObject or StartArray && !reader.TrySkip())
+            {
+                propPath.Stop();
             }
         };
     }
@@ -517,16 +522,29 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 throw new JsonObserverException("Wrong path");
             }
 
+            RuntimeHelpers.EnsureSufficientExecutionStack();
             writer.WriteStartObject();
 
-            while (reader.Read())
+            while (true)
             {
+                if (propPath.Stopped || !reader.Read())
+                {
+                    propPath.Stop();
+                    return;
+                }
+
                 switch (reader.TokenType)
                 {
                     case PropertyName:
                         propPath.AddPropertyName(ref reader);
 
-                        reader.Read();
+                        if (!reader.Read())
+                        {
+                            propPath.RemovePropertyName();
+                            propPath.Stop();
+                            return;
+                        }
+
                         var tokenType = reader.TokenType;
 
                         var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
@@ -587,10 +605,17 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 throw new JsonObserverException("Wrong path");
             }
 
+            RuntimeHelpers.EnsureSufficientExecutionStack();
             writer.WriteStartArray();
 
-            while (reader.Read())
+            while (true)
             {
+                if (propPath.Stopped || !reader.Read())
+                {
+                    propPath.Stop();
+                    return;
+                }
+
                 switch (reader.TokenType)
                 {
                     case StartObject:
