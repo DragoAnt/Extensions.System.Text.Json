@@ -127,7 +127,7 @@ public static class Payloads
         sb.Append(",\"sku\":\"SKU-").Append(10000 + index).Append('"');
         sb.Append(",\"title\":\"Plain product title for line ").Append(index).Append('"');
         sb.Append(",\"quantity\":").Append(index % 7 + 1);
-        sb.Append(",\"price\":").Append(19.99m + index);
+        sb.Append(",\"price\":").Append((19.99m + index).ToString(global::System.Globalization.CultureInfo.InvariantCulture));
         sb.Append(",\"active\":true,\"tags\":[\"a\",\"b\",\"c\"]");
         sb.Append(",\"owner\":{");
         AppendCustomer(sb, index, seed);
