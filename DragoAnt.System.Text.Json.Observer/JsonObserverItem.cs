@@ -137,6 +137,88 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
         }
     }
 
+    public static JsonObserverDelegate<TContext> ReadStr(Action<string?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
+        ApplyReadPolicy(
+            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetString(), context),
+            static type => type is JsonTokenType.String or Null,
+            valuePolicy);
+
+    public static JsonObserverDelegate<TContext> ReadInt(Action<int?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
+        ApplyReadPolicy(
+            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetInt32(), context),
+            static type => type is Number or Null,
+            valuePolicy);
+
+    public static JsonObserverDelegate<TContext> ReadLong(Action<long?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
+        ApplyReadPolicy(
+            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetInt64(), context),
+            static type => type is Number or Null,
+            valuePolicy);
+
+    public static JsonObserverDelegate<TContext> ReadDecimal(Action<decimal?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
+        ApplyReadPolicy(
+            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetDecimal(), context),
+            static type => type is Number or Null,
+            valuePolicy);
+
+    public static JsonObserverDelegate<TContext> ReadBool(Action<bool?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
+        ApplyReadPolicy(
+            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetBoolean(), context),
+            static type => type is True or False or Null,
+            valuePolicy);
+
+    public static JsonObserverDelegate<TContext> ReadRaw(Action<string?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
+        ApplyReadPolicy(
+            (ref Utf8JsonReader reader, TContext context) =>
+                read(Encoding.UTF8.GetString(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan), context),
+            static type => type is JsonTokenType.String or Number or True or False or Null,
+            valuePolicy);
+
+    private delegate void ReadValue(ref Utf8JsonReader reader, TContext context);
+
+    /// <summary>
+    /// Hands the value to <paramref name="read"/> and writes the token back unchanged.
+    /// </summary>
+    private static JsonObserverDelegate<TContext> ApplyReadPolicy(
+        ReadValue read,
+        Func<JsonTokenType, bool> accepts,
+        JsonObserverValueDelegate<TContext>? valuePolicy)
+    {
+        return (
+            ref Utf8JsonReader reader,
+            JsonWriter writer,
+            TContext context,
+            int _,
+            ref PropertyPath propPath,
+            JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
+        {
+            var tokenType = reader.TokenType;
+            if (!accepts(tokenType))
+            {
+                (valuePolicy ?? defaultValuePolicy).Invoke(ref reader, writer, context, ref propPath);
+                return;
+            }
+
+            read(ref reader, context);
+            switch (tokenType)
+            {
+                case Null:
+                    writer.WriteNullValue();
+                    break;
+                case JsonTokenType.String:
+                    writer.CopyStringValue(ref reader);
+                    break;
+                case True:
+                case False:
+                    writer.WriteBooleanValue(tokenType is True);
+                    break;
+                default:
+                    writer.CopyRawValue(ref reader);
+                    break;
+            }
+        };
+    }
+
     /// <summary>
     /// Masks a value of any JSON type; a container is skipped and reported to the rule as <c>null</c>.
     /// </summary>

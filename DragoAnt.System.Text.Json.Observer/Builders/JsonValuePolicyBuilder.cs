@@ -80,11 +80,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonValuePolicyBuilder<TContext> ReadStr(Action<string?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueStringPolicy((v, c) =>
-            {
-                strategy(v, c);
-                return v;
-            }, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ReadStr(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Add masking for value <see cref="JsonTokenType.Number"/>
@@ -98,11 +94,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonValuePolicyBuilder<TContext> ReadInt(Action<int?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueIntPolicy((v, c) =>
-            {
-                strategy(v, c);
-                return v?.ToString();
-            }, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ReadInt(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Add masking for value <see cref="JsonTokenType.Number"/>
@@ -116,11 +108,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonValuePolicyBuilder<TContext> ReadLong(Action<long?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueLongPolicy((v, c) =>
-            {
-                strategy(v, c);
-                return v?.ToString();
-            }, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ReadLong(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Add masking for value <see cref="JsonTokenType.Number"/>
@@ -134,11 +122,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonValuePolicyBuilder<TContext> ReadDecimal(Action<decimal?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueDecimalPolicy((v, c) =>
-            {
-                strategy(v, c);
-                return v?.ToString();
-            }, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ReadDecimal(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Add masking for value <see cref="JsonTokenType.True"/>  or <see cref="JsonTokenType.False"/>.
@@ -152,11 +136,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonValuePolicyBuilder<TContext> ReadBool(Action<bool?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueBoolPolicy((v, c) =>
-            {
-                strategy(v, c);
-                return v?.ToString();
-            }, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ReadBool(strategy, builderDefaultValuePolicy));
 
         /// <summary>
         /// Masks the whole value whatever its JSON type: a string, number or boolean is passed to the strategy as text,
@@ -186,11 +166,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>(bool relative, JsonObser
         /// </summary>
         /// <param name="strategy">Masking strategy</param>
         public JsonValuePolicyBuilder<TContext> ReadRaw(Action<string?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueRawPolicy((v, c) =>
-            {
-                strategy(v, c);
-                return v?.ToString();
-            }, builderDefaultValuePolicy));
+            => MaskValue(JsonObserverItem<TContext>.ReadRaw(strategy, builderDefaultValuePolicy));
 
 
         /// <summary>
