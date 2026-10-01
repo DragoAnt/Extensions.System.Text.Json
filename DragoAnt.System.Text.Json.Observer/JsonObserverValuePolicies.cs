@@ -17,6 +17,16 @@ public static class JsonObserverValuePolicies
     public static readonly JsonObserverValueDelegate<JsonObserveringEmptyContext> AllowList
         = JsonObserverValuePolicies<JsonObserveringEmptyContext>.AllowList;
 
+    /// <summary>
+    /// The 1.x allow list: strings become <c>"#str#*****"</c>, numbers <c>"#number#*****"</c>, booleans and <c>null</c> pass.
+    /// </summary>
+    [Obsolete(LegacyAllowListMessage)]
+    public static readonly JsonObserverValueDelegate<JsonObserveringEmptyContext> LegacyAllowList
+        = JsonObserverValuePolicies<JsonObserveringEmptyContext>.LegacyAllowList;
+
+    internal const string LegacyAllowListMessage =
+        "The 1.x allow list keeps booleans and the type of masked values. Use AllowList, or JsonObserver.FromShape for a structure-aware allow list.";
+
     public static readonly JsonObserverValueDelegate<JsonObserveringEmptyContext> NullList
         = JsonObserverValuePolicies<JsonObserveringEmptyContext>.NullList;
 
@@ -130,12 +140,32 @@ public static class JsonObserverValuePolicies<TContext>
     }
 
     /// <summary>
-    /// Allow (or white) list policy approach.
+    /// Allow (or white) list policy approach: every value no rule allows is written as <c>"***"</c>, whatever its type;
+    /// <c>null</c> stays <c>null</c>.
     /// </summary>
-    /// <remarks>
-    /// Masks all properties by default, props from the list will not mask.
-    /// </remarks>
     public static void AllowList(ref Utf8JsonReader reader, JsonWriter writer, TContext context, ref PropertyPath propPath)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.String:
+            case Number:
+            case True:
+            case False:
+                writer.WriteStringValue("***"u8);
+                break;
+            case Null:
+                writer.WriteNullValue();
+                break;
+            default:
+                throw new JsonObserverException("Wrong path");
+        }
+    }
+
+    /// <summary>
+    /// The 1.x allow list: strings become <c>"#str#*****"</c>, numbers <c>"#number#*****"</c>, booleans and <c>null</c> pass.
+    /// </summary>
+    [Obsolete(JsonObserverValuePolicies.LegacyAllowListMessage)]
+    public static void LegacyAllowList(ref Utf8JsonReader reader, JsonWriter writer, TContext context, ref PropertyPath propPath)
     {
         switch (reader.TokenType)
         {

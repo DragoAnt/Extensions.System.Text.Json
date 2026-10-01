@@ -103,6 +103,19 @@ public sealed class JsonObserver
         JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
         new(JsonObserverItem<TContext>.Array(init, defaultMasking));
 
+    /// <summary>
+    /// Masks against an expected structure: values of known properties are written as is, sensitive ones are masked
+    /// with their tag, and anything the shape does not describe is handled by <see cref="JsonShapeOptions.Unknown"/>.
+    /// </summary>
+    /// <param name="shape">Expected structure, for example from <see cref="JsonShape.FromTypeInfo"/>. It cannot change afterwards.</param>
+    /// <param name="options">Treatment of unknown properties and of <c>null</c>.</param>
+    public static JsonObserver FromShape(JsonShape shape, JsonShapeOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        var walker = new ShapeWalker(shape, options ?? JsonShapeOptions.Default);
+        return new JsonObserver(new JsonObserver<JsonObserveringEmptyContext>(walker.Invoke));
+    }
+
     private JsonObserver(JsonObserver<JsonObserveringEmptyContext> masking)
     {
         _masking = masking;

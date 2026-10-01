@@ -235,49 +235,14 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> ___) =>
         {
-            var tokenType = reader.TokenType;
-            if (tokenType is Null)
+            if (reader.TokenType is Null)
             {
                 writer.WriteNullValue();
                 return;
             }
 
-            var options = writer.Options;
-            var strategy = options.MaskStrategy ?? Utf8MaskStrategy.Default;
-            switch (tokenType)
-            {
-                case StartObject:
-                case StartArray:
-                    strategy.Mask(default, tokenType, tag, writer, options);
-                    if (!reader.TrySkip())
-                    {
-                        propPath.Stop();
-                    }
-
-                    return;
-                case JsonTokenType.String when reader.HasValueSequence || reader.ValueIsEscaped:
-                    MaskEscapedString(ref reader, strategy, tag, writer, options);
-                    return;
-                default:
-                    strategy.Mask(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan, tokenType, tag, writer, options);
-                    return;
-            }
+            TagMasking.Mask(ref reader, writer, tag, ref propPath);
         };
-
-        static void MaskEscapedString(ref Utf8JsonReader reader, Utf8MaskStrategy strategy, MaskTag tag, JsonWriter writer, JsonObserverOptions options)
-        {
-            var length = reader.HasValueSequence ? checked((int)reader.ValueSequence.Length) : reader.ValueSpan.Length;
-            var buffer = ArrayPool<byte>.Shared.Rent(length);
-            try
-            {
-                var written = reader.CopyString(buffer);
-                strategy.Mask(buffer.AsSpan(0, written), JsonTokenType.String, tag, writer, options);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
-            }
-        }
     }
 
     /// <summary>
