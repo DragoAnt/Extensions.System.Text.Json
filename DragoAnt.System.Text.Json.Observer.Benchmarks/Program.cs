@@ -1,10 +1,17 @@
-﻿using DragoAnt.System.Text.Json.Observer.Benchmarks;
+using DragoAnt.System.Text.Json.Observer.Benchmarks;
+using DragoAnt.System.Text.Json.Observer.Benchmarks.Harness;
 
-BenchmarkRunner.Run<ReadBenchmark>();
-
-
-// var context = new JsonReadTests.ReadContext();
-// while (Console.ReadKey().Key != ConsoleKey.E)
-// {
-//     JsonReadTests.BenchmarkRead(context);
-// }
+switch (args.FirstOrDefault())
+{
+    case "probes":
+        var thread = new Thread(() => Probes.Run(args.Skip(1).FirstOrDefault()), 256 * 1024 * 1024);
+        thread.Start();
+        thread.Join();
+        break;
+    case "soak":
+        Soak.Run(args.Skip(1).ToArray());
+        break;
+    default:
+        BenchmarkSwitcher.FromAssembly(typeof(MaskBenchmarks).Assembly).Run(args);
+        break;
+}
