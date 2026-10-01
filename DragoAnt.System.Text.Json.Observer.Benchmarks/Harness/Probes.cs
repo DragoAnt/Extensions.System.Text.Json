@@ -18,6 +18,8 @@ public static class Probes
             ("MaskStr", Wrap(BuildObserver(raw: false))),
             ("MaskRawValue", Wrap(BuildObserver(raw: true))),
             ("MaskAny", Wrap(BuildMaskAnyObserver())),
+            ("Bytes API + MaskAny", MaskBytes(BuildMaskAnyObserver())),
+            ("Bytes API + MaskAny, 4 KB output / 256 B value caps", MaskBytes(BuildMaskAnyObserver(), new JsonObserverOptions(MaxOutputBytes: 4096, MaxValueBytes: 256))),
             ("Read-mode mask+extract", MaskAndExtract),
         };
 
@@ -71,6 +73,13 @@ public static class Probes
         public int? Id { get; set; }
         public bool? Active { get; set; }
     }
+
+    private static Func<string, JsonReaderOptions, string?> MaskBytes(JsonObserver observer, JsonObserverOptions? options = null) => (json, _) =>
+    {
+        var output = new global::System.Buffers.ArrayBufferWriter<byte>();
+        var result = observer.Mask(Encoding.UTF8.GetBytes(json), output, options);
+        return $"[{result.Status}] {Encoding.UTF8.GetString(output.WrittenSpan)}";
+    };
 
     private static JsonObserver BuildMaskAnyObserver() =>
         JsonObserver.Any(_ => { }, _ => { }, JsonObserverValuePolicies.Relative(
