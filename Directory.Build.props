@@ -12,7 +12,6 @@
     <Copyright>Copyright (c) 2025 DragoAnt</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/DragoAnt/Extensions.System.Text.Json</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/DragoAnt/Extensions.System.Text.Json</PackageProjectUrl>
     <PackageReleaseNotes>https://github.com/DragoAnt/Extensions.System.Text.Json/releases</PackageReleaseNotes>
   </PropertyGroup>
 
