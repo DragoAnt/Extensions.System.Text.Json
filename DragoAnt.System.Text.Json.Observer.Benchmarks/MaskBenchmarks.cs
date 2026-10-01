@@ -12,17 +12,26 @@ public sealed class AuditConfig : ManualConfig
 {
     public AuditConfig()
     {
+        var fast = Environment.GetEnvironmentVariable("AUDIT_FAST") == "1";
         AddJob(Job.Default
             .WithToolchain(InProcessEmitToolchain.Instance)
             .WithLaunchCount(1)
-            .WithWarmupCount(3)
-            .WithIterationCount(8)
+            .WithWarmupCount(fast ? 2 : 3)
+            .WithIterationCount(fast ? 5 : 8)
             .WithId("Audit"));
         AddDiagnoser(MemoryDiagnoser.Default);
         AddExporter(CsvExporter.Default);
         AddColumn(BenchmarkDotNet.Columns.StatisticColumn.Median);
         WithOptions(ConfigOptions.DisableOptimizationsValidator);
         HideColumns("Job", "Toolchain", "LaunchCount", "WarmupCount", "IterationCount");
+    }
+
+    public static T[]? FromEnv<T>(string name, Func<string, T> parse)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(parse).ToArray();
     }
 }
 
@@ -35,11 +44,19 @@ public class MaskBenchmarks
     private ArrayBufferWriter<byte> _output = null!;
     private Utf8JsonWriter _writer = null!;
 
-    [Params(PayloadShape.Flat, PayloadShape.Nested, PayloadShape.Array)]
+    [ParamsSource(nameof(Shapes))]
     public PayloadShape Shape { get; set; }
 
-    [Params(1024, 8 * 1024, 64 * 1024)]
+    [ParamsSource(nameof(Sizes))]
     public int Size { get; set; }
+
+    public static IEnumerable<PayloadShape> Shapes =>
+        AuditConfig.FromEnv("AUDIT_SHAPES", s => Enum.Parse<PayloadShape>(s, ignoreCase: true))
+        ?? [PayloadShape.Flat, PayloadShape.Nested, PayloadShape.Array];
+
+    public static IEnumerable<int> Sizes =>
+        AuditConfig.FromEnv("AUDIT_SIZES", s => int.Parse(s, global::System.Globalization.CultureInfo.InvariantCulture))
+        ?? [1024, 8 * 1024, 64 * 1024];
 
     [GlobalSetup]
     public void Setup()
