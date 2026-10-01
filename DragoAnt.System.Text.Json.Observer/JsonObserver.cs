@@ -194,10 +194,15 @@ public sealed class JsonObserver<TContext>
     {
         reader.Read();
         var propPath = new PropertyPath(_maxDepth);
-        _maskDelegate(ref reader, jsonWriter, context, 0, ref propPath, JsonObserverValuePolicies<TContext>.Default);
-
-        var newMaxDepth = propPath.MaxLength;
-        UpdateMaxDepth(newMaxDepth);
+        try
+        {
+            _maskDelegate(ref reader, jsonWriter, context, 0, ref propPath, JsonObserverValuePolicies<TContext>.Default);
+            UpdateMaxDepth(propPath.MaxLength);
+        }
+        finally
+        {
+            propPath.Dispose();
+        }
     }
 
     /// <summary>

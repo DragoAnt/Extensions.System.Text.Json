@@ -27,7 +27,7 @@ public ref struct PropertyPath(int capacity)
         Depth++;
         MaxLength = Math.Max(MaxLength, Depth + 1);
 
-        if (_path.Length < Depth)
+        if (Depth >= _path.Length)
         {
             var newPath = ArrayPool<string?>.Shared.Rent(MaxLength);
             Array.Copy(_path, newPath, _path.Length);
@@ -62,4 +62,17 @@ public ref struct PropertyPath(int capacity)
     }
 
     public override string ToString() => string.Join('.', _path, 0, Depth + 1);
+
+    /// <summary>
+    /// Returns the pooled buffer. The path must not be used afterwards.
+    /// </summary>
+    public void Dispose()
+    {
+        var path = _path;
+        _path = [];
+        if (path.Length > 0)
+        {
+            ArrayPool<string?>.Shared.Return(path, clearArray: true);
+        }
+    }
 }
