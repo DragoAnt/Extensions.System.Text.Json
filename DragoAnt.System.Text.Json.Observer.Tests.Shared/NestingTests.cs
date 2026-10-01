@@ -45,7 +45,7 @@ public abstract class NestingTests
     [Fact]
     public void PropertyPath_ReturnsRentedArray()
     {
-        var pool = ArrayPool<string?>.Shared;
+        var pool = ArrayPool<PropertyPath.Segment>.Shared;
         var probe = pool.Rent(16);
         pool.Return(probe);
 

@@ -1,4 +1,4 @@
-﻿using DragoAnt.System.Text.Json.Observer.Strategies;
+using DragoAnt.System.Text.Json.Observer.Strategies;
 
 namespace DragoAnt.System.Text.Json.Observer;
 
@@ -8,14 +8,19 @@ namespace DragoAnt.System.Text.Json.Observer;
 public sealed class PropertyPathMatch
 {
     public const StringComparison DefaultComparison = StringComparison.OrdinalIgnoreCase;
-    private readonly Func<string?, bool>[] _matches;
+    private readonly NameMatcher[] _matches;
 
     public PropertyPathMatch(PropMatchingStrategy[] matches)
-        : this(matches.Select(m => (Func<string?, bool>)m).ToArray())
+        : this(matches.Select(m => m.Matcher).ToArray())
     {
     }
 
     public PropertyPathMatch(params Func<string?, bool>[] matches)
+        : this(matches.Select(NameMatcher (m) => new NameMatcher.FuncNameMatcher(m)).ToArray())
+    {
+    }
+
+    private PropertyPathMatch(NameMatcher[] matches)
     {
         if (matches.Length == 0)
         {
@@ -27,11 +32,12 @@ public sealed class PropertyPathMatch
 
     public (bool success, int depth) RelativeMatch(int depth, ref PropertyPath propPath)
     {
-        int j = -1;
+        var last = propPath.CurrentDepth;
+        var j = -1;
         for (var i = _matches.Length - 1; i >= 0; i--)
         {
             j++;
-            if (!_matches[i](propPath.GetPropertyNameReverse(j)))
+            if (!_matches[i].Match(ref propPath, last - j))
             {
                 return (false, _matches.Length);
             }
@@ -44,7 +50,7 @@ public sealed class PropertyPathMatch
     {
         for (var i = 0; i < _matches.Length; i++)
         {
-            if (!_matches[i](propPath.GetPropertyName(i + depth)))
+            if (!_matches[i].Match(ref propPath, i + depth))
             {
                 return (false, _matches.Length);
             }

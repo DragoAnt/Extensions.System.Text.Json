@@ -158,10 +158,11 @@ public sealed class JsonObserver<TContext>
             return null;
         }
 
-        var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(value), readerOptions);
+        var bytes = Encoding.UTF8.GetBytes(value);
+        var reader = new Utf8JsonReader(bytes, readerOptions);
         using var stream = new MemoryStream();
 
-        Mask(reader, context, stream, writerOptions, ignoreNulls, ignoreComments);
+        Mask(reader, bytes, context, stream, writerOptions, ignoreNulls, ignoreComments);
 
         stream.Flush();
         stream.Seek(0, SeekOrigin.Begin);
@@ -175,6 +176,7 @@ public sealed class JsonObserver<TContext>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Mask(
         Utf8JsonReader reader,
+        ReadOnlySpan<byte> input,
         TContext context,
         Stream output,
         JsonWriterOptions writerOptions = default,
@@ -184,16 +186,16 @@ public sealed class JsonObserver<TContext>
         using var writer = new Utf8JsonWriter(output, writerOptions);
         var jsonWriter = JsonWriter.FromUtf8JsonWriter(writer, ignoreNulls, ignoreComments);
 
-        Mask(reader, context, jsonWriter);
+        Mask(reader, input, context, jsonWriter);
 
         writer.Flush();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void Mask(Utf8JsonReader reader, TContext context, JsonWriter jsonWriter)
+    private void Mask(Utf8JsonReader reader, ReadOnlySpan<byte> input, TContext context, JsonWriter jsonWriter)
     {
         reader.Read();
-        var propPath = new PropertyPath(_maxDepth);
+        var propPath = new PropertyPath(_maxDepth, input);
         try
         {
             _maskDelegate(ref reader, jsonWriter, context, 0, ref propPath, JsonObserverValuePolicies<TContext>.Default);
@@ -256,6 +258,6 @@ public sealed class JsonObserver<TContext>
     public void Read(byte[] utf8Bytes, TContext context, JsonReaderOptions readerOptions = default)
     {
         var reader = new Utf8JsonReader(utf8Bytes, readerOptions);
-        Mask(reader, context, JsonWriter.Empty);
+        Mask(reader, utf8Bytes, context, JsonWriter.Empty);
     }
 }

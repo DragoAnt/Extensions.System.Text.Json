@@ -340,8 +340,14 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 case Null:
                     var tokenType = reader.TokenType;
                     var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
-                    var policyMethod = matchPolicy is not null ? matchPolicy.Apply : defaultPolicy;
-                    policyMethod(ref reader, writer, context, nextDepth, ref propPath, defaultValuePolicy);
+                    if (matchPolicy is not null)
+                    {
+                        matchPolicy.Apply(ref reader, writer, context, nextDepth, ref propPath, defaultValuePolicy);
+                    }
+                    else
+                    {
+                        defaultPolicy(ref reader, writer, context, nextDepth, ref propPath, defaultValuePolicy);
+                    }
                     break;
                 case Comment:
                 case EndArray:
@@ -391,17 +397,22 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 switch (reader.TokenType)
                 {
                     case PropertyName:
-                        var propertyName = reader.GetString()!;
+                        propPath.AddPropertyName(ref reader);
 
                         reader.Read();
                         var tokenType = reader.TokenType;
 
-                        propPath.AddPropertyName(propertyName);
                         var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
-                        var policyMethod = matchPolicy is not null ? matchPolicy.Apply : defaultPolicy;
 
-                        writer.WritePropertyName(propertyName);
-                        policyMethod(ref reader, writer, context, nextDepth, ref propPath, effective);
+                        writer.WritePropertyName(propPath.CurrentUtf8);
+                        if (matchPolicy is not null)
+                        {
+                            matchPolicy.Apply(ref reader, writer, context, nextDepth, ref propPath, effective);
+                        }
+                        else
+                        {
+                            defaultPolicy(ref reader, writer, context, nextDepth, ref propPath, effective);
+                        }
 
                         propPath.RemovePropertyName();
 
@@ -466,9 +477,15 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
 
                         propPath.AddPropertyName(null);
                         var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
-                        var policyMethod = matchPolicy is not null ? matchPolicy.Apply : defaultPolicy;
 
-                        policyMethod(ref reader, writer, context, nextDepth, ref propPath, effective);
+                        if (matchPolicy is not null)
+                        {
+                            matchPolicy.Apply(ref reader, writer, context, nextDepth, ref propPath, effective);
+                        }
+                        else
+                        {
+                            defaultPolicy(ref reader, writer, context, nextDepth, ref propPath, effective);
+                        }
                         propPath.RemovePropertyName();
                         break;
                     case Comment:

@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 
 namespace DragoAnt.System.Text.Json.Observer.Strategies;
 
@@ -11,19 +11,19 @@ public static class PropMatches
     /// Matches property name by start value.
     /// </summary>
     /// <param name="value">Property name start value.</param>
-    public static PropMatchingStrategy StartsWith(string value) => new(v => v?.StartsWith(value, PropertyPathMatch.DefaultComparison) == true);
+    public static PropMatchingStrategy StartsWith(string value) => new(NameMatcher.StartsWith(value));
 
     /// <summary>
     /// Matches property name by ending.
     /// </summary>
     /// <param name="value">Property name ending value.</param>
-    public static PropMatchingStrategy EndsWith(string value) => new(v => v?.EndsWith(value, PropertyPathMatch.DefaultComparison) == true);
+    public static PropMatchingStrategy EndsWith(string value) => new(NameMatcher.EndsWith(value));
 
     /// <summary>
     /// Matches property name by containing value.
     /// </summary>
     /// <param name="value">Property name containing value.</param>
-    public static PropMatchingStrategy Contains(string value) => new(v => v?.Contains(value, PropertyPathMatch.DefaultComparison) == true);
+    public static PropMatchingStrategy Contains(string value) => new(NameMatcher.Contains(value));
 
     /// <summary>
     /// Matches property name by regular expression.
@@ -35,6 +35,5 @@ public static class PropMatches
     /// Matches property by full name equality.
     /// </summary>
     /// <param name="propNames">Property names.</param>
-    public static PropMatchingStrategy OneOf(params string[] propNames) =>
-        new(v => propNames.Any(p => string.Equals(v, p, PropertyPathMatch.DefaultComparison)));
+    public static PropMatchingStrategy OneOf(params string[] propNames) => new(NameMatcher.OneOf(propNames));
 }
