@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
@@ -49,15 +50,16 @@ public sealed class JsonShape
 {
     private static readonly Type[] OpaqueTypes = [typeof(object), typeof(JsonElement), typeof(JsonDocument), typeof(JsonNode)];
 
-    private readonly List<(string Name, JsonShape Shape)>? _members;
-    private (byte[]? Ascii, string Name, JsonShape Shape)[] _lookup = [];
+    private readonly List<JsonShapeProperty>? _members;
+    private (byte[]? Ascii, JsonShapeProperty Property)[] _lookup = [];
     private bool _sealed;
 
-    private JsonShape(JsonShapeKind kind, MaskTag tag = default, JsonShape? item = null)
+    private JsonShape(JsonShapeKind kind, MaskTag tag = default, JsonShape? item = null, JsonTypeInfo? typeInfo = null)
     {
         Kind = kind;
         Tag = tag;
         Item = item;
+        TypeInfo = typeInfo;
         _members = kind == JsonShapeKind.Object ? [] : null;
     }
 
@@ -77,9 +79,25 @@ public sealed class JsonShape
     public JsonShape? Item { get; private set; }
 
     /// <summary>
-    /// Known properties of an <see cref="JsonShapeKind.Object"/>.
+    /// Known properties of an <see cref="JsonShapeKind.Object"/>, in the order they were added.
     /// </summary>
-    public IReadOnlyList<(string Name, JsonShape Shape)> Members => (IReadOnlyList<(string Name, JsonShape Shape)>?)_members?.AsReadOnly() ?? [];
+    public IReadOnlyList<JsonShapeProperty> Members => (IReadOnlyList<JsonShapeProperty>?)_members?.AsReadOnly() ?? [];
+
+    /// <summary>
+    /// The System.Text.Json metadata the node was built from; <c>null</c> for a hand-built node and for the shared
+    /// <see cref="Scalar"/> and <see cref="Opaque"/> nodes.
+    /// </summary>
+    public JsonTypeInfo? TypeInfo { get; }
+
+    /// <summary>
+    /// CLR type of the node, from <see cref="TypeInfo"/>.
+    /// </summary>
+    public Type? ClrType => TypeInfo?.Type;
+
+    /// <summary>
+    /// Data an integration attaches to the node.
+    /// </summary>
+    public JsonShapeAnnotations Annotations { get; } = new();
 
     /// <summary>
     /// A value written as is.
@@ -111,7 +129,7 @@ public sealed class JsonShape
     public static JsonShape Map(JsonShape value) => new(JsonShapeKind.Map, item: value);
 
     /// <summary>
-    /// An object with the given properties; add more with <see cref="Add"/>, which also allows cycles.
+    /// An object with the given properties; add more with <see cref="Add(string, JsonShape)"/>, which also allows cycles.
     /// </summary>
     public static JsonShape Object(params (string Name, JsonShape Shape)[] members)
     {
@@ -128,8 +146,15 @@ public sealed class JsonShape
     /// Adds a known property to an object shape. Names match case-insensitively; when two names collide the masked one wins.
     /// </summary>
     /// <exception cref="InvalidOperationException">The shape is not an object, or an observer was already built from it.</exception>
-    public JsonShape Add(string name, JsonShape shape)
+    public JsonShape Add(string name, JsonShape shape) => Add(new JsonShapeProperty(name, shape));
+
+    /// <summary>
+    /// Adds a known property, with its annotations, to an object shape. When two names collide the masked one wins.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The shape is not an object, or an observer was already built from it.</exception>
+    public JsonShape Add(JsonShapeProperty property)
     {
+        ArgumentNullException.ThrowIfNull(property);
         if (_members is null || _sealed)
         {
             throw new InvalidOperationException(_members is null
@@ -137,7 +162,7 @@ public sealed class JsonShape
                 : "The shape is in use by an observer and can no longer change.");
         }
 
-        _members.Add((name, shape));
+        _members.Add(property);
         return this;
     }
 
@@ -147,27 +172,51 @@ public sealed class JsonShape
     /// </summary>
     /// <param name="typeInfo">Metadata of the root type.</param>
     /// <param name="classify">Mask for a sensitive property, or <c>null</c> for one shown as is.</param>
+    /// <param name="annotate">
+    /// Called once per property with its <see cref="JsonShapeProperty"/>, for example to attach annotations; a type
+    /// reached twice, or recursively, is built and annotated once.
+    /// </param>
     /// <remarks>
-    /// On .NET 8, metadata from a source-generated <c>JsonSerializerContext</c> has no <see cref="JsonPropertyInfo.AttributeProvider"/>,
-    /// so a <paramref name="classify"/> that reads attributes finds none and shows every property; classify by name there,
-    /// or use reflection-based metadata.
+    /// Every node and property carries its metadata: <see cref="TypeInfo"/>, <see cref="JsonShapeProperty.PropertyInfo"/>,
+    /// the CLR member, nullability and attributes. On .NET 8, metadata from a source-generated <c>JsonSerializerContext</c>
+    /// has no <see cref="JsonPropertyInfo.AttributeProvider"/>, so a <paramref name="classify"/> that reads attributes finds
+    /// none and shows every property; classify by name there, or use reflection-based metadata.
     /// </remarks>
-    public static JsonShape FromTypeInfo(JsonTypeInfo typeInfo, Func<JsonPropertyInfo, MaskTag?> classify)
+    public static JsonShape FromTypeInfo(JsonTypeInfo typeInfo, Func<JsonPropertyInfo, MaskTag?> classify, Action<JsonShapeProperty>? annotate = null)
     {
         ArgumentNullException.ThrowIfNull(typeInfo);
         ArgumentNullException.ThrowIfNull(classify);
-        return Build(typeInfo, classify, []);
+        return new Builder(classify, annotate).Build(typeInfo);
     }
 
-    internal JsonShape? Find(ReadOnlySpan<byte> utf8Name)
+    /// <summary>
+    /// Finds a known property of an object shape by its unescaped UTF-8 JSON name, as the observer does. The first lookup
+    /// freezes the shape like building an observer from it.
+    /// </summary>
+    /// <param name="utf8Name">Unescaped UTF-8 name.</param>
+    /// <param name="propertyNameCaseInsensitive">Compare names ignoring case, as by default.</param>
+    /// <returns>The property, or <c>null</c> when the shape does not know it or is not an object.</returns>
+    public JsonShapeProperty? FindMember(ReadOnlySpan<byte> utf8Name, bool propertyNameCaseInsensitive = true)
+    {
+        if (!_sealed)
+        {
+            Seal([]);
+        }
+
+        return FindProperty(utf8Name);
+    }
+
+    internal JsonShape? Find(ReadOnlySpan<byte> utf8Name) => FindProperty(utf8Name)?.Shape;
+
+    private JsonShapeProperty? FindProperty(ReadOnlySpan<byte> utf8Name)
     {
         if (Ascii.IsValid(utf8Name))
         {
-            foreach (var (ascii, _, shape) in _lookup)
+            foreach (var (ascii, property) in _lookup)
             {
                 if (ascii is not null && ascii.Length == utf8Name.Length && Ascii.EqualsIgnoreCase(ascii, utf8Name))
                 {
-                    return shape;
+                    return property;
                 }
             }
 
@@ -175,11 +224,11 @@ public sealed class JsonShape
         }
 
         var name = Encoding.UTF8.GetString(utf8Name);
-        foreach (var (_, candidate, shape) in _lookup)
+        foreach (var (_, property) in _lookup)
         {
-            if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
             {
-                return shape;
+                return property;
             }
         }
 
@@ -196,78 +245,108 @@ public sealed class JsonShape
         _sealed = true;
         if (_members is not null)
         {
-            var merged = new List<(string Name, JsonShape Shape)>();
-            foreach (var (name, shape) in _members)
+            var merged = new List<JsonShapeProperty>();
+            foreach (var property in _members)
             {
-                var index = merged.FindIndex(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+                var index = merged.FindIndex(m => string.Equals(m.Name, property.Name, StringComparison.OrdinalIgnoreCase));
                 if (index < 0)
                 {
-                    merged.Add((name, shape));
+                    merged.Add(property);
                 }
-                else if (shape.Kind is JsonShapeKind.Masked or JsonShapeKind.Opaque)
+                else if (property.Shape.Kind is JsonShapeKind.Masked or JsonShapeKind.Opaque)
                 {
-                    merged[index] = (name, shape);
+                    merged[index] = property;
                 }
             }
 
             _lookup = merged
-                .Select(m => (Ascii.IsValid(m.Name) ? Encoding.ASCII.GetBytes(m.Name) : null, m.Name, m.Shape))
+                .Select(m => (Ascii.IsValid(m.Name) ? Encoding.ASCII.GetBytes(m.Name) : null, m))
                 .ToArray();
-            foreach (var (_, shape) in merged)
+            foreach (var property in merged)
             {
-                shape.Seal(visited);
+                property.Shape.Seal(visited);
             }
         }
 
         Item?.Seal(visited);
     }
 
-    private static JsonShape Build(JsonTypeInfo typeInfo, Func<JsonPropertyInfo, MaskTag?> classify, Dictionary<Type, JsonShape> built)
+    private sealed class Builder(Func<JsonPropertyInfo, MaskTag?> classify, Action<JsonShapeProperty>? annotate)
     {
-        var type = typeInfo.Type;
-        if (built.TryGetValue(type, out var existing))
-        {
-            return existing;
-        }
+        private readonly Dictionary<Type, JsonShape> _built = [];
+#if !NET9_0_OR_GREATER
+        private readonly NullabilityInfoContext _nullability = new();
+#endif
 
-        if (OpaqueTypes.Any(t => t.IsAssignableFrom(type) && (t != typeof(object) || type == typeof(object))))
+        public JsonShape Build(JsonTypeInfo typeInfo)
         {
-            return Opaque;
-        }
-
-        switch (typeInfo.Kind)
-        {
-            case JsonTypeInfoKind.Object:
+            var type = typeInfo.Type;
+            if (_built.TryGetValue(type, out var existing))
             {
-                var shape = new JsonShape(JsonShapeKind.Object);
-                built[type] = shape;
-                foreach (var property in typeInfo.Properties.Where(p => !p.IsExtensionData))
+                return existing;
+            }
+
+            if (OpaqueTypes.Any(t => t.IsAssignableFrom(type) && (t != typeof(object) || type == typeof(object))))
+            {
+                return Opaque;
+            }
+
+            switch (typeInfo.Kind)
+            {
+                case JsonTypeInfoKind.Object:
                 {
-                    var tag = classify(property);
-                    shape.Add(property.Name, tag is { } mask
-                        ? Masked(mask)
-                        : Build(typeInfo.Options.GetTypeInfo(property.PropertyType), classify, built));
-                }
+                    var shape = new JsonShape(JsonShapeKind.Object, typeInfo: typeInfo);
+                    _built[type] = shape;
+                    foreach (var property in typeInfo.Properties.Where(p => !p.IsExtensionData))
+                    {
+                        var tag = classify(property);
+                        var member = new JsonShapeProperty(
+                            property.Name,
+                            tag is { } mask ? Masked(mask) : Build(typeInfo.Options.GetTypeInfo(property.PropertyType)),
+                            property,
+                            Nullability(property));
+                        shape.Add(member);
+                        annotate?.Invoke(member);
+                    }
 
-                return shape;
+                    return shape;
+                }
+                case JsonTypeInfoKind.Enumerable:
+                case JsonTypeInfoKind.Dictionary:
+                {
+                    var shape = new JsonShape(typeInfo.Kind == JsonTypeInfoKind.Enumerable ? JsonShapeKind.Array : JsonShapeKind.Map, typeInfo: typeInfo);
+                    _built[type] = shape;
+                    shape.Item = ElementTypeOf(typeInfo) is { } elementType
+                        ? Build(typeInfo.Options.GetTypeInfo(elementType))
+                        : Opaque;
+                    return shape;
+                }
+                default:
+                {
+                    var shape = new JsonShape(JsonShapeKind.Scalar, typeInfo: typeInfo);
+                    _built[type] = shape;
+                    return shape;
+                }
             }
-            case JsonTypeInfoKind.Enumerable:
-            case JsonTypeInfoKind.Dictionary:
-            {
-                var shape = new JsonShape(typeInfo.Kind == JsonTypeInfoKind.Enumerable ? JsonShapeKind.Array : JsonShapeKind.Map);
-                built[type] = shape;
-                shape.Item = ElementTypeOf(type, typeInfo.Kind == JsonTypeInfoKind.Dictionary) is { } elementType
-                    ? Build(typeInfo.Options.GetTypeInfo(elementType), classify, built)
-                    : Opaque;
-                return shape;
-            }
-            default:
-                return Scalar;
         }
+
+#if NET9_0_OR_GREATER
+        private static bool? Nullability(JsonPropertyInfo property) => JsonShapeProperty.NullabilityOf(property, null);
+#else
+        private bool? Nullability(JsonPropertyInfo property) => JsonShapeProperty.NullabilityOf(property, _nullability);
+#endif
     }
 
-    private static Type? ElementTypeOf(Type type, bool dictionary)
+    private static Type? ElementTypeOf(JsonTypeInfo typeInfo)
     {
+#if NET9_0_OR_GREATER
+        if (typeInfo.ElementType is { } elementType)
+        {
+            return elementType;
+        }
+#endif
+        var type = typeInfo.Type;
+        var dictionary = typeInfo.Kind == JsonTypeInfoKind.Dictionary;
         if (type.IsArray)
         {
             return type.GetElementType();

@@ -106,7 +106,7 @@ public abstract class ShapeCoverageTests
     {
         var shape = JsonShape.Object(("id", JsonShape.Scalar));
 
-        shape.Members.Should().NotBeAssignableTo<List<(string, JsonShape)>>();
+        shape.Members.Should().NotBeAssignableTo<List<JsonShapeProperty>>();
         shape.Members.Should().ContainSingle();
     }
 
