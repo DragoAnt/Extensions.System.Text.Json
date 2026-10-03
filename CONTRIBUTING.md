@@ -29,10 +29,10 @@ Tests use xUnit v3 on Microsoft.Testing.Platform v2, with [AwesomeAssertions](ht
 
 ```sh
 dotnet test --solution DragoAnt.System.Text.Json.slnx -c Release --no-build --coverage --coverage-output-format cobertura --results-directory TestResults
-pwsh tools/check-coverage.ps1 -ResultsDirectory TestResults -Package DragoAnt.System.Text.Json.Observer -MinLine 88 -MinBranch 75
+pwsh tools/check-coverage.ps1 -ResultsDirectory TestResults -Package DragoAnt.System.Text.Json.Observer -MinLine 92 -MinBranch 80
 ```
 
-The script merges the reports of every test run and fails below the thresholds; keep the core library at **88 % line / 75 % branch** or above. The `ci` workflow also gates on overall coverage.
+The script merges the reports of every test run and fails below the thresholds; keep the core library at **92 % line / 80 % branch** or above (95 % / 82 % today). The `ci` workflow also gates on overall coverage.
 
 ### Public API
 

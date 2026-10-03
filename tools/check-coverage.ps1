@@ -10,7 +10,7 @@
 
 .EXAMPLE
     dotnet test --solution DragoAnt.System.Text.Json.slnx -c Release --coverage --coverage-output-format cobertura --results-directory TestResults
-    pwsh tools/check-coverage.ps1 -ResultsDirectory TestResults -Package DragoAnt.System.Text.Json.Observer -MinLine 88 -MinBranch 75
+    pwsh tools/check-coverage.ps1 -ResultsDirectory TestResults -Package DragoAnt.System.Text.Json.Observer -MinLine 92 -MinBranch 80
 #>
 param(
     [Parameter(Mandatory)] [string] $ResultsDirectory,
