@@ -1,0 +1,80 @@
+<Project>
+  <!--  Usage: Read metadata of the project-->
+
+  <!-- NOTE: More info https://learn.microsoft.com/en-us/visualstudio/msbuild/customize-net-builds?view=vs-2022-->
+<!--   REMARKS: It will not work with <TargetrgetFrameworks></TargetrgetFrameworks> due msbuild didn't provide CustomAfterMicrosoftCSharpTargets to inner TargetFramework build.
+
+For those projects we need explicitly import readMetadata.targets in Directory.Build.targets
+-->
+
+  <!--  Usage:
+
+   dotnet msbuild -t:Build,ReadDotnetProjMetadata /p:CustomAfterMicrosoftCSharpTargets="(path to target file)/readMetadata.targets" /p:ProjMetadataOutDir="(output dir)"
+
+    -->
+  <PropertyGroup>
+    <ProjMetadataOutDir Condition="'$(ProjMetadataOutDir)'!=''">$([System.IO.Path]::GetFullPath('$(ProjMetadataOutDir)').TrimEnd('/').Replace('\', '/'))</ProjMetadataOutDir>
+  </PropertyGroup>
+
+  <Target Name="ReadDotnetProjMetadata"
+          Condition="'$(TargetFramework)'!='' And '$(ProjMetadataOutDir)'!=''"
+          AfterTargets="FindReferenceAssembliesForReferences">
+    <!--    Based on https://stackoverflow.com/questions/42403046/msbuild-itemgroup-intersection/42403721-->
+    <ItemGroup>
+      <PackageReferenceEmpty Include="@(PackageReference)" Condition="'%(PackageReference.Version)' == ''" />
+    </ItemGroup>
+    <CreateItem Include="@(PackageVersion)" Condition="'%(Identity)' != '' AND '@(PackageReferenceEmpty)' != ''">
+      <Output TaskParameter="Include" ItemName="PackagesWithVersion" />
+    </CreateItem>
+
+    <ItemGroup>
+      <PackagesWithVersion Include="@(PackageReference)" Condition="'%(PackageReference.Version)' != ''">
+        <Version>%(PackageReference.Version)</Version>
+      </PackagesWithVersion>
+      <PackagesWithVersion Include="@(PackageReference)" Condition="'%(PackageReference.Version)' == '' AND '%(PackageReference.VersionOverride)' !=''">
+        <Version>%(PackageReference.VersionOverride)</Version>
+        <VersionOverride>true</VersionOverride>
+      </PackagesWithVersion>
+    </ItemGroup>
+
+    <ItemGroup>
+      <_IntermidiateReferencePath Condition="'%(ReferencePathWithRefAssemblies.ReferenceSourceTarget)'!='ProjectReference' And '%(ReferencePathWithRefAssemblies.NugetPackageId)'!='Microsoft.NETCore.App.Ref'" Include="@(ReferencePathWithRefAssemblies)">
+        <AssemblyName Condition="'%(ReferencePathWithRefAssemblies.AssemblyName)'=='' And $([System.String]::Copy('%(FusionName)').IndexOf('%2C'))>=0">$([System.String]::Copy('%(FusionName)').Substring(0,$([System.String]::Copy('%(FusionName)').IndexOf('%2C'))))</AssemblyName>
+      </_IntermidiateReferencePath>
+
+      <_IntermidiateReferencePath Condition="'%(ReferencePathWithRefAssemblies.AssemblyName)'==''"
+                                  Update="@(ReferencePathWithRefAssemblies)">
+        <AssemblyVersion>$([System.Text.RegularExpressions.Regex]::Match('%(FusionName)', 'Version=([^,]+)').Groups[1].Value)</AssemblyVersion>
+      </_IntermidiateReferencePath>
+
+    </ItemGroup>
+
+    <PropertyGroup>
+      <ProjMetadataOutFile>$(ProjMetadataOutDir)/$(MSBuildProjectName).$(TargetFramework).metadata.yml</ProjMetadataOutFile>
+
+      <UseCPM>$(ManagePackageVersionsCentrally)</UseCPM>
+      <UseCPM Condition="'$(UseCPM)'==''">false</UseCPM>
+
+      <_Packages>@(PackagesWithVersion->'  %(Identity): %(Version)', '%0D%0A')</_Packages>
+      <_References>@(_IntermidiateReferencePath->'  %(AssemblyName):%0D%0A    PackageId: %(NuGetPackageId)%0D%0A    AssemblyVersion: %(AssemblyVersion)%0D%0A    PackageVersion: %(NuGetPackageVersion)', '%0D%0A')</_References>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(ProjMetadataOutDir)" Condition="!Exists('$(ProjMetadataOutDir)')" />
+
+    <WriteLinesToFile
+        File="$(ProjMetadataOutFile)"
+        Overwrite="true"
+        Lines="
+project: $(MSBuildProjectName)
+description: $(Description)
+tfm: $(TargetFramework)
+useCPM: $(UseCPM)
+isPackage: $(IsPackable)
+packages:
+$(_Packages)
+assemblies:
+$(_References)
+" />
+
+  </Target>
+</Project>

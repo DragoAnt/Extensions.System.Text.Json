@@ -1,0 +1,14 @@
+<Project>
+
+  <PropertyGroup>
+    <IsCodeAnalyzer>True</IsCodeAnalyzer>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="lib\**\*" Pack="false" />
+    <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="$(OutputPath)\$(AssemblyName).pdb" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="AnalyzerReleases.Shipped.md" Pack="true" PackagePath="analyzers/dotnet/cs" />
+    <None Include="AnalyzerReleases.Unshipped.md" Pack="true" PackagePath="analyzers/dotnet/cs" />
+  </ItemGroup>
+
+</Project>

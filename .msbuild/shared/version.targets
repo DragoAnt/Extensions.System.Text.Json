@@ -1,0 +1,19 @@
+<Project InitialTargets="RestrictManualVersion">
+  <!--    Checks Project for setting Version manual in csproj if IncrementVersionType != Manual   -->
+
+  <Target Name="RestrictManualVersion" Condition="'$(IncrementVersionType)'!='Manual'" BeforeTargets="Restore;Build;CoreCompile">
+
+    <XmlPeek XmlInputPath="$(MSBuildProjectFullPath)" Query="Project/PropertyGroup/Version/text()">
+      <Output TaskParameter="Result" ItemName="VersionCheckNodeXmlResult" />
+    </XmlPeek>
+
+    <PropertyGroup>
+      <VersionCheckCountXmlResult>@(VersionCheckNodeXmlResult->Count())</VersionCheckCountXmlResult>
+    </PropertyGroup>
+
+    <Error Condition="$(VersionCheckCountXmlResult) > 0" Text="Version property is not allowed in project file. Remove it if it was added by mistake or add &lt;IncrementVersionType&gt;Manual&lt;/IncrementVersionType&gt; to avoid this message."
+           File="$(MSBuildProjectFullPath)" />
+
+  </Target>
+
+</Project>
