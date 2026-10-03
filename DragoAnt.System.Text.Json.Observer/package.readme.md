@@ -33,17 +33,31 @@ Console.WriteLine(masking.Mask(json));
 
 `BlockList` writes unmatched values unchanged. The default, `AllowList`, masks every string and number that no rule names; `NullList` writes them as `null`.
 
-## Performance: 0 B Allocations on Byte Streams
+## Performance & Analogs Comparison
 
-Under high-load HTTP request logging (e.g. 1,000+ req/s), traditional DOM-based maskers (`JsonNode.Parse`) allocate 3.5×–4.5× the body size into the managed heap per call, causing severe GC Gen0/Gen1/Gen2 churn.
+Under high-throughput HTTP request and response logging (e.g. 1,000+ req/s), traditional DOM-based maskers parse and re-serialize the entire JSON tree into memory, creating massive GC churn and Large Object Heap (LOH) fragmentation.
 
-`DragoAnt.System.Text.Json.Observer` performs a **single forward streaming pass** directly from `Utf8JsonReader` to `Utf8JsonWriter`:
+`DragoAnt.System.Text.Json.Observer` performs a **single forward streaming pass** directly from `Utf8JsonReader` to `Utf8JsonWriter` over UTF-8 bytes:
 
-| Payload Size | DragoAnt Observer (bytes) | DOM `JsonNode` / `JsonMasking` |
-| :--- | :---: | :---: |
-| **1 KB** | **0 B** | 11 000 B *(3.3×)* |
-| **8 KB** | **0 B** | 86 865 B – 112 953 B *(3.5×–4.6×)* |
-| **64 KB** | **0 B** | 709 609 B – 923 894 B *(LOH!)* |
+### Head-to-Head Performance (.NET 10.0 x64 RyuJIT)
+
+| Payload Size | DragoAnt Observer (bytes) | DOM `JsonNode` | [JsonMasking 2.0](https://github.com/ThiagoBarradas/jsonmasking) (~876k dl) | Speedup vs JsonMasking | Memory Reduction |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **1 KB Flat** | **0 B** / 8.3 µs | 11,000 B / 8.0 µs | 57,633 B / 98.0 µs | **11.8× faster** | **17× less RAM** |
+| **8 KB Flat** | **0 B** / 70.8 µs | 86,865 B / 61.8 µs | 468,078 B / 902.0 µs | **12.8× faster** | **703× less RAM** |
+| **64 KB Flat** | **0 B** / 534.0 µs | 709,628 B (LOH!) | 3,594,477 B (LOH!) / 8,173.0 µs | **15.3× faster** | **5,364× less RAM** |
+
+*Detailed benchmark logs and methodology: [OSS Analogs Comparison](https://github.com/DragoAnt/Extensions.System.Text.Json/blob/main/docs/comparisons/analogs.md).*
+
+### Truncated & Incomplete JSON: Container Synthesis
+
+When HTTP bodies are cut short by logging limits (e.g. 32 KB cap) or network timeouts:
+
+| Library | Behavior on Truncated JSON | Security & Stability |
+| :--- | :--- | :--- |
+| **[DragoAnt Observer](https://github.com/DragoAnt/Extensions.System.Text.Json)** | **Synthesizes missing closing braces (`}}`)** and emits valid JSON. | ✅ **100% safe.** 0 leaks, 0 crashes. |
+| **[JsonMasking](https://github.com/ThiagoBarradas/jsonmasking)** | Throws unhandled `JsonReaderException: '}' expected`. | ❌ Crash or raw body leak on fallback. |
+| **[Slin.Masking](https://github.com/sw0/Slin.Masking)** | Catches exception and **returns raw input unmasked**. | 🚨 **Severe security leak** in logs/SIEM. |
 
 ### Zero-Allocation Streaming (Hot Path)
 

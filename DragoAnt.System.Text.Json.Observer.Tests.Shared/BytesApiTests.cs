@@ -60,6 +60,80 @@ public abstract class BytesApiTests
     }
 
     [Fact]
+    public void UncompletedJson_MasksSensitiveAndSynthesizesClosingBraces()
+    {
+        var observer = JsonObserver.Any(
+            _ => { },
+            _ => { },
+            Relative(b => b.Match("DriverLicense").MaskAny("***"), BlockList));
+
+        var uncompletedJson = """
+            {
+               "user": {
+                  "DriverLicense": "vvvvvvv3444"
+            """;
+
+        var (result, output) = Mask(observer, uncompletedJson);
+
+        result.Status.Should().Be(MaskStatus.Truncated);
+        output.Should().Be("""{"user":{"DriverLicense":"***"}}""");
+        output.Should().NotContain("vvvvvvv3444");
+
+        using var parsed = JsonDocument.Parse(output);
+        parsed.RootElement.GetProperty("user").GetProperty("DriverLicense").GetString().Should().Be("***");
+    }
+
+    [Fact]
+    public void UncompletedJson_IncompleteFieldName_RollsBackAndClosesContainers()
+    {
+        var observer = JsonObserver.Any(
+            _ => { },
+            _ => { },
+            Relative(b => b.Match("DriverLicense").MaskAny("***"), BlockList));
+
+        // Cut off mid-field name: "dr
+        var uncompletedJson = """
+            {
+               "user": {
+                  "dr
+            """;
+
+        var (result, output) = Mask(observer, uncompletedJson);
+
+        result.Status.Should().Be(MaskStatus.Truncated);
+        output.Should().Be("""{"user":{}}""");
+        output.Should().NotContain("dr");
+
+        using var parsed = JsonDocument.Parse(output);
+        parsed.RootElement.GetProperty("user").ValueKind.Should().Be(JsonValueKind.Object);
+    }
+
+    [Fact]
+    public void UncompletedJson_IncompleteFieldValue_NeverLeaksAndClosesContainers()
+    {
+        var observer = JsonObserver.Any(
+            _ => { },
+            _ => { },
+            Relative(b => b.Match("DriverLicense").MaskAny("***"), BlockList));
+
+        // Cut off mid-field value: "vvv without closing quote
+        var uncompletedJson = """
+            {
+               "user": {
+                  "DriverLicense": "vvv
+            """;
+
+        var (result, output) = Mask(observer, uncompletedJson);
+
+        result.Status.Should().Be(MaskStatus.Truncated);
+        output.Should().Be("""{"user":{}}""");
+        output.Should().NotContain("vvv");
+
+        using var parsed = JsonDocument.Parse(output);
+        parsed.RootElement.GetProperty("user").ValueKind.Should().Be(JsonValueKind.Object);
+    }
+
+    [Fact]
     public void Invalid_ReturnsPrefixAndInvalid()
     {
         var json = $$"""{"user":"bob","password":"{{Secret}}","a": }""";

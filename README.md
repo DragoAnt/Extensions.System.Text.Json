@@ -20,6 +20,15 @@ Under high request traffic (e.g. 1,000+ req/sec in API gateways or payment webho
 
 `DragoAnt.System.Text.Json.Observer` executes a **single forward streaming pass** directly from `Utf8JsonReader` to `Utf8JsonWriter` over UTF-8 bytes:
 
+### Head-to-Head Performance & Memory (.NET 10.0 x64 RyuJIT)
+
+| Payload Size & Shape | DragoAnt Observer (bytes) | DOM `JsonNode` | [JsonMasking 2.0](https://github.com/ThiagoBarradas/jsonmasking) (~876k dl) | Speedup vs JsonMasking | Memory Reduction |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **1 KB Flat** | **0 B** / 8.3 µs | 11,000 B / 8.0 µs | 57,633 B / 98.0 µs | **11.8× faster** | **17× less RAM** |
+| **8 KB Flat** | **0 B** / 70.8 µs | 86,865 B / 61.8 µs | 468,078 B / 902.0 µs | **12.8× faster** | **703× less RAM** |
+| **64 KB Flat** | **0 B** / 534.0 µs | 709,628 B (LOH!) | 3,594,477 B (LOH!) / 8,173.0 µs | **15.3× faster** | **5,364× less RAM** |
+| **64 KB Array** | **60 KB** / 639.6 µs | 923,927 B (LOH!) | 3,904,063 B (LOH!) / 7,538.2 µs | **11.8× faster** | **64× less RAM** |
+
 ### Allocated Bytes per Call (Noise-free, lower is better)
 
 | Payload Size & Shape | LowerBound (bytes copy) | **DragoAnt Observer 2.0 (bytes)** | LowerBound (string copy) | DragoAnt Observer 2.0 (string) | DOM `JsonNode` / `JsonMasking 2.0` |
@@ -31,14 +40,19 @@ Under high request traffic (e.g. 1,000+ req/sec in API gateways or payment webho
 | **64 KB Flat** | 0 B | **0 B** | 197 158 B | 197 500 B | **709 609 B (LOH!)** |
 | **64 KB Array (~100 items)**| 0 B | **0 B** | 200 562 B | 201 100 B | **923 894 B (LOH!)** |
 
-*Measured with BenchmarkDotNet v0.14+ on .NET 9.0 (x64 RyuJIT). Detailed logs and methodology: [perf-audit.md](https://github.com/DragoAnt/Extensions.System.Text.Json/blob/feat/observer-v2/artifacts/perf-audit.md).*
+*Measured with BenchmarkDotNet on .NET 9.0 and .NET 10.0 (x64 RyuJIT). Detailed BenchmarkDotNet logs: [benchmarks.md](docs/benchmarks/benchmarks.md).*
 
 ### Why Observer 2.0 Outperforms Analogs
 
 * **0 B Heap Allocations on Byte Streams:** When called with `ReadOnlySpan<byte>` and a pooled `IBufferWriter<byte>`, zero objects are allocated on the managed heap.
-* **No Large Object Heap (LOH) Pollution:** At 64 KB and larger, DOM-based maskers (`JsonMasking`) allocate >85 KB blocks per call, promoting objects straight into Gen2 and fragmenting the LOH. Observer streams chunk-by-chunk without LOH allocation.
-* **Pre-encoded UTF-8 Property Matching:** Property names are matched directly on their raw UTF-8 bytes without materializing intermediate `string` objects.
-* **Fail-Closed Truncation Safety:** Unlike `Slin.Masking` (which leaks raw bodies when truncated) or `JsonMasking` (which crashes with `JsonException`), Observer safely outputs already-masked tokens, appends `...[truncated]`, and returns `MaskStatus.Truncated`.
+* **Pre-encoded UTF-8 Property Matching:** Property names are matched directly on their raw UTF-8 bytes without materializing intermediate string objects.
+* **Fail-Closed Truncation Safety & Container Synthesis:** When JSON is incomplete or cut short mid-body (e.g. `{"user":{"DriverLicense":"vvvvvvv3444"`), Observer masks all sensitive tokens up to the cutoff, automatically synthesizes missing closing braces (`}}`), outputs syntactically valid JSON, and returns `MaskStatus.Truncated`. Analogs either throw unhandled exceptions ([JsonMasking](https://github.com/ThiagoBarradas/jsonmasking)) or silently leak raw unmasked data ([Slin.Masking](https://github.com/sw0/Slin.Masking)).
+
+| Truncated JSON Handling | Behavior | Security / Stability |
+| :--- | :--- | :--- |
+| **[DragoAnt Observer](https://github.com/DragoAnt/Extensions.System.Text.Json)** | **Synthesizes missing closing braces (`}}`)** | ✅ **100% safe.** Valid JSON emitted, 0 leaks, 0 crashes. |
+| **[JsonMasking](https://github.com/ThiagoBarradas/jsonmasking)** | Throws `JsonReaderException: '}' expected` | ❌ Crash or raw body leak on fallback. |
+| **[Slin.Masking](https://github.com/sw0/Slin.Masking)** | Returns raw string unmasked | 🚨 **Severe security leak** in logs/SIEM. |
 
 👉 For an in-depth architectural comparison against `JsonMasking`, `Slin.Masking`, and `Microsoft.Extensions.Compliance.Redaction`, see the **[OSS Analogs Comparison](docs/comparisons/analogs.md)**.
 
@@ -204,7 +218,7 @@ services.AddHttpClient("PaymentApi", client => client.BaseAddress = new Uri("htt
     .AddJsonBodyLogging(options =>
     {
         options.MaxBodyBytes = 32 * 1024;
-        options.LogWhen = JsonBodyLogWhen.Always;
+        options.When = JsonBodyLogWhen.Always;
     });
 ```
 
