@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text;
 using BenchmarkDotNet.Configs;
+using JsonMasking;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Exporters.Csv;
 using BenchmarkDotNet.Jobs;
@@ -44,6 +45,8 @@ public class MaskBenchmarks
     private ArrayBufferWriter<byte> _output = null!;
     private Utf8JsonWriter _writer = null!;
 
+    private string[] _jsonMaskingPatterns = null!;
+
     [ParamsSource(nameof(Shapes))]
     public PayloadShape Shape { get; set; }
 
@@ -66,6 +69,7 @@ public class MaskBenchmarks
         _utf8 = Encoding.UTF8.GetBytes(_json);
         _output = new ArrayBufferWriter<byte>(_utf8.Length * 2);
         _writer = new Utf8JsonWriter(_output);
+        _jsonMaskingPatterns = Payloads.SensitiveNames.Select(n => "*" + n).ToArray();
 
         var masked = _observer.Mask(_json)!;
         if (masked.Contains(Payloads.SensitiveMarker, StringComparison.Ordinal))
@@ -91,6 +95,14 @@ public class MaskBenchmarks
     [Benchmark(Description = "Lib JsonObserver.Mask string->string (built once)")]
     public string? Library() => _observer.Mask(_json);
 
+    [Benchmark(Description = "Lib JsonObserver.Mask bytes->pooled IBufferWriter (built once)")]
+    public int LibraryBytes()
+    {
+        ResetOutput();
+        _observer.Mask(_utf8.AsSpan(), _output);
+        return _output.WrittenCount;
+    }
+
     [Benchmark(Description = "Hand-rolled span masker string->string")]
     public string SpanMasker() => Baselines.SpanMaskString(_json);
 
@@ -104,6 +116,9 @@ public class MaskBenchmarks
 
     [Benchmark(Description = "DOM JsonNode.Parse->replace->ToJsonString")]
     public string Dom() => Baselines.Dom(_json);
+
+    [Benchmark(Description = "JsonMasking 2.0.0 (DOM ThiagoBarradas)")]
+    public string JsonMaskingLib() => _json.MaskFields(_jsonMaskingPatterns, Baselines.Mask);
 
     [Benchmark(Description = "Regex [GeneratedRegex] over UTF-16")]
     public string Regex() => Baselines.Regex(_json);

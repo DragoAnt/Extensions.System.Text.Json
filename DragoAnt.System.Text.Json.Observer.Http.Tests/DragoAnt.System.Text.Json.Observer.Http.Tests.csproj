@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer.Http\DragoAnt.System.Text.Json.Observer.Http.csproj" />
     <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer.Tests.Shared\DragoAnt.System.Text.Json.Observer.Tests.Shared.csproj" />
-    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />

@@ -48,3 +48,6 @@
 *.fsproj text=auto
 *.dbproj text=auto
 *.sln text=auto eol=crlf
+
+# Verify
+*.verified.txt text eol=lf working-tree-encoding=UTF-8

@@ -33,6 +33,31 @@ Console.WriteLine(masking.Mask(json));
 
 `BlockList` writes unmatched values unchanged. The default, `AllowList`, masks every string and number that no rule names; `NullList` writes them as `null`.
 
+## Performance: 0 B Allocations on Byte Streams
+
+Under high-load HTTP request logging (e.g. 1,000+ req/s), traditional DOM-based maskers (`JsonNode.Parse`) allocate 3.5×–4.5× the body size into the managed heap per call, causing severe GC Gen0/Gen1/Gen2 churn.
+
+`DragoAnt.System.Text.Json.Observer` performs a **single forward streaming pass** directly from `Utf8JsonReader` to `Utf8JsonWriter`:
+
+| Payload Size | DragoAnt Observer (bytes) | DOM `JsonNode` / `JsonMasking` |
+| :--- | :---: | :---: |
+| **1 KB** | **0 B** | 11 000 B *(3.3×)* |
+| **8 KB** | **0 B** | 86 865 B – 112 953 B *(3.5×–4.6×)* |
+| **64 KB** | **0 B** | 709 609 B – 923 894 B *(LOH!)* |
+
+### Zero-Allocation Streaming (Hot Path)
+
+```csharp
+using System.Buffers;
+using DragoAnt.System.Text.Json.Observer;
+
+var output = new ArrayBufferWriter<byte>(1024);
+ReadOnlySpan<byte> utf8Json = """{"user":"alice","password":"secret"}"""u8;
+
+MaskResult result = masking.Mask(utf8Json, output);
+// 0 B heap allocated!
+```
+
 ## Extract
 
 ```csharp
@@ -54,10 +79,12 @@ sealed class RequestInfo
 
 `observer.Mask(json, info)` masks and extracts in the same pass.
 
-## Documentation
+## Documentation & Comparisons
 
-Absolute and relative rules, custom strategies and options: https://github.com/DragoAnt/Extensions.System.Text.Json#readme
+- [Full Documentation & Benchmarks](https://github.com/DragoAnt/Extensions.System.Text.Json#readme)
+- [OSS Analogs Comparison](https://github.com/DragoAnt/Extensions.System.Text.Json/blob/main/docs/comparisons/analogs.md)
+- HTTP Client Body Logging package: `DragoAnt.System.Text.Json.Observer.Http`
 
 ## Feedback
 
-Issues: https://github.com/DragoAnt/Extensions.System.Text.Json/issues
+Report issues or feature requests on [GitHub Issues](https://github.com/DragoAnt/Extensions.System.Text.Json/issues).

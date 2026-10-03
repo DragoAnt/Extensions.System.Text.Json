@@ -12,13 +12,16 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(IsNET8)'=='True'">
-    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">8.0.6</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">8.0.2</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsHttpVersion Condition="'$(MicrosoftExtensionsHttpVersion)'==''">8.0.1</MicrosoftExtensionsHttpVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET9)'=='True'">
     <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">9.0.20</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsHttpVersion Condition="'$(MicrosoftExtensionsHttpVersion)'==''">9.0.20</MicrosoftExtensionsHttpVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET10)'=='True'">
     <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">10.0.12</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsHttpVersion Condition="'$(MicrosoftExtensionsHttpVersion)'==''">10.0.12</MicrosoftExtensionsHttpVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET11)'=='True'">
     <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">11.0.0</MicrosoftExtensionsVersion>
@@ -42,6 +45,7 @@
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.0" />
     <PackageVersion Include="Verify.DiffPlex" Version="3.3.1" />
     <PackageVersion Include="Verify" Version="32.0.0" />
     <PackageVersion Include="Verify.XunitV3" Version="32.0.0" />
@@ -49,5 +53,9 @@
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
     <PackageVersion Include="xunit.v3.assert" Version="4.0.1" />
     <PackageVersion Include="xunit.v3.extensibility.core" Version="4.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsHttpVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="JsonMasking" Version="2.0.0" />
   </ItemGroup>
 </Project>

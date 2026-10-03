@@ -65,22 +65,22 @@ public class JsonMaskingTests
 
     private static readonly Dictionary<string, string> SensitiveValues = new()
     {
-        { "cardId", Guid.NewGuid().ToString() },
-        { "userEntered", F.Lorem.Sentence(3) },
-        { "templateId", Guid.NewGuid().ToString() },
-        { "accountNumber", F.Finance.Account() },
-        { "cardNumber", F.Finance.CreditCardNumber().Replace("-", string.Empty) },
-        { "cardHolder", F.Name.FullName().ToUpper() },
-        { "orderDescription", F.Lorem.Sentence(5) },
-        { "customerId", Guid.NewGuid().ToString() },
-        { "customerBirth", F.Date.Past(20).ToString(CultureInfo.InvariantCulture) },
-        { "ip", F.Internet.Ip() },
-        { "email", F.Internet.ExampleEmail() },
-        { "phone", F.Phone.PhoneNumber() },
-        { "document", F.Random.Long(1000000000, 9999999999).ToString() },
-        { "firstName", F.Person.FirstName },
-        { "lastName", F.Person.LastName },
-        { "address", F.Person.Address.City },
+        { "cardId", "0c7ed9e5-1c7f-42bd-9efd-e267edd17e57" },
+        { "userEntered", "Excepturi quia voluptatem." },
+        { "templateId", "21a60d6c-1043-41d2-b39b-1b9f350c9375" },
+        { "accountNumber", "81357746" },
+        { "cardNumber", "4902130214042281" },
+        { "cardHolder", "JAMARCUS WIZA" },
+        { "orderDescription", "Minus et repellat rem autem." },
+        { "customerId", "56e48b58-79a3-4442-9a1a-b19120f0b120" },
+        { "customerBirth", "11/10/2015 13:58:18" },
+        { "ip", "132.152.216.232" },
+        { "email", "Jarrell.Ankunding@example.net" },
+        { "phone", "310-508-9236" },
+        { "document", "5709240376" },
+        { "firstName", "Roman" },
+        { "lastName", "Shields" },
+        { "address", "Wardfurt" },
     };
 
     //language=json
@@ -172,12 +172,12 @@ public class JsonMaskingTests
     }
 
     [Fact]
-    public void Mask_ForAllRules_MaskingData_IgnoreNulls_And_Comments()
+    public async Task Mask_ForAllRules_MaskingData_IgnoreNulls_And_Comments()
     {
         // Act
         var maskedRequest = Mask(TestJson, _ignoreNullsRequestMasking, true, true);
 
         // Assert
-        Verify(maskedRequest, _verifySettings);
+        await Verify(maskedRequest, _verifySettings);
     }
 }

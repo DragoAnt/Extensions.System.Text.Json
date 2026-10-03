@@ -1,0 +1,22 @@
+﻿{
+  "routing": {
+    "method": "test"
+  },
+  "session": {
+    "card": {
+      "saved": {
+        "id": "0c7ed9e5-1c7f-42bd-9efd-e267edd17e57"
+      },
+      "number": "4902130214042281",
+      "cardHolder": "JAMARCUS WIZA"
+    },
+    "browser": {
+      "ipAddress": "132.152.216.232"
+    },
+    "customer": {
+      "id": "56e48b58-79a3-4442-9a1a-b19120f0b120",
+      "email": "Jarrell.Ankunding@example.net",
+      "birthDate": "11/10/2015 13:58:18"
+    }
+  }
+}
