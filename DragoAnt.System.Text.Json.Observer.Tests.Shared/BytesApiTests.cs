@@ -169,7 +169,7 @@ public abstract class BytesApiTests
         var json = $$"""{/*c*/"password":"{{Secret}}"}""";
 
         var (result, output) = Mask(Observer, json);
-        var masked = Observer.Mask(json, ignoreComments: true);
+        var masked = Observer.Mask(json);
 
         result.Status.Should().Be(MaskStatus.Masked);
         output.Should().Be("""{"password":"***"}""");
@@ -196,7 +196,7 @@ public abstract class BytesApiTests
     {
         var (result, output) = Mask(Observer, """{"note":"abcdefghij","ru":"ИванИван"}""", new JsonObserverOptions(MaxValueBytes: 5));
 
-        result.Status.Should().Be(MaskStatus.Masked);
+        result.Status.Should().Be(MaskStatus.Truncated);
         var root = JsonDocument.Parse(output).RootElement;
         root.GetProperty("note").GetString().Should().Be("abcde" + (char)0x2026);
         root.GetProperty("ru").GetString().Should().Be("Ив" + (char)0x2026);

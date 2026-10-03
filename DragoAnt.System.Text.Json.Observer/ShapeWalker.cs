@@ -82,7 +82,7 @@ internal sealed class ShapeWalker
         writer.WriteStartObject();
         while (true)
         {
-            if (propPath.Stopped || !reader.Read())
+            if (propPath.Stopped || writer.Stopped || !reader.Read())
             {
                 propPath.Stop();
                 return;
@@ -118,7 +118,7 @@ internal sealed class ShapeWalker
         writer.WriteStartArray();
         while (true)
         {
-            if (propPath.Stopped || !reader.Read())
+            if (propPath.Stopped || writer.Stopped || !reader.Read())
             {
                 propPath.Stop();
                 return;

@@ -44,9 +44,6 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 case StartArray:
                     arrayMasking(ref reader, writer, context, depth, ref propPath, valuePolicy);
                     break;
-                case Comment:
-                    writer.WriteCommentValue(reader.GetComment());
-                    break;
                 case Null:
                     writer.WriteNullValue();
                     break;
@@ -88,57 +85,6 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
         return JsonArrayBuilder<TContext>.Build(builder);
     }
 
-    /// <summary>
-    /// Apply masking policy for value string.
-    /// </summary>
-    /// <param name="maskingRule">Property masking rule.</param>
-    /// <param name="valuePolicy">Value masking policy.</param>
-    public static JsonObserverDelegate<TContext> ApplyValueRawPolicy(Func<string?, TContext, string?> maskingRule, JsonObserverValueDelegate<TContext>? valuePolicy)
-    {
-        return (
-            ref Utf8JsonReader reader,
-            JsonWriter writer,
-            TContext context,
-            int _,
-            ref PropertyPath propPath,
-            JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
-        {
-            var effective = valuePolicy ?? defaultValuePolicy;
-            if (reader.TokenType is
-                not JsonTokenType.String and
-                not Number and
-                not True and
-                not False and
-                not Null)
-            {
-                effective.Invoke(ref reader, writer, context, ref propPath);
-                return;
-            }
-
-            var val = GetRawStringValue(ref reader);
-            var result = maskingRule(val, context);
-            if (result is null)
-            {
-                writer.WriteNullValue();
-            }
-            else
-            {
-                writer.WriteStringValue(result);
-            }
-        };
-
-        static string GetRawStringValue(ref Utf8JsonReader reader)
-        {
-            // Get the raw UTF-8 bytes for the current token
-            var rawBytes = reader.HasValueSequence
-                ? reader.ValueSequence.ToArray()
-                : reader.ValueSpan;
-
-            // Convert the bytes to a UTF-8 string
-            return Encoding.UTF8.GetString(rawBytes);
-        }
-    }
-
     public static JsonObserverDelegate<TContext> ReadStr(Action<string?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
         ApplyReadPolicy(
             (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetString(), context),
@@ -147,19 +93,19 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
 
     public static JsonObserverDelegate<TContext> ReadInt(Action<int?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
         ApplyReadPolicy(
-            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetInt32(), context),
+            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Number && reader.TryGetInt32(out var v) ? v : null, context),
             static type => type is Number or Null,
             valuePolicy);
 
     public static JsonObserverDelegate<TContext> ReadLong(Action<long?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
         ApplyReadPolicy(
-            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetInt64(), context),
+            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Number && reader.TryGetInt64(out var v) ? v : null, context),
             static type => type is Number or Null,
             valuePolicy);
 
     public static JsonObserverDelegate<TContext> ReadDecimal(Action<decimal?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
         ApplyReadPolicy(
-            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Null ? null : reader.GetDecimal(), context),
+            (ref Utf8JsonReader reader, TContext context) => read(reader.TokenType is Number && reader.TryGetDecimal(out var v) ? v : null, context),
             static type => type is Number or Null,
             valuePolicy);
 
@@ -246,10 +192,76 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     }
 
     /// <summary>
-    /// Masks a value of any JSON type; a container is skipped and reported to the rule as <c>null</c>.
+    /// Masks a value of any JSON type: a string arrives decoded, a number or boolean as its literal, an object or array
+    /// is skipped unread and arrives as <c>null</c>; a <c>null</c> value stays <c>null</c>.
     /// </summary>
-    /// <param name="maskingRule">Property masking rule.</param>
-    public static JsonObserverDelegate<TContext> ApplyAnyPolicy(Func<string?, TContext, string?> maskingRule)
+    public static JsonObserverDelegate<TContext> ApplyAnyPolicy(Func<string?, TContext, string?> maskingRule) =>
+        ApplyMaskPolicy(
+            (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: true), context),
+            keepNull: true);
+
+    /// <summary>
+    /// Like <see cref="ApplyAnyPolicy"/>, but the function is also called for <c>null</c>.
+    /// </summary>
+    public static JsonObserverDelegate<TContext> ApplyStringPolicy(Func<string?, TContext, string?> maskingRule) =>
+        ApplyMaskPolicy(
+            (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: true), context),
+            keepNull: false);
+
+    /// <summary>
+    /// Like <see cref="ApplyStringPolicy"/>, but a string arrives as its raw, still escaped JSON text.
+    /// </summary>
+    public static JsonObserverDelegate<TContext> ApplyRawPolicy(Func<string?, TContext, string?> maskingRule) =>
+        ApplyMaskPolicy(
+            (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: false), context),
+            keepNull: false);
+
+    /// <summary>
+    /// Masks a value of any JSON type; the function receives <c>true</c> or <c>false</c>, and <c>null</c> for anything else.
+    /// </summary>
+    public static JsonObserverDelegate<TContext> ApplyBoolPolicy(Func<bool?, TContext, string?> maskingRule) =>
+        ApplyMaskPolicy(
+            (ref Utf8JsonReader reader, TContext context, int _) => maskingRule(reader.TokenType switch
+            {
+                True => true,
+                False => false,
+                _ => null,
+            }, context),
+            keepNull: false);
+
+    /// <summary>
+    /// Masks a value of any JSON type; the function receives a number that fits <see cref="int"/>, and <c>null</c> for anything else.
+    /// </summary>
+    public static JsonObserverDelegate<TContext> ApplyIntPolicy(Func<int?, TContext, string?> maskingRule) =>
+        ApplyMaskPolicy(
+            (ref Utf8JsonReader reader, TContext context, int _) =>
+                maskingRule(reader.TokenType is Number && reader.TryGetInt32(out var value) ? value : null, context),
+            keepNull: false);
+
+    /// <summary>
+    /// Masks a value of any JSON type; the function receives a number that fits <see cref="long"/>, and <c>null</c> for anything else.
+    /// </summary>
+    public static JsonObserverDelegate<TContext> ApplyLongPolicy(Func<long?, TContext, string?> maskingRule) =>
+        ApplyMaskPolicy(
+            (ref Utf8JsonReader reader, TContext context, int _) =>
+                maskingRule(reader.TokenType is Number && reader.TryGetInt64(out var value) ? value : null, context),
+            keepNull: false);
+
+    /// <summary>
+    /// Masks a value of any JSON type; the function receives a number that fits <see cref="decimal"/>, and <c>null</c> for anything else.
+    /// </summary>
+    public static JsonObserverDelegate<TContext> ApplyDecimalPolicy(Func<decimal?, TContext, string?> maskingRule) =>
+        ApplyMaskPolicy(
+            (ref Utf8JsonReader reader, TContext context, int _) =>
+                maskingRule(reader.TokenType is Number && reader.TryGetDecimal(out var value) ? value : null, context),
+            keepNull: false);
+
+    private delegate string? MaskToken(ref Utf8JsonReader reader, TContext context, int maxValueBytes);
+
+    /// <summary>
+    /// Writes the function's replacement for the current value whatever its type, then moves past it; a container is never read.
+    /// </summary>
+    private static JsonObserverDelegate<TContext> ApplyMaskPolicy(MaskToken mask, bool keepNull)
     {
         return (
             ref Utf8JsonReader reader,
@@ -259,25 +271,13 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             ref PropertyPath propPath,
             JsonObserverValueDelegate<TContext> __) =>
         {
-            string? value;
-            switch (reader.TokenType)
+            if (keepNull && reader.TokenType is Null)
             {
-                case Null:
-                    writer.WriteNullValue();
-                    return;
-                case StartObject:
-                case StartArray:
-                    value = null;
-                    break;
-                case JsonTokenType.String:
-                    value = reader.GetString();
-                    break;
-                default:
-                    value = Encoding.UTF8.GetString(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan);
-                    break;
+                writer.WriteNullValue();
+                return;
             }
 
-            var result = maskingRule(value, context);
+            var result = mask(ref reader, context, writer.Options.MaxValueBytes);
             if (result is null)
             {
                 writer.WriteNullValue();
@@ -295,180 +295,52 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     }
 
     /// <summary>
-    /// Apply masking policy for value string.
+    /// Text of a string, number or boolean token, at most <paramref name="maxBytes"/> UTF-8 bytes of it; <c>null</c> for anything else.
     /// </summary>
-    /// <param name="maskingRule">Property masking rule.</param>
-    /// <param name="valuePolicy">Value masking policy.</param>
-    public static JsonObserverDelegate<TContext> ApplyValueStringPolicy(Func<string?, TContext, string?> maskingRule, JsonObserverValueDelegate<TContext>? valuePolicy)
+    private static string? ScalarText(ref Utf8JsonReader reader, int maxBytes, bool decode)
     {
-        return (
-            ref Utf8JsonReader reader,
-            JsonWriter writer,
-            TContext context,
-            int _,
-            ref PropertyPath propPath,
-            JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
+        if (reader.TokenType is not (JsonTokenType.String or Number or True or False))
         {
-            var effective = valuePolicy ?? defaultValuePolicy;
-            if (reader.TokenType is not JsonTokenType.String and not Null)
-            {
-                effective.Invoke(ref reader, writer, context, ref propPath);
-                return;
-            }
+            return null;
+        }
 
-            var val = reader.TokenType is Null ? null : reader.GetString();
-            var result = maskingRule(val, context);
-            if (result is null)
+        if (decode && reader.TokenType is JsonTokenType.String && (reader.ValueIsEscaped || reader.HasValueSequence))
+        {
+            var length = reader.HasValueSequence ? checked((int)reader.ValueSequence.Length) : reader.ValueSpan.Length;
+            var buffer = ArrayPool<byte>.Shared.Rent(length);
+            try
             {
-                writer.WriteNullValue();
+                return Utf8Prefix(buffer.AsSpan(0, reader.CopyString(buffer)), maxBytes);
             }
-            else
+            finally
             {
-                writer.WriteStringValue(result);
+                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
             }
-        };
+        }
+
+        if (!reader.HasValueSequence)
+        {
+            return Utf8Prefix(reader.ValueSpan, maxBytes);
+        }
+
+        var sequence = reader.ValueSequence;
+        return Utf8Prefix(sequence.Slice(0, Math.Min(sequence.Length, (long)maxBytes + 4)).ToArray(), maxBytes);
     }
 
-    /// <summary>
-    /// Apply masking policy for value <see cref="Int64"/>.
-    /// </summary>
-    /// <param name="maskingRule">Property masking rule.</param>
-    /// <param name="valuePolicy">Value masking policy.</param>
-    public static JsonObserverDelegate<TContext> ApplyValueBoolPolicy(Func<bool?, TContext, string?> maskingRule, JsonObserverValueDelegate<TContext>? valuePolicy)
+    private static string Utf8Prefix(ReadOnlySpan<byte> utf8, int maxBytes)
     {
-        return (
-            ref Utf8JsonReader reader,
-            JsonWriter writer,
-            TContext context,
-            int _,
-            ref PropertyPath propPath,
-            JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
+        if (utf8.Length > maxBytes)
         {
-            var effective = valuePolicy ?? defaultValuePolicy;
-            if (reader.TokenType is not True and not False and not Null)
+            var cut = Math.Max(maxBytes, 0);
+            while (cut > 0 && (utf8[cut] & 0xC0) == 0x80)
             {
-                effective.Invoke(ref reader, writer, context, ref propPath);
-                return;
+                cut--;
             }
 
-            var val = reader.TokenType is Null ? (bool?)null : reader.GetBoolean();
-            var result = maskingRule(val, context);
-            if (result is null)
-            {
-                writer.WriteNullValue();
-            }
-            else
-            {
-                writer.WriteStringValue(result);
-            }
-        };
-    }
+            utf8 = utf8[..cut];
+        }
 
-    /// <summary>
-    /// Apply masking policy for value <see cref="Int64"/>.
-    /// </summary>
-    /// <param name="maskingRule">Property masking rule.</param>
-    /// <param name="valuePolicy">Value masking policy.</param>
-    public static JsonObserverDelegate<TContext> ApplyValueIntPolicy(Func<int?, TContext, string?> maskingRule, JsonObserverValueDelegate<TContext>? valuePolicy)
-    {
-        return (
-            ref Utf8JsonReader reader,
-            JsonWriter writer,
-            TContext context,
-            int _,
-            ref PropertyPath propPath,
-            JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
-        {
-            var effective = valuePolicy ?? defaultValuePolicy;
-            if (reader.TokenType is not Number and not Null)
-            {
-                effective.Invoke(ref reader, writer, context, ref propPath);
-                return;
-            }
-
-            var val = reader.TokenType is Null ? (int?)null : reader.GetInt32();
-            var result = maskingRule(val, context);
-            if (result is null)
-            {
-                writer.WriteNullValue();
-            }
-            else
-            {
-                writer.WriteStringValue(result);
-            }
-        };
-    }
-
-    /// <summary>
-    /// Apply masking policy for value <see cref="Int64"/>.
-    /// </summary>
-    /// <param name="maskingRule">Property masking rule.</param>
-    /// <param name="valuePolicy">Value masking policy.</param>
-    public static JsonObserverDelegate<TContext> ApplyValueLongPolicy(Func<long?, TContext, string?> maskingRule, JsonObserverValueDelegate<TContext>? valuePolicy)
-    {
-        return (
-            ref Utf8JsonReader reader,
-            JsonWriter writer,
-            TContext context,
-            int _,
-            ref PropertyPath propPath,
-            JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
-        {
-            var effective = valuePolicy ?? defaultValuePolicy;
-            if (reader.TokenType is not Number and not Null)
-            {
-                effective.Invoke(ref reader, writer, context, ref propPath);
-                return;
-            }
-
-            var val = reader.TokenType is Null ? (long?)null : reader.GetInt64();
-            var result = maskingRule(val, context);
-            if (result is null)
-            {
-                writer.WriteNullValue();
-            }
-            else
-            {
-                writer.WriteStringValue(result);
-            }
-        };
-    }
-
-    /// <summary>
-    /// Apply masking policy for value <see cref="Int64"/>.
-    /// </summary>
-    /// <param name="maskingRule">Property masking rule.</param>
-    /// <param name="valuePolicy">Value masking policy.</param>
-    public static JsonObserverDelegate<TContext> ApplyValueDecimalPolicy(
-        Func<decimal?, TContext, string?> maskingRule,
-        JsonObserverValueDelegate<TContext>? valuePolicy)
-    {
-        return (
-            ref Utf8JsonReader reader,
-            JsonWriter writer,
-            TContext context,
-            int _,
-            ref PropertyPath propPath,
-            JsonObserverValueDelegate<TContext> defaultValuePolicy) =>
-        {
-            var effective = valuePolicy ?? defaultValuePolicy;
-            if (reader.TokenType is not Number and not Null)
-            {
-                effective.Invoke(ref reader, writer, context, ref propPath);
-                return;
-            }
-
-            var val = reader.TokenType is Null ? (decimal?)null : reader.GetDecimal();
-            var result = maskingRule(val, context);
-            if (result is null)
-            {
-                writer.WriteNullValue();
-            }
-            else
-            {
-                writer.WriteStringValue(result);
-            }
-        };
+        return Encoding.UTF8.GetString(utf8);
     }
 
     /// <summary>
@@ -506,7 +378,6 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                         defaultPolicy(ref reader, writer, context, nextDepth, ref propPath, defaultValuePolicy);
                     }
                     break;
-                case Comment:
                 case EndArray:
                 case StartObject:
                 case StartArray:
@@ -552,7 +423,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
 
             while (true)
             {
-                if (propPath.Stopped || !reader.Read())
+                if (propPath.Stopped || writer.Stopped || !reader.Read())
                 {
                     propPath.Stop();
                     return;
@@ -586,9 +457,6 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
 
                         propPath.RemovePropertyName();
 
-                        break;
-                    case Comment:
-                        writer.WriteCommentValue(reader.GetComment());
                         break;
                     case EndObject:
                         writer.WriteEndObject();
@@ -635,7 +503,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
 
             while (true)
             {
-                if (propPath.Stopped || !reader.Read())
+                if (propPath.Stopped || writer.Stopped || !reader.Read())
                 {
                     propPath.Stop();
                     return;
@@ -664,9 +532,6 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                             defaultPolicy(ref reader, writer, context, nextDepth, ref propPath, effective);
                         }
                         propPath.RemovePropertyName();
-                        break;
-                    case Comment:
-                        writer.WriteCommentValue(reader.GetComment());
                         break;
                     case EndArray:
                         writer.WriteEndArray();
@@ -709,9 +574,6 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                     }
 
                     unknown.Array(ref reader, writer, context, depth, ref propPath, effective);
-                    break;
-                case Comment:
-                    writer.WriteCommentValue(reader.GetComment());
                     break;
                 case JsonTokenType.String:
                 case Number:

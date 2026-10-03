@@ -1,67 +1,103 @@
 using System.Buffers;
 using System.Text;
-using static DragoAnt.System.Text.Json.Observer.JsonWriter.IgnoreNullsJsonTokenType;
 
 namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
-/// Output of an observer pass: receives the masked tokens.
+/// Output of an observer pass. A custom rule writes exactly one value for the token it is given.
 /// </summary>
 public abstract class JsonWriter
 {
     private const int StackallocThreshold = 256;
 
-    /// <summary>
-    /// Writer that discards everything; used when values are only read.
-    /// </summary>
-    public static readonly JsonWriter Empty = new EmptyJsonWriter();
+    internal static readonly JsonWriter Empty = new EmptyJsonWriter();
+
+    private protected JsonWriter()
+    {
+    }
 
     /// <summary>
-    /// Wraps a <see cref="Utf8JsonWriter"/>.
+    /// Writes <c>null</c>.
     /// </summary>
-    /// <param name="writer">Target writer.</param>
-    /// <param name="ignoreNulls">Drop properties whose value is <c>null</c>, and containers left empty by that.</param>
-    /// <param name="ignoreComments">Drop comments.</param>
-    public static JsonWriter FromUtf8JsonWriter(Utf8JsonWriter writer, bool ignoreNulls = false, bool ignoreComments = false)
-        => ignoreNulls
-            ? new IgnoreNullsTextJsonWriter(writer, ignoreComments)
-            : new TextJsonWriter(writer, ignoreComments);
-
     public abstract void WriteNullValue();
+
+    /// <summary>
+    /// Writes <c>true</c> or <c>false</c>.
+    /// </summary>
+    /// <param name="value">Value to write.</param>
     public abstract void WriteBooleanValue(bool value);
+
+    /// <summary>
+    /// Writes a string value; <c>null</c> is written as <c>null</c>.
+    /// </summary>
+    /// <param name="value">Value to write.</param>
     public abstract void WriteStringValue(string? value);
+
+    /// <summary>
+    /// Writes a number.
+    /// </summary>
+    /// <param name="value">Value to write.</param>
     public abstract void WriteNumberValue(long value);
+
+    /// <summary>
+    /// Writes a number.
+    /// </summary>
+    /// <param name="value">Value to write.</param>
     public abstract void WriteNumberValue(decimal value);
-    public abstract void WriteCommentValue(string comment);
+
+    /// <summary>
+    /// Writes a property name; the value written next belongs to it.
+    /// </summary>
+    /// <param name="propertyName">Name to write.</param>
     public abstract void WritePropertyName(string propertyName);
+
+    /// <summary>
+    /// Opens an object.
+    /// </summary>
     public abstract void WriteStartObject();
+
+    /// <summary>
+    /// Closes the innermost open object.
+    /// </summary>
     public abstract void WriteEndObject();
+
+    /// <summary>
+    /// Opens an array.
+    /// </summary>
     public abstract void WriteStartArray();
+
+    /// <summary>
+    /// Closes the innermost open array.
+    /// </summary>
     public abstract void WriteEndArray();
 
     /// <summary>
     /// Writes a property name given as unescaped UTF-8 text.
     /// </summary>
     /// <param name="utf8PropertyName">Unescaped UTF-8 name.</param>
-    public virtual void WritePropertyName(ReadOnlySpan<byte> utf8PropertyName) => WritePropertyName(Encoding.UTF8.GetString(utf8PropertyName));
+    public abstract void WritePropertyName(ReadOnlySpan<byte> utf8PropertyName);
 
     /// <summary>
     /// Writes a string value given as unescaped UTF-8 text.
     /// </summary>
     /// <param name="utf8Value">Unescaped UTF-8 value.</param>
-    public virtual void WriteStringValue(ReadOnlySpan<byte> utf8Value) => WriteStringValue(Encoding.UTF8.GetString(utf8Value));
+    public abstract void WriteStringValue(ReadOnlySpan<byte> utf8Value);
 
     /// <summary>
     /// Writes an already valid JSON value as is, for example a number literal.
     /// </summary>
     /// <param name="utf8Json">UTF-8 JSON value.</param>
-    public virtual void WriteRawValue(ReadOnlySpan<byte> utf8Json) =>
-        throw new NotSupportedException($"{GetType().Name} does not support raw values.");
+    public abstract void WriteRawValue(ReadOnlySpan<byte> utf8Json);
 
     /// <summary>
     /// Options of the current call; rules with a <see cref="Strategies.MaskTag"/> read their strategy and hash key here.
     /// </summary>
     internal virtual JsonObserverOptions Options => JsonObserverOptions.Default;
+
+    /// <summary>
+    /// The output is full: nothing more is written, so reading can stop.
+    /// </summary>
+    internal virtual bool Stopped => false;
 
     internal void CopyStringValue(ref Utf8JsonReader reader)
     {
@@ -90,7 +126,7 @@ public abstract class JsonWriter
         {
             if (rented is not null)
             {
-                ArrayPool<byte>.Shared.Return(rented);
+                ArrayPool<byte>.Shared.Return(rented, clearArray: true);
             }
         }
     }
@@ -133,10 +169,6 @@ public abstract class JsonWriter
         {
         }
 
-        public override void WriteCommentValue(string comment)
-        {
-        }
-
         public override void WritePropertyName(string propertyName)
         {
         }
@@ -169,185 +201,231 @@ public abstract class JsonWriter
         {
         }
     }
+}
 
-    private sealed class TextJsonWriter(Utf8JsonWriter writer, bool ignoreComments) : JsonWriter
+/// <summary>
+/// Drops <c>null</c> values: a property name and an opened container are written only once a non-null value follows.
+/// </summary>
+internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDisposable
+{
+    private Pending[] _pending = ArrayPool<Pending>.Shared.Rent(16);
+    private byte[] _names = ArrayPool<byte>.Shared.Rent(256);
+    private int _count;
+    private int _namesUsed;
+
+    internal override JsonObserverOptions Options => inner.Options;
+
+    internal override bool Stopped => inner.Stopped;
+
+    public override void WriteNullValue()
     {
-        public override void WriteNullValue() => writer.WriteNullValue();
-        public override void WriteBooleanValue(bool value) => writer.WriteBooleanValue(value);
-        public override void WriteStringValue(string? value) => writer.WriteStringValue(value);
-        public override void WriteStringValue(ReadOnlySpan<byte> utf8Value) => writer.WriteStringValue(utf8Value);
-        public override void WriteRawValue(ReadOnlySpan<byte> utf8Json) => writer.WriteRawValue(utf8Json, skipInputValidation: true);
-        public override void WriteNumberValue(long value) => writer.WriteNumberValue(value);
-        public override void WriteNumberValue(decimal value) => writer.WriteNumberValue(value);
-
-        public override void WriteCommentValue(string comment)
+        if (_count > 0 && _pending[_count - 1].Kind == Kind.Name)
         {
-            if (ignoreComments)
-            {
-                return;
-            }
-
-            writer.WriteCommentValue(comment);
+            Pop();
         }
-
-        public override void WritePropertyName(string propertyName) => writer.WritePropertyName(propertyName);
-        public override void WritePropertyName(ReadOnlySpan<byte> utf8PropertyName) => writer.WritePropertyName(utf8PropertyName);
-        public override void WriteStartObject() => writer.WriteStartObject();
-        public override void WriteEndObject() => writer.WriteEndObject();
-        public override void WriteStartArray() => writer.WriteStartArray();
-        public override void WriteEndArray() => writer.WriteEndArray();
-    }
-
-    private sealed class IgnoreNullsTextJsonWriter(Utf8JsonWriter writer, bool ignoreComments = false) : JsonWriter
-    {
-        private readonly Stack<(IgnoreNullsJsonTokenType type, string? propName)> _stack = new();
-
-        public override void WriteNullValue()
+        else if (_count == 0 || !_pending[_count - 1].IsArray)
         {
-            var item = _stack.Peek();
-            switch (item.type)
-            {
-                case StartArr:
-                case StartedArr:
-                    return;
-                case PropName:
-                    _stack.Pop();
-                    return;
-                default: throw new InvalidOperationException("Unexpected type");
-            }
-        }
-
-        public override void WriteBooleanValue(bool value)
-        {
-            StartGroupOnStack();
-            writer.WriteBooleanValue(value);
-        }
-
-        public override void WriteStringValue(string? value)
-        {
-            StartGroupOnStack();
-            writer.WriteStringValue(value);
-        }
-
-        public override void WriteStringValue(ReadOnlySpan<byte> utf8Value)
-        {
-            StartGroupOnStack();
-            writer.WriteStringValue(utf8Value);
-        }
-
-        public override void WriteRawValue(ReadOnlySpan<byte> utf8Json)
-        {
-            StartGroupOnStack();
-            writer.WriteRawValue(utf8Json, skipInputValidation: true);
-        }
-
-        public override void WriteNumberValue(long value)
-        {
-            StartGroupOnStack();
-            writer.WriteNumberValue(value);
-        }
-
-        public override void WriteNumberValue(decimal value)
-        {
-            StartGroupOnStack();
-            writer.WriteNumberValue(value);
-        }
-
-        public override void WriteCommentValue(string comment)
-        {
-            if (ignoreComments)
-            {
-                return;
-            }
-
-            StartGroupOnStack();
-            writer.WriteCommentValue(comment);
-        }
-
-        public override void WritePropertyName(string propertyName) => _stack.Push((PropName, propertyName));
-        public override void WriteStartObject() => _stack.Push((StartObj, null));
-
-        public override void WriteEndObject()
-        {
-            var item = _stack.Pop();
-            switch (item.type)
-            {
-                case StartObj:
-                    if (_stack.TryPeek(out item) && item.type is PropName)
-                    {
-                        _stack.Pop();
-                    }
-                    return;
-                case StartedObj:
-                    StartGroupOnStack();
-                    writer.WriteEndObject();
-                    break;
-                default: throw new InvalidOperationException("Unexpected type");
-            }
-        }
-
-        public override void WriteStartArray() => _stack.Push((StartArr, null));
-
-        public override void WriteEndArray()
-        {
-            var item = _stack.Pop();
-            switch (item.type)
-            {
-                case StartArr:
-                    if (_stack.TryPeek(out item) && item.type is PropName)
-                    {
-                        _stack.Pop();
-                    }
-                    return;
-                case StartedArr:
-                    StartGroupOnStack();
-                    writer.WriteEndArray();
-                    break;
-                default: throw new InvalidOperationException("Unexpected type");
-            }
-        }
-
-        private void StartGroupOnStack()
-        {
-            if (!_stack.TryPeek(out var item))
-            {
-                return;
-            }
-
-            switch (item.type)
-            {
-                case StartedObj:
-                case StartedArr:
-                    break;
-                case StartObj:
-                    _stack.Pop();
-                    StartGroupOnStack();
-                    writer.WriteStartObject();
-                    _stack.Push((StartedObj, null));
-                    return;
-                case StartArr:
-                    _stack.Pop();
-                    StartGroupOnStack();
-                    writer.WriteStartArray();
-                    _stack.Push((StartedArr, null));
-                    return;
-                case PropName:
-                    item = _stack.Pop();
-                    StartGroupOnStack();
-                    writer.WritePropertyName(item.propName!);
-                    return;
-                default: throw new InvalidOperationException("Unexpected type");
-            }
+            Flush();
+            inner.WriteNullValue();
         }
     }
 
-    public enum IgnoreNullsJsonTokenType : byte
+    public override void WriteBooleanValue(bool value)
     {
-        None,
-        StartObj,
-        StartedObj,
-        StartArr,
-        StartedArr,
-        PropName,
+        Flush();
+        inner.WriteBooleanValue(value);
     }
+
+    public override void WriteStringValue(string? value)
+    {
+        if (value is null)
+        {
+            WriteNullValue();
+            return;
+        }
+
+        Flush();
+        inner.WriteStringValue(value);
+    }
+
+    public override void WriteStringValue(ReadOnlySpan<byte> utf8Value)
+    {
+        Flush();
+        inner.WriteStringValue(utf8Value);
+    }
+
+    public override void WriteRawValue(ReadOnlySpan<byte> utf8Json)
+    {
+        Flush();
+        inner.WriteRawValue(utf8Json);
+    }
+
+    public override void WriteNumberValue(long value)
+    {
+        Flush();
+        inner.WriteNumberValue(value);
+    }
+
+    public override void WriteNumberValue(decimal value)
+    {
+        Flush();
+        inner.WriteNumberValue(value);
+    }
+
+    public override void WritePropertyName(string propertyName) => WritePropertyName(Encoding.UTF8.GetBytes(propertyName));
+
+    public override void WritePropertyName(ReadOnlySpan<byte> utf8PropertyName)
+    {
+        if (_namesUsed + utf8PropertyName.Length > _names.Length)
+        {
+            var grown = ArrayPool<byte>.Shared.Rent(Math.Max(_names.Length * 2, _namesUsed + utf8PropertyName.Length));
+            _names.AsSpan(0, _namesUsed).CopyTo(grown);
+            ArrayPool<byte>.Shared.Return(_names, clearArray: true);
+            _names = grown;
+        }
+
+        utf8PropertyName.CopyTo(_names.AsSpan(_namesUsed));
+        Push(new Pending(Kind.Name, _namesUsed, utf8PropertyName.Length, false));
+        _namesUsed += utf8PropertyName.Length;
+    }
+
+    public override void WriteStartObject() => Push(new Pending(Kind.Open, 0, 0, false));
+
+    public override void WriteStartArray() => Push(new Pending(Kind.Open, 0, 0, true));
+
+    public override void WriteEndObject() => End(isArray: false);
+
+    public override void WriteEndArray() => End(isArray: true);
+
+    public void Dispose()
+    {
+        ArrayPool<Pending>.Shared.Return(_pending);
+        ArrayPool<byte>.Shared.Return(_names, clearArray: true);
+        _pending = [];
+        _names = [];
+    }
+
+    private void End(bool isArray)
+    {
+        if (_count > 0 && _pending[_count - 1].Kind == Kind.Open)
+        {
+            Pop();
+            if (_count > 0 && _pending[_count - 1].Kind == Kind.Name)
+            {
+                Pop();
+            }
+            else if (_count == 0)
+            {
+                WriteEmptyRoot(isArray);
+            }
+
+            return;
+        }
+
+        if (isArray)
+        {
+            inner.WriteEndArray();
+        }
+        else
+        {
+            inner.WriteEndObject();
+        }
+
+        if (_count > 0 && _pending[_count - 1].Kind == Kind.Written)
+        {
+            _count--;
+        }
+    }
+
+    private void WriteEmptyRoot(bool isArray)
+    {
+        if (isArray)
+        {
+            inner.WriteStartArray();
+            inner.WriteEndArray();
+        }
+        else
+        {
+            inner.WriteStartObject();
+            inner.WriteEndObject();
+        }
+    }
+
+    /// <summary>
+    /// Writes every pending name and opened container, because a non-null value follows.
+    /// </summary>
+    private void Flush()
+    {
+        for (var i = 0; i < _count; i++)
+        {
+            ref var pending = ref _pending[i];
+            switch (pending.Kind)
+            {
+                case Kind.Name:
+                    inner.WritePropertyName(_names.AsSpan(pending.Start, pending.Length));
+                    break;
+                case Kind.Open when pending.IsArray:
+                    inner.WriteStartArray();
+                    pending = pending with { Kind = Kind.Written };
+                    continue;
+                case Kind.Open:
+                    inner.WriteStartObject();
+                    pending = pending with { Kind = Kind.Written };
+                    continue;
+                default:
+                    continue;
+            }
+
+            pending = pending with { Kind = Kind.Flushed };
+        }
+
+        _namesUsed = 0;
+        Compact();
+    }
+
+    private void Compact()
+    {
+        var kept = 0;
+        for (var i = 0; i < _count; i++)
+        {
+            if (_pending[i].Kind != Kind.Flushed)
+            {
+                _pending[kept++] = _pending[i];
+            }
+        }
+
+        _count = kept;
+    }
+
+    private void Push(Pending pending)
+    {
+        if (_count == _pending.Length)
+        {
+            var grown = ArrayPool<Pending>.Shared.Rent(_count * 2);
+            _pending.AsSpan(0, _count).CopyTo(grown);
+            ArrayPool<Pending>.Shared.Return(_pending);
+            _pending = grown;
+        }
+
+        _pending[_count++] = pending;
+    }
+
+    private void Pop()
+    {
+        var pending = _pending[--_count];
+        if (pending.Kind == Kind.Name)
+        {
+            _namesUsed = pending.Start;
+        }
+    }
+
+    private enum Kind : byte
+    {
+        Name,
+        Open,
+        Written,
+        Flushed,
+    }
+
+    private readonly record struct Pending(Kind Kind, int Start, int Length, bool IsArray);
 }

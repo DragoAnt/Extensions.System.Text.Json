@@ -31,12 +31,20 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         {
             Encoder = options.RelaxedEscaping ? JavaScriptEncoder.UnsafeRelaxedJsonEscaping : null,
             MaxDepth = Math.Min(Math.Max(options.MaxDepth, 1), int.MaxValue - 1) + 1,
+            Indented = options.Indented,
         });
     }
 
     public bool Exhausted { get; private set; }
 
+    /// <summary>
+    /// At least one string value was cut to <see cref="JsonObserverOptions.MaxValueBytes"/>.
+    /// </summary>
+    public bool ValuesTruncated { get; private set; }
+
     internal override JsonObserverOptions Options { get; }
+
+    internal override bool Stopped => Exhausted;
 
     private int Length => checked((int)(_writer.BytesCommitted + _writer.BytesPending));
 
@@ -75,14 +83,36 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
             return;
         }
 
-        if ((long)value.Length * 3 > _maxValueBytes && Encoding.UTF8.GetByteCount(value) > _maxValueBytes)
+        if ((long)value.Length * 3 <= _maxValueBytes)
         {
-            WriteStringValue(Encoding.UTF8.GetBytes(value).AsSpan());
+            _writer.WriteStringValue(value);
+            Completed();
             return;
         }
 
-        _writer.WriteStringValue(value);
-        Completed();
+        var chars = value.AsSpan(0, (int)Math.Min(value.Length, (long)_maxValueBytes + 1));
+        if (chars.Length < value.Length && char.IsHighSurrogate(chars[^1]))
+        {
+            chars = chars[..^1];
+        }
+
+        var encoded = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(chars.Length));
+        try
+        {
+            var utf8 = encoded.AsSpan(0, Encoding.UTF8.GetBytes(chars, encoded));
+            if (chars.Length < value.Length && utf8.Length <= _maxValueBytes)
+            {
+                WriteCut(utf8, utf8.Length);
+            }
+            else
+            {
+                WriteStringValue(utf8);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(encoded, clearArray: true);
+        }
     }
 
     public override void WriteStringValue(ReadOnlySpan<byte> utf8Value)
@@ -105,6 +135,12 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
             cut--;
         }
 
+        WriteCut(utf8Value, cut);
+    }
+
+    private void WriteCut(ReadOnlySpan<byte> utf8Value, int cut)
+    {
+        ValuesTruncated = true;
         var shortened = ArrayPool<byte>.Shared.Rent(cut + Ellipsis.Length);
         try
         {
@@ -151,10 +187,6 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
 
         _writer.WriteNumberValue(value);
         Completed();
-    }
-
-    public override void WriteCommentValue(string comment)
-    {
     }
 
     public override void WritePropertyName(string propertyName)

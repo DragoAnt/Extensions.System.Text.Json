@@ -1,18 +1,21 @@
 namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
-/// Outcome of masking a UTF-8 JSON payload.
+/// Outcome of masking or reading a JSON payload. Whatever the status, the output never holds a value a rule masks.
 /// </summary>
 public enum MaskStatus
 {
     /// <summary>
-    /// The whole payload was masked.
+    /// The whole payload was masked and every value was written in full.
     /// </summary>
     Masked,
 
     /// <summary>
-    /// The payload ended inside the document, or the output reached its size limit.
-    /// The output holds the masked part, with every open object and array closed.
+    /// Part of the data is missing from the output, which is still valid JSON:
+    /// the payload ended inside the document or the output reached <see cref="JsonObserverOptions.MaxOutputBytes"/>
+    /// (the output holds the masked part with every open object and array closed, and <see cref="MaskResult.FailedAtByte"/>
+    /// is where reading stopped), or a string longer than <see cref="JsonObserverOptions.MaxValueBytes"/> was cut
+    /// (the whole document was read and <see cref="MaskResult.FailedAtByte"/> is -1).
     /// </summary>
     Truncated,
 
@@ -29,9 +32,11 @@ public enum MaskStatus
 }
 
 /// <summary>
-/// Result of masking a UTF-8 JSON payload.
+/// Result of masking or reading a JSON payload.
 /// </summary>
 /// <param name="Status">What happened.</param>
-/// <param name="BytesWritten">Bytes written to the output.</param>
-/// <param name="FailedAtByte">Input offset where reading stopped, or -1 when the whole payload was masked.</param>
+/// <param name="BytesWritten">UTF-8 bytes written to the output; 0 when only reading.</param>
+/// <param name="FailedAtByte">
+/// UTF-8 offset in the input where reading stopped; -1 when the whole payload was read, 0 for <see cref="MaskStatus.NotJson"/>.
+/// </param>
 public readonly record struct MaskResult(MaskStatus Status, int BytesWritten, long FailedAtByte);

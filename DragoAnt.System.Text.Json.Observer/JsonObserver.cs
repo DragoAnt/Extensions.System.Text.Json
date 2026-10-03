@@ -122,33 +122,44 @@ public sealed class JsonObserver
     }
 
     /// <summary>
-    /// JSON-string masking using defined strategies.
+    /// Masks a JSON text. Never throws: invalid or cut-off JSON yields its safe masked prefix, and only masked values
+    /// are ever written. The output is the same as <see cref="Mask(ReadOnlySpan{byte}, IBufferWriter{byte}, JsonObserverOptions?)"/>
+    /// writes for the same text.
     /// </summary>
-    /// <param name="value">Value for masking.</param>
-    /// <param name="readerOptions">JSON reader options.</param>
-    /// <param name="writerOptions">JSON writer options.</param>
-    /// <param name="ignoreNulls">Ignore null properties.</param>
-    /// <param name="ignoreComments">Ignore comments.</param>
-    /// <returns>Masked JSON-string.</returns>
-    public string? Mask(
-        string? value,
-        JsonReaderOptions readerOptions = default,
-        JsonWriterOptions writerOptions = default,
-        bool ignoreNulls = false,
-        bool ignoreComments = false)
-        => _masking.Mask(value, JsonObserveringEmptyContext.Instance, readerOptions, writerOptions, ignoreNulls, ignoreComments);
+    /// <param name="json">JSON text; it may be cut short, for example by a size limit.</param>
+    /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>The masked JSON; empty when the text is not a JSON object or array; <c>null</c> for <c>null</c>.</returns>
+    public string? Mask(string? json, JsonObserverOptions? options = null)
+        => _masking.Mask(json, JsonObserveringEmptyContext.Instance, out _, options);
+
+    /// <summary>
+    /// Masks a JSON text and reports what happened. Never throws: invalid or cut-off JSON yields its safe masked prefix,
+    /// and only masked values are ever written.
+    /// </summary>
+    /// <param name="json">JSON text; it may be cut short, for example by a size limit.</param>
+    /// <param name="result">Status, UTF-8 length of the output and UTF-8 offset where reading stopped.</param>
+    /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>The masked JSON; empty when the text is not a JSON object or array; <c>null</c> for <c>null</c>.</returns>
+    public string? Mask(string? json, out MaskResult result, JsonObserverOptions? options = null)
+        => _masking.Mask(json, JsonObserveringEmptyContext.Instance, out result, options);
 
     /// <summary>
     /// Masks a UTF-8 JSON payload into <paramref name="output"/>. Never throws: problems are reported in the result,
     /// and only masked values are ever written.
     /// </summary>
-    /// <param name="utf8">UTF-8 JSON payload; it may be cut short, for example by a size limit.</param>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short, for example by a size limit. A leading byte order mark is skipped.</param>
     /// <param name="output">Receives the masked JSON.</param>
     /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
     public MaskResult Mask(ReadOnlySpan<byte> utf8, IBufferWriter<byte> output, JsonObserverOptions? options = null)
         => _masking.Mask(utf8, output, JsonObserveringEmptyContext.Instance, options);
 }
 
+/// <summary>
+/// Masks JSON and hands values to a context of type <typeparamref name="TContext"/> in one streaming pass.
+/// Build it once and share it: it is thread-safe.
+/// </summary>
+/// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
 public sealed class JsonObserver<TContext>
 {
     private readonly JsonObserverDelegate<TContext> _maskDelegate;
@@ -162,64 +173,142 @@ public sealed class JsonObserver<TContext>
     private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 
     /// <summary>
-    /// JSON-string masking using defined strategies.
+    /// Masks a JSON text and hands values to <paramref name="context"/>. Never throws: invalid or cut-off JSON yields
+    /// its safe masked prefix, and only masked values are ever written.
     /// </summary>
-    /// <param name="value">Value for masking.</param>
-    /// <param name="context">Masking context.</param>
-    /// <param name="readerOptions">JSON reader options.</param>
-    /// <param name="writerOptions">JSON writer options.</param>
-    /// <param name="ignoreNulls">Ignore null properties.</param>
-    /// <param name="ignoreComments">Ignore comments; they are also accepted in the input then.</param>
-    /// <returns>Masked JSON-string.</returns>
-    public string? Mask(
-        string? value,
-        TContext context,
-        JsonReaderOptions readerOptions = default,
-        JsonWriterOptions writerOptions = default,
-        bool ignoreNulls = false,
-        bool ignoreComments = false)
+    /// <param name="json">JSON text; it may be cut short, for example by a size limit.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
+    /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>The masked JSON; empty when the text is not a JSON object or array; <c>null</c> for <c>null</c>.</returns>
+    public string? Mask(string? json, TContext context, JsonObserverOptions? options = null)
+        => Mask(json, context, out _, options);
+
+    /// <summary>
+    /// Masks a JSON text, hands values to <paramref name="context"/> and reports what happened. Never throws:
+    /// invalid or cut-off JSON yields its safe masked prefix, and only masked values are ever written.
+    /// </summary>
+    /// <param name="json">JSON text; it may be cut short, for example by a size limit.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
+    /// <param name="result">Status, UTF-8 length of the output and UTF-8 offset where reading stopped.</param>
+    /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>The masked JSON; empty when the text is not a JSON object or array; <c>null</c> for <c>null</c>.</returns>
+    public string? Mask(string? json, TContext context, out MaskResult result, JsonObserverOptions? options = null)
     {
-        if (value is null)
+        if (json is null)
         {
+            result = new MaskResult(MaskStatus.NotJson, 0, 0);
             return null;
         }
 
-        if (ignoreComments && readerOptions.CommentHandling == JsonCommentHandling.Disallow)
-        {
-            readerOptions.CommentHandling = JsonCommentHandling.Skip;
-        }
-
-        var input = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(value.Length));
+        byte[]? input = null;
         try
         {
-            var utf8 = input.AsSpan(0, Encoding.UTF8.GetBytes(value, input));
-            using var output = new PooledBufferWriter(Math.Max(utf8.Length, 256));
-            using (var writer = new Utf8JsonWriter(output, writerOptions))
-            {
-                var reader = new Utf8JsonReader(utf8, readerOptions);
-                MaskStrict(ref reader, utf8, context, JsonWriter.FromUtf8JsonWriter(writer, ignoreNulls, ignoreComments));
-                writer.Flush();
-            }
-
+            input = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetByteCount(json));
+            var utf8 = input.AsSpan(0, Encoding.UTF8.GetBytes(json, input));
+            using var output = new PooledBufferWriter(Math.Clamp(utf8.Length, 256, 64 * 1024));
+            result = Mask(utf8, output, context, options);
             return Encoding.UTF8.GetString(output.WrittenSpan);
+        }
+        catch (Exception)
+        {
+            result = new MaskResult(MaskStatus.Invalid, 0, 0);
+            return string.Empty;
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(input);
+            if (input is not null)
+            {
+                ArrayPool<byte>.Shared.Return(input, clearArray: true);
+            }
         }
     }
 
     /// <summary>
-    /// Masks a UTF-8 JSON payload into <paramref name="output"/>. Never throws: problems are reported in the result,
-    /// and only masked values are ever written.
+    /// Masks a UTF-8 JSON payload into <paramref name="output"/> and hands values to <paramref name="context"/>.
+    /// Never throws: problems are reported in the result, and only masked values are ever written.
     /// </summary>
-    /// <param name="utf8">UTF-8 JSON payload; it may be cut short, for example by a size limit.</param>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short, for example by a size limit. A leading byte order mark is skipped.</param>
     /// <param name="output">Receives the masked JSON.</param>
-    /// <param name="context">Masking context.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
     /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
     public MaskResult Mask(ReadOnlySpan<byte> utf8, IBufferWriter<byte> output, TContext context, JsonObserverOptions? options = null)
     {
         options ??= JsonObserverOptions.Default;
+        using var bounded = new BoundedJsonWriter(options);
+        using var ignoreNulls = options.IgnoreNulls ? new IgnoreNullsJsonWriter(bounded) : null;
+        var (status, failedAt) = Observe(utf8, (JsonWriter?)ignoreNulls ?? bounded, context, options);
+        if (status == MaskStatus.NotJson)
+        {
+            return new MaskResult(MaskStatus.NotJson, 0, 0);
+        }
+
+        try
+        {
+            var written = bounded.CopyTo(output, status == MaskStatus.Masked);
+            if (status == MaskStatus.Masked && bounded.ValuesTruncated)
+            {
+                status = MaskStatus.Truncated;
+            }
+
+            return new MaskResult(status, written, failedAt);
+        }
+        catch (Exception)
+        {
+            return new MaskResult(MaskStatus.Invalid, 0, failedAt);
+        }
+    }
+
+    /// <summary>
+    /// Hands values of a JSON text to <paramref name="context"/> without writing anything. Never throws:
+    /// values after a problem in the text are not read, and the result says why.
+    /// </summary>
+    /// <param name="json">JSON text; it may be cut short.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
+    /// <param name="options">Limits; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status and the UTF-8 offset where reading stopped; <see cref="MaskStatus.NotJson"/> for <c>null</c>.</returns>
+    public MaskResult Read(string? json, TContext context, JsonObserverOptions? options = null)
+    {
+        if (json is null)
+        {
+            return new MaskResult(MaskStatus.NotJson, 0, 0);
+        }
+
+        byte[]? input = null;
+        try
+        {
+            input = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetByteCount(json));
+            return Read(input.AsSpan(0, Encoding.UTF8.GetBytes(json, input)), context, options);
+        }
+        catch (Exception)
+        {
+            return new MaskResult(MaskStatus.Invalid, 0, 0);
+        }
+        finally
+        {
+            if (input is not null)
+            {
+                ArrayPool<byte>.Shared.Return(input, clearArray: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Hands values of a UTF-8 JSON payload to <paramref name="context"/> without writing anything. Never throws:
+    /// values after a problem in the payload are not read, and the result says why.
+    /// </summary>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short. A leading byte order mark is skipped.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
+    /// <param name="options">Limits; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status and the input offset where reading stopped.</returns>
+    public MaskResult Read(ReadOnlySpan<byte> utf8, TContext context, JsonObserverOptions? options = null)
+    {
+        var (status, failedAt) = Observe(utf8, JsonWriter.Empty, context, options ?? JsonObserverOptions.Default);
+        return new MaskResult(status, 0, failedAt);
+    }
+
+    private (MaskStatus Status, long FailedAt) Observe(ReadOnlySpan<byte> utf8, JsonWriter writer, TContext context, JsonObserverOptions options)
+    {
         if (utf8.StartsWith(Utf8Bom))
         {
             utf8 = utf8[Utf8Bom.Length..];
@@ -231,53 +320,23 @@ public sealed class JsonObserver<TContext>
             AllowTrailingCommas = true,
             MaxDepth = Math.Max(options.MaxDepth, 1),
         }));
-        using var writer = new BoundedJsonWriter(options);
         var propPath = new PropertyPath(_maxDepth, utf8);
-        var status = MaskStatus.Masked;
-        long failedAt = -1;
         try
         {
             if (!reader.Read() || reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))
             {
-                return new MaskResult(MaskStatus.NotJson, 0, 0);
+                return (MaskStatus.NotJson, 0);
             }
 
             _maskDelegate(ref reader, writer, context, 0, ref propPath, JsonObserverValuePolicies<TContext>.Default);
             UpdateMaxDepth(propPath.MaxLength);
-            if (propPath.Stopped || writer.Exhausted)
-            {
-                status = MaskStatus.Truncated;
-                failedAt = reader.BytesConsumed;
-            }
+            return propPath.Stopped || writer.Stopped
+                ? (MaskStatus.Truncated, reader.BytesConsumed)
+                : (MaskStatus.Masked, -1);
         }
         catch (Exception)
         {
-            status = MaskStatus.Invalid;
-            failedAt = reader.BytesConsumed;
-        }
-        finally
-        {
-            propPath.Dispose();
-        }
-
-        try
-        {
-            return new MaskResult(status, writer.CopyTo(output, status == MaskStatus.Masked), failedAt);
-        }
-        catch (Exception)
-        {
-            return new MaskResult(MaskStatus.Invalid, 0, failedAt);
-        }
-    }
-
-    private void MaskStrict(ref Utf8JsonReader reader, ReadOnlySpan<byte> input, TContext context, JsonWriter jsonWriter)
-    {
-        reader.Read();
-        var propPath = new PropertyPath(_maxDepth, input);
-        try
-        {
-            _maskDelegate(ref reader, jsonWriter, context, 0, ref propPath, JsonObserverValuePolicies<TContext>.Default);
-            UpdateMaxDepth(propPath.MaxLength);
+            return (MaskStatus.Invalid, reader.BytesConsumed);
         }
         finally
         {
@@ -286,9 +345,8 @@ public sealed class JsonObserver<TContext>
     }
 
     /// <summary>
-    /// Update max depth for optimize next calls.
+    /// Remembers the deepest path seen, so that later calls start with a large enough path buffer.
     /// </summary>
-    /// <param name="newMaxDepth"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void UpdateMaxDepth(int newMaxDepth)
     {
@@ -306,36 +364,5 @@ public sealed class JsonObserver<TContext>
                 return;
             }
         } while (Interlocked.CompareExchange(ref _maxDepth, newMaxDepth, initialValue) != initialValue);
-    }
-
-    /// <summary>
-    /// Reads values to context from JSON-string by using defined strategies.
-    /// </summary>
-    /// <param name="value">Value for masking.</param>
-    /// <param name="context">Masking context.</param>
-    /// <param name="readerOptions">JSON reader options.</param>
-    /// <returns>Masked JSON-string.</returns>
-    public void Read(string? value, TContext context, JsonReaderOptions readerOptions = default)
-    {
-        if (value is null)
-        {
-            return;
-        }
-
-        Read(Encoding.UTF8.GetBytes(value), context, readerOptions);
-    }
-
-    /// <summary>
-    /// Reads values to context from JSON-string by using defined strategies.
-    /// </summary>
-    /// <param name="utf8Bytes">Value for masking.</param>
-    /// <param name="context">Masking context.</param>
-    /// <param name="readerOptions">JSON reader options.</param>
-    /// <returns>Masked JSON-string.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Read(byte[] utf8Bytes, TContext context, JsonReaderOptions readerOptions = default)
-    {
-        var reader = new Utf8JsonReader(utf8Bytes, readerOptions);
-        MaskStrict(ref reader, utf8Bytes, context, JsonWriter.Empty);
     }
 }
