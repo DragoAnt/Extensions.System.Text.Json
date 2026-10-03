@@ -13,7 +13,7 @@ A common question is: **"Should we switch to an existing open-source library, or
 4. **Serialization Mismatch:** Libraries like [Json.Masker](https://github.com/myarichuk/Json.Masker) operate during object serialization. At the HTTP handler/middleware layer, bodies arrive as raw byte streams; deserializing them into C# objects just to re-serialize them with masking adds enormous CPU and memory overhead.
 5. **Lack of JSON Body Support:** Microsoft's official [Microsoft.Extensions.Compliance.Redaction](https://github.com/dotnet/extensions) redacts discrete string values by classification, but does not parse or traverse JSON bodies.
 
-**[DragoAnt.System.Text.Json.Observer 2.0](https://github.com/DragoAnt/Extensions.System.Text.Json)** is the **only** high-performance, single forward-pass streaming engine (`Utf8JsonReader` → `Utf8JsonWriter`) in .NET. On its bytes API (`ReadOnlySpan<byte>` → `IBufferWriter<byte>`), it achieves **0 B heap allocations**, fail-closed security on truncated bodies, and throughput near the raw token-copy floor.
+**[DragoAnt.System.Text.Json.Observer 2.0](https://github.com/DragoAnt/Extensions.System.Text.Json)** is the **only** high-performance, single forward-pass streaming engine (`Utf8JsonReader` → `Utf8JsonWriter`) in .NET. On its bytes API (`ReadOnlySpan<byte>` → `IBufferWriter<byte>`), it allocates a small constant amount per call (about 240 B with constant or tag rules), stays fail-closed on truncated bodies, and runs at 2–3× the raw token-copy floor.
 
 ---
 
@@ -21,7 +21,7 @@ A common question is: **"Should we switch to an existing open-source library, or
 
 | Category | Typical Libraries | How it works | Suitability for HTTP Body Logging |
 | :--- | :--- | :--- | :--- |
-| **Streaming Reader → Writer** | **[DragoAnt.System.Text.Json.Observer](https://github.com/DragoAnt/Extensions.System.Text.Json)** | Single forward pass `Utf8JsonReader` to `Utf8JsonWriter` over UTF-8 bytes. | **Optimal.** 0 B heap allocation, linear $O(N)$ speed, stream-friendly. |
+| **Streaming Reader → Writer** | **[DragoAnt.System.Text.Json.Observer](https://github.com/DragoAnt/Extensions.System.Text.Json)** | Single forward pass `Utf8JsonReader` to `Utf8JsonWriter` over UTF-8 bytes. | **Optimal.** Small constant allocation, linear $O(N)$ speed, stream-friendly. |
 | **DOM-based Tree Walk** | [ThiagoBarradas/jsonmasking](https://github.com/ThiagoBarradas/jsonmasking), [sw0/Slin.Masking](https://github.com/sw0/Slin.Masking), [raramer/Felt.Redactor.Json](https://github.com/raramer/Felt.Redactor.Json) | Parses JSON string into a DOM (`JsonNode`, `JsonElement`, `JToken`), traverses nodes, replaces values, re-serializes. | **Poor.** Allocates 4× payload size, causes heavy GC Gen0/Gen1/Gen2 churn. |
 | **DTO Serialization Converters** | [myarichuk/Json.Masker](https://github.com/myarichuk/Json.Masker), [Byndyusoft/Byndyusoft.MaskedSerialization](https://github.com/Byndyusoft/Byndyusoft.MaskedSerialization), [luizaes/json-data-masking](https://github.com/luizaes/json-data-masking) | Modifies `JsonSerializer` type info or converters when serializing C# DTOs. | **Inapplicable to raw streams.** Requires 2× roundtrips (deserialize bytes → object → serialize masked). |
 | **Log Destructuring / Regex** | [destructurama/attributed](https://github.com/destructurama/attributed), [serilog-contrib/Serilog.Enrichers.Sensitive](https://github.com/serilog-contrib/Serilog.Enrichers.Sensitive) | Reflection over `{@Object}` parameters or regex scanning over logged message text. | **Unsafe & slow.** Regex misses escaped quotes, non-string primitives, and has CPU backtracking overhead. |
@@ -39,13 +39,13 @@ A common question is: **"Should we switch to an existing open-source library, or
 | **License** | **MIT** | **MIT** | **MIT** | ⚠️ **GPL-3.0** | **MIT** |
 | **Input Type** | `ReadOnlySpan<byte>`, `string` | `ReadOnlySpan<char>` | `string` | `string`, `object` | C# DTO |
 | **Processing Engine** | `Utf8JsonReader` → `Utf8JsonWriter` | Custom `Redactor` | `JsonNode.Parse` (DOM) | `JsonElement` (DOM) | STJ `JsonTypeInfoModifier` |
-| **[Zero-Alloc Streaming API](../benchmarks/benchmarks.md)**<br>*(example: [`BytesApiTests.cs`](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/BytesApiTests.cs))* | **Yes** (`IBufferWriter<byte>`) | ✅ Yes (scalar values) | ❌ No | ❌ No | ❌ No |
-| **[Allocations (8 KB payload)](../benchmarks/benchmarks.md)** | **0 B** (bytes path) | N/A (value only) | ~87 KB – 112 KB | ~45 KB – 90 KB | N/A (requires DTO) |
-| **[Allocations (64 KB payload)](../benchmarks/benchmarks.md)** | **0 B** (bytes path) | N/A (value only) | ~710 KB – 924 KB (LOH) | ~350 KB – 700 KB (LOH) | N/A (requires DTO) |
+| **[Streaming UTF-8 API](../benchmarks/benchmarks.md)**<br>*(example: [`BytesApiTests.cs`](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/BytesApiTests.cs))* | **Yes** (`IBufferWriter<byte>`) | ✅ Yes (scalar values) | ❌ No | ❌ No | ❌ No |
+| **[Allocations (8 KB payload)](../benchmarks/benchmarks.md)** | **~0.2–7.6 KB** (bytes path) | N/A (value only) | ~87 KB – 112 KB | ~45 KB – 90 KB | N/A (requires DTO) |
+| **[Allocations (64 KB payload)](../benchmarks/benchmarks.md)** | **~0.2–61 KB** (bytes path) | N/A (value only) | ~710 KB – 924 KB (LOH) | ~350 KB – 700 KB (LOH) | N/A (requires DTO) |
 | **[Pre-encoded UTF-8 Matching](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/NameMatchingTests.cs)** | **Yes** (zero name allocations) | N/A | ❌ No (`Regex` per property) | ❌ No (strings) | N/A |
 | **[Truncated JSON & Container Synthesis](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/BytesApiTests.cs#L63-L135)** | **Fail-closed** (synthesizes closing brackets) | N/A | ❌ Throws `JsonException` | 🚨 **Leaks raw body unmasked** | N/A |
 | **[Type-Agnostic Masking (`MaskAny`)](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/WholeValueMaskingTests.cs)** | **Yes** (string, num, bool, obj, arr) | N/A | ❌ String values only | Partial | Per property attribute |
-| **[Mask & Extract in 1 Pass](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/MaskAndExtractTests.cs)** | **Yes** (0 extra allocations) | ❌ No | ❌ No | ❌ No | ❌ No |
+| **[Mask & Extract in 1 Pass](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/MaskAndExtractTests.cs)** | **Yes** (one pass) | ❌ No | ❌ No | ❌ No | ❌ No |
 | **[HTTP Body DelegatingHandler](../../DragoAnt.System.Text.Json.Observer.Http.Tests/JsonBodyLoggingHandlerTests.cs)** | **Yes** (`.Observer.Http`) | ❌ (Header/path only) | ❌ No | ❌ No | ❌ No |
 
 ---
@@ -137,17 +137,17 @@ When downstream log forwarders (e.g. Datadog, Elastic, Loki, CloudWatch) receive
 
 ## Why DragoAnt.System.Text.Json.Observer 2.0 Wins
 
-1. **True Zero-Allocation Byte Path:**
+1. **Small, Constant Allocation on the Byte Path:**
    ```csharp
    ReadOnlySpan<byte> utf8Json = ...;
    var result = observer.Mask(utf8Json, bufferWriter);
-   // 0 B heap allocated!
+   // about 240 B per call with constant or tag rules, whatever the body size
    ```
 2. **Pre-Encoded UTF-8 Property Matching:**
    Rules are compiled once into pre-encoded UTF-8 byte sequences. During traversal, property names are compared directly on `ReadOnlySpan<byte>` via case-insensitive SIMD/ASCII routines without allocating `string` instances.
 3. **Fail-Closed Security by Design:**
-   If a body is truncated (e.g. HTTP logger capped at 32 KB) or corrupted, Observer never leaks sensitive values. It safely flushes already-masked tokens, appends `...[truncated]`, and returns `MaskStatus.Truncated` or `MaskStatus.Invalid`.
+   If a body is truncated (e.g. HTTP logger capped at 32 KB) or corrupted, Observer never leaks sensitive values. It writes the already-masked part, closes every open object and array so the output stays valid JSON, and returns `MaskStatus.Truncated` or `MaskStatus.Invalid`.
 4. **Type-Agnostic Protection:**
    A sensitive property name (e.g. `password` or `pin`) will be masked whether the JSON value is a string, a raw number (`{"pin": 1234}`), a boolean, or an entire nested object/array (`{"credentials": {"key": "value"}}`).
 5. **Integrated HTTP Client Logging:**
-   The companion package [DragoAnt.System.Text.Json.Observer.Http](https://github.com/DragoAnt/Extensions.System.Text.Json/tree/main/DragoAnt.System.Text.Json.Observer.Http) provides `JsonBodyLoggingHandler`, seamlessly integrating with `IHttpClientFactory` and `WithBodyLogging<TReq, TResp>()` with stream-preserving replay (`PrefixRemainderStream`).
+   The companion package [DragoAnt.System.Text.Json.Observer.Http](https://github.com/DragoAnt/Extensions.System.Text.Json/tree/main/DragoAnt.System.Text.Json.Observer.Http) provides `JsonBodyLoggingHandler`, registered per named client with `AddJsonBodyLogging`, with per-request model types via `WithBodyLogging<TRequest, TResponse>()`; the caller still reads the full response body.

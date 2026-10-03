@@ -1,104 +1,76 @@
 # DragoAnt.System.Text.Json.Observer
 
-Mask or extract JSON values by property-path rules in a single streaming pass from `Utf8JsonReader` to `Utf8JsonWriter` — no deserialization, no DOM.
-
-## Getting started
-
-```sh
-dotnet add package DragoAnt.System.Text.Json.Observer
-```
+Mask or extract JSON values by property-path rules in a single streaming pass from `Utf8JsonReader` to `Utf8JsonWriter` — no deserialization, no DOM. Built for logging: it never throws, even on cut-off or invalid JSON, and never writes a masked value in clear.
 
 Targets `net8.0`, `net9.0` and `net10.0`, with no dependencies beyond the .NET base class library.
 
-## Mask
+## Quick start
 
 ```csharp
-using System.Text.RegularExpressions;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Strategies;
 using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
 
-var masking = JsonObserver.Obj(Relative(rules => rules
-        .Match("card", "number").MaskStr(new Regex("(?<=.{6}).(?=.{4})"))
-        .Match(PropMatches.Contains("password")).MaskStr("*****"),
+var masker = JsonObserver.Obj(Relative(rules => rules
+        .Match("password").MaskAny("***")
+        .Match("card", "number").MaskAny(MaskTag.Last4),
     BlockList));
 
-var json = """
-    {"user":{"login":"alice","password":"s3cret"},"card":{"number":"4111111111111111","holder":"ALICE SMITH"}}
-    """;
-
-Console.WriteLine(masking.Mask(json));
-// {"user":{"login":"alice","password":"*****"},"card":{"number":"411111******1111","holder":"ALICE SMITH"}}
+Console.WriteLine(masker.Mask("""{"user":"alice","password":"s3cret","card":{"number":"4111111111111111"}}"""));
+// Output:
+// {"user":"alice","password":"***","card":{"number":"***1111"}}
 ```
 
-`BlockList` writes unmatched values unchanged. The default, `AllowList`, masks every string and number that no rule names; `NullList` writes them as `null`.
+Build an observer once and share it: it is thread-safe. `Relative` rules match the end of a property's path at any depth; rules passed straight to `JsonObserver.Obj(root => …)` follow the path from the root. Values no rule names get the default policy: `AllowList` (the default) writes every string, number and boolean as `"***"`, `BlockList` writes them unchanged, `NullList` as `null`.
 
-## Performance & Analogs Comparison
+Every `Mask*` rule masks the whole value whatever its JSON type; an object or array under a mask rule is skipped unread.
 
-Under high-throughput HTTP request and response logging (e.g. 1,000+ req/s), traditional DOM-based maskers parse and re-serialize the entire JSON tree into memory, creating massive GC churn and Large Object Heap (LOH) fragmentation.
-
-`DragoAnt.System.Text.Json.Observer` performs a **single forward streaming pass** directly from `Utf8JsonReader` to `Utf8JsonWriter` over UTF-8 bytes:
-
-### Head-to-Head Performance (.NET 10.0 x64 RyuJIT)
-
-| Payload Size | DragoAnt Observer (bytes) | DOM `JsonNode` | [JsonMasking 2.0](https://github.com/ThiagoBarradas/jsonmasking) (~876k dl) | Speedup vs JsonMasking | Memory Reduction |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **1 KB Flat** | **0 B** / 8.3 µs | 11,000 B / 8.0 µs | 57,633 B / 98.0 µs | **11.8× faster** | **17× less RAM** |
-| **8 KB Flat** | **0 B** / 70.8 µs | 86,865 B / 61.8 µs | 468,078 B / 902.0 µs | **12.8× faster** | **703× less RAM** |
-| **64 KB Flat** | **0 B** / 534.0 µs | 709,628 B (LOH!) | 3,594,477 B (LOH!) / 8,173.0 µs | **15.3× faster** | **5,364× less RAM** |
-
-*Detailed benchmark logs and methodology: [OSS Analogs Comparison](https://github.com/DragoAnt/Extensions.System.Text.Json/blob/main/docs/comparisons/analogs.md).*
-
-### Truncated & Incomplete JSON: Container Synthesis
-
-When HTTP bodies are cut short by logging limits (e.g. 32 KB cap) or network timeouts:
-
-| Library | Behavior on Truncated JSON | Security & Stability |
-| :--- | :--- | :--- |
-| **[DragoAnt Observer](https://github.com/DragoAnt/Extensions.System.Text.Json)** | **Synthesizes missing closing braces (`}}`)** and emits valid JSON. | ✅ **100% safe.** 0 leaks, 0 crashes. |
-| **[JsonMasking](https://github.com/ThiagoBarradas/jsonmasking)** | Throws unhandled `JsonReaderException: '}' expected`. | ❌ Crash or raw body leak on fallback. |
-| **[Slin.Masking](https://github.com/sw0/Slin.Masking)** | Catches exception and **returns raw input unmasked**. | 🚨 **Severe security leak** in logs/SIEM. |
-
-### Zero-Allocation Streaming (Hot Path)
+## Mask and extract
 
 ```csharp
-using System.Buffers;
 using DragoAnt.System.Text.Json.Observer;
 
-var output = new ArrayBufferWriter<byte>(1024);
-ReadOnlySpan<byte> utf8Json = """{"user":"alice","password":"secret"}"""u8;
+var observer = JsonObserver.Obj<Order>(
+    rules => rules
+        .Match("id").ReadInt((id, order) => order.Id = id)
+        .Match("card").MaskAny("***"),
+    JsonObserverValuePolicies<Order>.BlockList);
 
-MaskResult result = masking.Mask(utf8Json, output);
-// 0 B heap allocated!
-```
+var order = new Order();
+Console.WriteLine(observer.Mask("""{"id":42,"card":"4111111111111111"}""", order));
+Console.WriteLine(order.Id);
+// Output:
+// {"id":42,"card":"***"}
+// 42
 
-## Extract
-
-```csharp
-var observer = JsonObserver.Obj<RequestInfo>(root => root
-    .Match("routing").Obj(routing => routing
-        .Match("contractId").ReadInt((value, info) => info.ContractId = value)
-        .Match("method").ReadStr((value, info) => info.Method = value)));
-
-var info = new RequestInfo();
-observer.Read("""{"routing":{"contractId":2,"method":"card"}}""", info);
-// info: ContractId = 2, Method = "card"
-
-sealed class RequestInfo
+sealed class Order
 {
-    public int? ContractId { get; set; }
-    public string? Method { get; set; }
+    public int? Id { get; set; }
 }
 ```
 
-`observer.Mask(json, info)` masks and extracts in the same pass.
+## Cut-off JSON and the UTF-8 API
 
-## Documentation & Comparisons
+`MaskResult.Status` is `Masked`, `Truncated` (the payload ended early, hit `MaxOutputBytes`, or a string was cut to `MaxValueBytes`), `Invalid` or `NotJson`. Whatever the status, the output is valid JSON holding only masked values. The string and the UTF-8 API produce the same output.
 
-- [Full Documentation & Benchmarks](https://github.com/DragoAnt/Extensions.System.Text.Json#readme)
-- [OSS Analogs Comparison](https://github.com/DragoAnt/Extensions.System.Text.Json/blob/main/docs/comparisons/analogs.md)
-- HTTP Client Body Logging package: `DragoAnt.System.Text.Json.Observer.Http`
+```csharp
+using System.Buffers;
+using System.Text;
+using DragoAnt.System.Text.Json.Observer;
+using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
 
-## Feedback
+var masker = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+var output = new ArrayBufferWriter<byte>(1024);
 
-Report issues or feature requests on [GitHub Issues](https://github.com/DragoAnt/Extensions.System.Text.Json/issues).
+MaskResult result = masker.Mask("""{"user":"alice","password":"secret","roles":["admin","de"""u8, output);
+Console.WriteLine($"{result.Status} {Encoding.UTF8.GetString(output.WrittenSpan)}");
+// Output:
+// Truncated {"user":"alice","password":"***","roles":["admin"]}
+```
+
+## More
+
+- [Documentation](https://github.com/DragoAnt/Extensions.System.Text.Json#readme): rule kinds, allow-lists from your types (`JsonShape`), options, performance.
+- [Changelog](https://github.com/DragoAnt/Extensions.System.Text.Json/blob/main/CHANGELOG.md), including the breaking changes from 1.x.
+- `DragoAnt.System.Text.Json.Observer.Http` logs masked `HttpClient` request and response bodies.
+- [Issues](https://github.com/DragoAnt/Extensions.System.Text.Json/issues)

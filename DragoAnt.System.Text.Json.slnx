@@ -16,6 +16,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="DragoAnt.System.Text.Json.Observer.Benchmarks/DragoAnt.System.Text.Json.Observer.Benchmarks.csproj" />
+    <Project Path="DragoAnt.System.Text.Json.Observer.Docs.Tests/DragoAnt.System.Text.Json.Observer.Docs.Tests.csproj" />
     <Project Path="DragoAnt.System.Text.Json.Observer.Http.Tests/DragoAnt.System.Text.Json.Observer.Http.Tests.csproj" />
     <Project Path="DragoAnt.System.Text.Json.Observer.Tests.Shared/DragoAnt.System.Text.Json.Observer.Tests.Shared.csproj" />
     <Project Path="DragoAnt.System.Text.Json.Observer.Tests/DragoAnt.System.Text.Json.Observer.Tests.csproj" />
