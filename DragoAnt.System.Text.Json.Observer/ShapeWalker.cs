@@ -12,12 +12,14 @@ internal sealed class ShapeWalker
     private readonly JsonShape _root;
     private readonly JsonShape _unknown;
     private readonly bool _keepNulls;
+    private readonly bool? _ignoreCase;
 
     public ShapeWalker(JsonShape root, JsonShapeOptions options)
     {
-        root.Seal([]);
+        root.Freeze();
         _root = root;
         _keepNulls = options.KeepNulls;
+        _ignoreCase = options.PropertyNameCaseInsensitive;
         _unknown = options.Unknown switch
         {
             UnknownMemberPolicy.Descend => JsonShape.UnknownDescend,
@@ -96,7 +98,7 @@ internal sealed class ShapeWalker
                 case PropertyName:
                     propPath.AddPropertyName(ref reader);
                     var name = propPath.CurrentUtf8;
-                    var child = values ?? shape!.Find(name) ?? _unknown;
+                    var child = values ?? shape!.Find(name, _ignoreCase ?? propPath.PropertyNameCaseInsensitive) ?? _unknown;
                     if (!reader.Read())
                     {
                         propPath.RemovePropertyName();

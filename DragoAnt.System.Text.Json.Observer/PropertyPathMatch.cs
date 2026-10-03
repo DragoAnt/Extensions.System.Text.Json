@@ -53,6 +53,4 @@ internal sealed class PropertyPathMatch
 
         return (true, _matches.Length);
     }
-
-    internal static bool DefaultPropertyNameEquals(string value, string? other) => string.Equals(value, other, DefaultComparison);
 }

@@ -331,7 +331,7 @@ public sealed class JsonObserver<TContext>
             AllowTrailingCommas = true,
             MaxDepth = Math.Max(options.MaxDepth, 1),
         }));
-        var propPath = new PropertyPath(_maxDepth, utf8);
+        var propPath = new PropertyPath(_maxDepth, utf8) { PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive };
         try
         {
             if (!reader.Read() || reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))

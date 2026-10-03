@@ -51,8 +51,10 @@ public sealed class JsonShape
     private static readonly Type[] OpaqueTypes = [typeof(object), typeof(JsonElement), typeof(JsonDocument), typeof(JsonNode)];
 
     private readonly List<JsonShapeProperty>? _members;
+    private static readonly object SealSync = new();
     private (byte[]? Ascii, JsonShapeProperty Property)[] _lookup = [];
-    private bool _sealed;
+    private (byte[]? Ascii, JsonShapeProperty Property)[] _exactLookup = [];
+    private volatile bool _sealed;
 
     private JsonShape(JsonShapeKind kind, MaskTag tag = default, JsonShape? item = null, JsonTypeInfo? typeInfo = null)
     {
@@ -200,21 +202,23 @@ public sealed class JsonShape
     {
         if (!_sealed)
         {
-            Seal([]);
+            Freeze();
         }
 
-        return FindProperty(utf8Name);
+        return FindProperty(utf8Name, propertyNameCaseInsensitive);
     }
 
-    internal JsonShape? Find(ReadOnlySpan<byte> utf8Name) => FindProperty(utf8Name)?.Shape;
+    internal JsonShape? Find(ReadOnlySpan<byte> utf8Name, bool ignoreCase) => FindProperty(utf8Name, ignoreCase)?.Shape;
 
-    private JsonShapeProperty? FindProperty(ReadOnlySpan<byte> utf8Name)
+    private JsonShapeProperty? FindProperty(ReadOnlySpan<byte> utf8Name, bool ignoreCase)
     {
+        var lookup = ignoreCase ? _lookup : _exactLookup;
         if (Ascii.IsValid(utf8Name))
         {
-            foreach (var (ascii, property) in _lookup)
+            foreach (var (ascii, property) in lookup)
             {
-                if (ascii is not null && ascii.Length == utf8Name.Length && Ascii.EqualsIgnoreCase(ascii, utf8Name))
+                if (ascii is not null && ascii.Length == utf8Name.Length &&
+                    (ignoreCase ? Ascii.EqualsIgnoreCase(ascii, utf8Name) : utf8Name.SequenceEqual(ascii)))
                 {
                     return property;
                 }
@@ -224,9 +228,10 @@ public sealed class JsonShape
         }
 
         var name = Encoding.UTF8.GetString(utf8Name);
-        foreach (var (_, property) in _lookup)
+        var comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (var (_, property) in lookup)
         {
-            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(property.Name, name, comparison))
             {
                 return property;
             }
@@ -235,40 +240,53 @@ public sealed class JsonShape
         return null;
     }
 
-    internal void Seal(HashSet<JsonShape> visited)
+    internal void Freeze()
+    {
+        lock (SealSync)
+        {
+            Seal([]);
+        }
+    }
+
+    private void Seal(HashSet<JsonShape> visited)
     {
         if (!visited.Add(this))
         {
             return;
         }
 
-        _sealed = true;
         if (_members is not null)
         {
-            var merged = new List<JsonShapeProperty>();
-            foreach (var property in _members)
-            {
-                var index = merged.FindIndex(m => string.Equals(m.Name, property.Name, StringComparison.OrdinalIgnoreCase));
-                if (index < 0)
-                {
-                    merged.Add(property);
-                }
-                else if (property.Shape.Kind is JsonShapeKind.Masked or JsonShapeKind.Opaque)
-                {
-                    merged[index] = property;
-                }
-            }
+            _lookup = Merge(_members, StringComparison.OrdinalIgnoreCase);
+            _exactLookup = Merge(_members, StringComparison.Ordinal);
+        }
 
-            _lookup = merged
-                .Select(m => (Ascii.IsValid(m.Name) ? Encoding.ASCII.GetBytes(m.Name) : null, m))
-                .ToArray();
-            foreach (var property in merged)
-            {
-                property.Shape.Seal(visited);
-            }
+        _sealed = true;
+        foreach (var property in _members ?? [])
+        {
+            property.Shape.Seal(visited);
         }
 
         Item?.Seal(visited);
+    }
+
+    private static (byte[]? Ascii, JsonShapeProperty Property)[] Merge(List<JsonShapeProperty> members, StringComparison comparison)
+    {
+        var merged = new List<JsonShapeProperty>();
+        foreach (var property in members)
+        {
+            var index = merged.FindIndex(m => string.Equals(m.Name, property.Name, comparison));
+            if (index < 0)
+            {
+                merged.Add(property);
+            }
+            else if (property.Shape.Kind is JsonShapeKind.Masked or JsonShapeKind.Opaque)
+            {
+                merged[index] = property;
+            }
+        }
+
+        return merged.Select(m => (Ascii.IsValid(m.Name) ? Encoding.ASCII.GetBytes(m.Name) : null, m)).ToArray();
     }
 
     private sealed class Builder(Func<JsonPropertyInfo, MaskTag?> classify, Action<JsonShapeProperty>? annotate)

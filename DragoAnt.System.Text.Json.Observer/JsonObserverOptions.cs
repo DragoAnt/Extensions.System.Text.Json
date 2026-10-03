@@ -19,6 +19,12 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// <param name="MaskStrategy">Strategy for rules added with a <see cref="MaskTag"/>; <see cref="Utf8MaskStrategy.Default"/> when <c>null</c>.</param>
 /// <param name="IgnoreNulls">Drop properties and array items whose value is <c>null</c>, and objects and arrays left empty by that.</param>
 /// <param name="Indented">Write the output indented.</param>
+/// <param name="PropertyNameCaseInsensitive">
+/// Match rule names, <see cref="PropMatches"/> tests and shape properties ignoring case, as by default. Pass the
+/// <c>PropertyNameCaseInsensitive</c> of the serializer's options to match names the way deserialization does.
+/// With <c>false</c> a rule no longer catches a differently cased name: under a block list such a value is written
+/// unchanged, under an allow list it is masked.
+/// </param>
 public sealed record JsonObserverOptions(
     int MaxOutputBytes = int.MaxValue,
     int MaxValueBytes = int.MaxValue,
@@ -27,11 +33,12 @@ public sealed record JsonObserverOptions(
     ReadOnlyMemory<byte> HashKey = default,
     Utf8MaskStrategy? MaskStrategy = null,
     bool IgnoreNulls = false,
-    bool Indented = false)
+    bool Indented = false,
+    bool PropertyNameCaseInsensitive = true)
 {
     /// <summary>
     /// Defaults: no size limits, depth 64, relaxed escaping, a per-process hash key, the built-in strategy,
-    /// <c>null</c> values kept and compact output.
+    /// <c>null</c> values kept, compact output and names matched ignoring case.
     /// </summary>
     public static JsonObserverOptions Default { get; } = new();
 }

@@ -41,6 +41,11 @@ public ref struct PropertyPath
     public readonly int Length => Depth + 1;
 
     /// <summary>
+    /// Whether names are matched ignoring case in this call, see <see cref="JsonObserverOptions.PropertyNameCaseInsensitive"/>.
+    /// </summary>
+    public bool PropertyNameCaseInsensitive { readonly get; internal set; } = true;
+
+    /// <summary>
     /// The input ended inside a value: every rule must stop reading.
     /// </summary>
     internal bool Stopped { get; private set; }
