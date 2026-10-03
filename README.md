@@ -246,3 +246,7 @@ Issues and pull requests are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md
 ## License
 
 [MIT](./LICENSE)
+
+---
+
+*Originally written by hand and empowered by AI.*
