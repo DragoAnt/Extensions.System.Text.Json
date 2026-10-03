@@ -1,0 +1,6 @@
+{
+  "repository": "DragoAnt/MSBuildKit",
+  "version": "0.1.0",
+  "sha256": "55c2f40a21fed8bcb5f727a56cf4830e476277574463437dd41560980dbec887",
+  "parts": ["PackageAsProj"]
+}
