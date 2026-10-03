@@ -128,7 +128,7 @@ public readonly struct JsonArrayBuilder<TContext>
 
     private JsonArrayBuilder<TContext> Add(Func<JsonTokenType, bool> typeMatch, JsonObserverDelegate<TContext> policy)
     {
-        _policies.Add(new JsonObserverItem<TContext>((int depth, ref PropertyPath _, JsonTokenType type) => (typeMatch(type), depth + 1), policy));
+        _policies.Add(new JsonObserverItem<TContext>((int _, ref PropertyPath _, JsonTokenType type) => (typeMatch(type), 1), policy));
         return this;
     }
 }
