@@ -83,6 +83,76 @@ public abstract class MaskTagTests
             "Omit True true");
     }
 
+    private sealed record Classification(string Taxonomy, string Name);
+
+    private static readonly Classification Pii = new("Demo", "Pii");
+
+    private static readonly JsonObserver KeyedObserver = JsonObserver.Obj(Relative(b => b
+            .Match("email").MaskAny(MaskTag.Custom(Pii))
+            .Match("token").MaskAny(new MaskTag(MaskKind.Hash, "secret"))
+            .Match("plain").MaskAny(MaskTag.Last4),
+        BlockList));
+
+    [Fact]
+    public void CustomKey_ReachesStrategyWithoutCasts()
+    {
+        var strategy = new KeyedStrategy();
+
+        var (_, output) = BytesApiTests.Mask(
+            KeyedObserver,
+            """{"email":"a@b.c","token":"t0k3n","plain":"12345678"}""",
+            new JsonObserverOptions(MaskStrategy: strategy));
+
+        output.Should().Be("""{"email":"Pii","token":"secret","plain":"none"}""");
+    }
+
+    [Fact]
+    public void CustomKey_DefaultStrategy_FallsBackToKind()
+    {
+        var root = Mask("""{"full":"x"}""");
+        root.GetProperty("full").GetString().Should().Be("***");
+
+        var masked = KeyedObserver.Mask("""{"email":"a@b.c","token":"t0k3n","plain":"12345678"}""");
+
+        masked.Should().StartWith("{\"email\":\"***\",\"token\":\"hash:").And.EndWith("\",\"plain\":\"***5678\"}");
+    }
+
+    [Fact]
+    public void MaskTag_KeyEqualityAndAccessors()
+    {
+        var custom = MaskTag.Custom(Pii);
+
+        custom.Kind.Should().Be(MaskKind.Custom);
+        custom.Should().Be(MaskTag.Custom(new Classification("Demo", "Pii")));
+        custom.Should().NotBe(MaskTag.Custom(new Classification("Demo", "Secret")));
+        custom.TryGetKey<Classification>(out var key).Should().BeTrue();
+        key.Should().Be(Pii);
+        custom.TryGetKey<string>(out _).Should().BeFalse();
+        ((MaskTag)MaskKind.Last4).Should().Be(MaskTag.Last4).And.Be(new MaskTag(MaskKind.Last4, null));
+        MaskTag.Last4.Key.Should().BeNull();
+        var build = () => MaskTag.Custom(null!);
+        build.Should().Throw<ArgumentNullException>();
+    }
+
+    private sealed class KeyedStrategy : Utf8MaskStrategy
+    {
+        public override void Mask(ReadOnlySpan<byte> value, JsonTokenType tokenType, MaskTag tag, JsonWriter writer, JsonObserverOptions options)
+        {
+            switch (tag.Key)
+            {
+                case Classification classification:
+                    writer.WriteStringValue(classification.Name);
+                    break;
+                case string name:
+                    writer.WriteStringValue(name);
+                    break;
+                default:
+                    writer.WriteStringValue("none");
+                    break;
+            }
+        }
+    }
+
     private sealed class RecordingStrategy : Utf8MaskStrategy
     {
         public List<string> Calls { get; } = [];
