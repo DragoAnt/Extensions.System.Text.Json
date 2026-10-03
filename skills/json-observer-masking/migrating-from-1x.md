@@ -1,0 +1,106 @@
+# Migrating from 1.x to 2.0 — json-observer-masking
+
+2.0 keeps the builder API (`JsonObserver.Obj/Array/Any`, `Match`, `Relative`, `Mask*`, `Read*`) and changes what the defaults produce. Work through this list; the "before" blocks are 1.x code and do not compile against 2.0.
+
+## 1. The default policy masks booleans and uses one token
+
+`AllowList` (still the default) now writes every string, number **and boolean** as `"***"`. 1.x wrote `"#str#*****"` / `"#number#*****"` and kept booleans; that output survives as the obsolete `LegacyAllowList`. Update golden strings in tests, and log parsers that looked for `#str#`.
+
+```csharp
+using DragoAnt.System.Text.Json.Observer;
+
+Console.WriteLine(JsonObserver.Obj(root => root.Match("id").Unmasked()).Mask("""{"id":1,"name":"x","vip":true}"""));
+// Output:
+// {"id":1,"name":"***","vip":"***"}
+```
+
+## 2. `Mask(string)` never throws, and its options moved
+
+1.x threw on invalid JSON and took `JsonReaderOptions`, `JsonWriterOptions`, `ignoreNulls` and `ignoreComments`. 2.0 never throws, always skips comments, accepts trailing commas, writes non-ASCII unescaped, and takes one `JsonObserverOptions`. Drop the `try/catch` around `Mask`, and read `MaskResult` when you need to know what happened.
+
+<!-- doc-test: skip -->
+```csharp
+// 1.x
+try
+{
+    var masked = observer.Mask(json, ignoreNulls: true, writerOptions: new JsonWriterOptions { Indented = true });
+}
+catch (JsonException)
+{
+    // invalid body
+}
+```
+
+```csharp
+using DragoAnt.System.Text.Json.Observer;
+using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+
+var observer = JsonObserver.Obj(BlockList);
+var masked = observer.Mask("""{"a":1,"b":null,}""", out var result, new JsonObserverOptions(IgnoreNulls: true));
+Console.WriteLine($"{result.Status} {masked}");
+// Output:
+// Masked {"a":1}
+```
+
+## 3. `Read(...)` returns a `MaskResult`
+
+`Read` used to return `void` and throw; it now returns `MaskResult` and never throws. `Read(byte[])` became `Read(ReadOnlySpan<byte>)` (a `byte[]` converts implicitly).
+
+```csharp
+using System.Text;
+using DragoAnt.System.Text.Json.Observer;
+
+var observer = JsonObserver.Obj<Holder>(root => root.Match("id").ReadInt((id, h) => h.Id = id));
+var holder = new Holder();
+MaskResult result = observer.Read(Encoding.UTF8.GetBytes("""{"id":5}"""), holder);
+Console.WriteLine($"{result.Status} {holder.Id}");
+// Output:
+// Masked 5
+
+sealed class Holder
+{
+    public int? Id { get; set; }
+}
+```
+
+## 4. Every `Mask*` rule masks the whole value, whatever its type
+
+`MaskStr`, `MaskRawValue`, `MaskInt`, `MaskLong`, `MaskDecimal` and `MaskBool` used to hand a value of another type to the default policy (so under `BlockList` a numeric `cvv` under `MaskStr` stayed visible) and descended into objects. Now they mask any value and skip containers unread; `MaskStr` receives a number or boolean as its literal. Because they also match containers, a mask rule placed before an `Obj(...)`/`Array(...)` rule for the same name now wins over it — reorder such rules.
+
+```csharp
+using DragoAnt.System.Text.Json.Observer;
+using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+
+var observer = JsonObserver.Obj(Relative(rules => rules.Match("cvv").MaskStr("***").Match("address").MaskStr("***"), BlockList));
+Console.WriteLine(observer.Mask("""{"cvv":123,"address":{"street":"Main 1"}}"""));
+// Output:
+// {"cvv":"***","address":"***"}
+```
+
+## 5. A string cut by `MaxValueBytes` reports `Truncated`
+
+It used to report success. `FailedAtByte` is -1 in that case (the whole document was read). Masking functions now receive such a value cut to `MaxValueBytes`.
+
+## 6. Number read rules no longer fail the body
+
+`ReadInt`, `ReadLong` and `ReadDecimal` receive `null` for a number that does not fit, and the token is written unchanged.
+
+## 7. `PropertyPath` is a `ref struct`
+
+Custom `MaskValue` rules that keep a `PropertyPath` beyond the call, construct one, or use `MaxLength`/`Dispose` must change: only `GetPropertyName`, `GetPropertyNameReverse`, `Length` and `ToString` remain. Rebuild custom rules against 2.0.
+
+## 8. `JsonWriter` is sealed to the library
+
+It cannot be derived from outside; `JsonWriter.FromUtf8JsonWriter`, `JsonWriter.Empty` and `WriteCommentValue` are gone.
+
+## 9. Internal types
+
+`JsonObserverException`, `PropertyPathMatch`, `JsonPropertyMatchDelegate`, `JsonPropertyPathMatchDelegate` and the builder constructors are internal. Start rules with `Match(...)` on the builder you are given.
+
+## 10. A UTF-8 byte order mark is skipped
+
+## New in 2.0, worth adopting while you migrate
+
+- The UTF-8 API with a reused `IBufferWriter<byte>` ([recipes.md](./recipes.md#hot-path-utf-8-api)).
+- `MaskAny(MaskTag.Last4/Hash/Omit)` instead of hand-written masking functions ([examples.md](./examples.md#tags)).
+- `JsonShape.FromTypeInfo` + `JsonObserver.FromShape` for structure-aware allow-lists ([examples.md](./examples.md#allow-list-from-a-type)).

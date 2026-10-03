@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj" />
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer.Http\DragoAnt.System.Text.Json.Observer.Http.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\skills\**\*.md" Link="skills\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\docs\skills.md" Link="docs\skills.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
