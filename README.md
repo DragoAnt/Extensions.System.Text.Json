@@ -63,7 +63,7 @@ sealed class Order
 
 ### Using an AI coding agent?
 
-Ready-made agent skills for this library are described in [Agent skills](./docs/skills.md).
+Ready-made agent skills for masking, HTTP body logging and testing — and how to install them in Claude Code, Codex, GitHub Copilot, Cursor, Gemini CLI or Antigravity — are in [Agent skills](./docs/skills.md).
 
 ---
 
