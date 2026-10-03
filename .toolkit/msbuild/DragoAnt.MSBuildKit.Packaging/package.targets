@@ -6,7 +6,6 @@
 
   <PropertyGroup>
     <PackageId Condition="'$(PackageId)'==''">$(MSBuildProjectName)</PackageId>
-    <GenerateDocumentationFile Condition="'$(GenerateDocumentationFile)'==''">True</GenerateDocumentationFile>
     <PackageRequireLicenseAcceptance Condition="'$(PackageRequireLicenseAcceptance)'==''">false</PackageRequireLicenseAcceptance>
     <RepositoryType Condition="'$(RepositoryType)'==''">git</RepositoryType>
     <PackageProjectUrl Condition="'$(PackageProjectUrl)'=='' AND '$(RepositoryUrl)'!=''">$(RepositoryUrl)</PackageProjectUrl>

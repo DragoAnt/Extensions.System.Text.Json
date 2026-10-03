@@ -7,6 +7,8 @@
     <PublishRepositoryUrl Condition="'$(PublishRepositoryUrl)'==''">true</PublishRepositoryUrl>
     <EmbedUntrackedSources Condition="'$(EmbedUntrackedSources)'==''">true</EmbedUntrackedSources>
     <Deterministic Condition="'$(Deterministic)'==''">true</Deterministic>
+    <!-- Must be set before the SDK targets, which default it to false. -->
+    <GenerateDocumentationFile Condition="'$(GenerateDocumentationFile)'==''">True</GenerateDocumentationFile>
     <!-- Normalizes the source paths in PDBs; only on CI, so local debugging keeps real paths. -->
     <ContinuousIntegrationBuild Condition="'$(ContinuousIntegrationBuild)'=='' AND '$(MSKit_IsDevEnv)'!='True'">true</ContinuousIntegrationBuild>
 
