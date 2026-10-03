@@ -72,7 +72,7 @@ public abstract class SensitiveRuleTests
             return "***";
         }), BlockList);
 
-        observer.Mask("""{"pin":"abc"}""");
+        observer.Mask("""{"pin":"a\u0062c"}""");
         observer.Mask("""{"pin":12.50}""");
         observer.Mask("""{"pin":true}""");
         observer.Mask("""{"pin":{"x":1}}""");

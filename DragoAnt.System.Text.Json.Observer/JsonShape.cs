@@ -147,6 +147,11 @@ public sealed class JsonShape
     /// </summary>
     /// <param name="typeInfo">Metadata of the root type.</param>
     /// <param name="classify">Mask for a sensitive property, or <c>null</c> for one shown as is.</param>
+    /// <remarks>
+    /// On .NET 8, metadata from a source-generated <c>JsonSerializerContext</c> has no <see cref="JsonPropertyInfo.AttributeProvider"/>,
+    /// so a <paramref name="classify"/> that reads attributes finds none and shows every property; classify by name there,
+    /// or use reflection-based metadata.
+    /// </remarks>
     public static JsonShape FromTypeInfo(JsonTypeInfo typeInfo, Func<JsonPropertyInfo, MaskTag?> classify)
     {
         ArgumentNullException.ThrowIfNull(typeInfo);
