@@ -28,7 +28,7 @@ jobs:
           global-json-file: './global.json'
 
       - name: 'Restore packages'
-        run: dotnet restore
+        run: dotnet restore --verbosity detailed
 
       - name: 'Build'
         run: dotnet build -c Release --no-restore
