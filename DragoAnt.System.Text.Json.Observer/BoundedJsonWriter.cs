@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Buffers.Text;
+using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 
@@ -83,6 +85,16 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
             return;
         }
 
+        WriteStringValue(value.AsSpan());
+    }
+
+    public override void WriteStringValue(ReadOnlySpan<char> value)
+    {
+        if (Exhausted)
+        {
+            return;
+        }
+
         if ((long)value.Length * 3 <= _maxValueBytes)
         {
             _writer.WriteStringValue(value);
@@ -90,7 +102,7 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
             return;
         }
 
-        var chars = value.AsSpan(0, (int)Math.Min(value.Length, (long)_maxValueBytes + 1));
+        var chars = value[..(int)Math.Min(value.Length, (long)_maxValueBytes + 1)];
         if (chars.Length < value.Length && char.IsHighSurrogate(chars[^1]))
         {
             chars = chars[..^1];
@@ -189,7 +201,61 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         Completed();
     }
 
+    public override void WriteNumberValue(double value)
+    {
+        if (Exhausted)
+        {
+            return;
+        }
+
+        if (!double.IsFinite(value))
+        {
+            Span<char> text = stackalloc char[16];
+            value.TryFormat(text, out var length, provider: CultureInfo.InvariantCulture);
+            WriteStringValue(text[..length]);
+            return;
+        }
+
+        _writer.WriteNumberValue(value);
+        Completed();
+    }
+
+    public override void WriteBase64StringValue(ReadOnlySpan<byte> bytes)
+    {
+        if (Exhausted)
+        {
+            return;
+        }
+
+        var length = Base64.GetMaxEncodedToUtf8Length(bytes.Length);
+        if (length <= _maxValueBytes)
+        {
+            _writer.WriteBase64StringValue(bytes);
+            Completed();
+            return;
+        }
+
+        var encoded = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            Base64.EncodeToUtf8(bytes, encoded, out _, out var written);
+            WriteStringValue(encoded.AsSpan(0, written));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(encoded, clearArray: true);
+        }
+    }
+
     public override void WritePropertyName(string propertyName)
+    {
+        if (!Exhausted)
+        {
+            _writer.WritePropertyName(propertyName);
+        }
+    }
+
+    public override void WritePropertyName(ReadOnlySpan<char> propertyName)
     {
         if (!Exhausted)
         {

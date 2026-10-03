@@ -90,6 +90,31 @@ public abstract class JsonWriter
     public abstract void WriteRawValue(ReadOnlySpan<byte> utf8Json);
 
     /// <summary>
+    /// Writes a string value given as UTF-16 text, for example the output of a char-based redactor, without a
+    /// <see cref="string"/> allocation.
+    /// </summary>
+    /// <param name="value">Unescaped text; an empty span writes <c>""</c>.</param>
+    public abstract void WriteStringValue(ReadOnlySpan<char> value);
+
+    /// <summary>
+    /// Writes a property name given as UTF-16 text; the value written next belongs to it.
+    /// </summary>
+    /// <param name="propertyName">Unescaped name.</param>
+    public abstract void WritePropertyName(ReadOnlySpan<char> propertyName);
+
+    /// <summary>
+    /// Writes bytes as a Base64 string value, for example a hash or an encrypted value.
+    /// </summary>
+    /// <param name="bytes">Bytes to encode.</param>
+    public abstract void WriteBase64StringValue(ReadOnlySpan<byte> bytes);
+
+    /// <summary>
+    /// Writes a number; <see cref="double.NaN"/> and infinities, which JSON cannot represent, are written as strings.
+    /// </summary>
+    /// <param name="value">Value to write.</param>
+    public abstract void WriteNumberValue(double value);
+
+    /// <summary>
     /// Options of the current call; rules with a <see cref="Strategies.MaskTag"/> read their strategy and hash key here.
     /// </summary>
     internal virtual JsonObserverOptions Options => JsonObserverOptions.Default;
@@ -185,6 +210,22 @@ public abstract class JsonWriter
         {
         }
 
+        public override void WriteStringValue(ReadOnlySpan<char> value)
+        {
+        }
+
+        public override void WritePropertyName(ReadOnlySpan<char> propertyName)
+        {
+        }
+
+        public override void WriteBase64StringValue(ReadOnlySpan<byte> bytes)
+        {
+        }
+
+        public override void WriteNumberValue(double value)
+        {
+        }
+
         public override void WriteStartObject()
         {
         }
@@ -272,21 +313,53 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
         inner.WriteNumberValue(value);
     }
 
-    public override void WritePropertyName(string propertyName) => WritePropertyName(Encoding.UTF8.GetBytes(propertyName));
+    public override void WriteStringValue(ReadOnlySpan<char> value)
+    {
+        Flush();
+        inner.WriteStringValue(value);
+    }
+
+    public override void WriteBase64StringValue(ReadOnlySpan<byte> bytes)
+    {
+        Flush();
+        inner.WriteBase64StringValue(bytes);
+    }
+
+    public override void WriteNumberValue(double value)
+    {
+        Flush();
+        inner.WriteNumberValue(value);
+    }
+
+    public override void WritePropertyName(string propertyName) => WritePropertyName(propertyName.AsSpan());
+
+    public override void WritePropertyName(ReadOnlySpan<char> propertyName)
+    {
+        EnsureNames(Encoding.UTF8.GetMaxByteCount(propertyName.Length));
+        var written = Encoding.UTF8.GetBytes(propertyName, _names.AsSpan(_namesUsed));
+        Push(new Pending(Kind.Name, _namesUsed, written, false));
+        _namesUsed += written;
+    }
 
     public override void WritePropertyName(ReadOnlySpan<byte> utf8PropertyName)
     {
-        if (_namesUsed + utf8PropertyName.Length > _names.Length)
-        {
-            var grown = ArrayPool<byte>.Shared.Rent(Math.Max(_names.Length * 2, _namesUsed + utf8PropertyName.Length));
-            _names.AsSpan(0, _namesUsed).CopyTo(grown);
-            ArrayPool<byte>.Shared.Return(_names, clearArray: true);
-            _names = grown;
-        }
-
+        EnsureNames(utf8PropertyName.Length);
         utf8PropertyName.CopyTo(_names.AsSpan(_namesUsed));
         Push(new Pending(Kind.Name, _namesUsed, utf8PropertyName.Length, false));
         _namesUsed += utf8PropertyName.Length;
+    }
+
+    private void EnsureNames(int length)
+    {
+        if (_namesUsed + length <= _names.Length)
+        {
+            return;
+        }
+
+        var grown = ArrayPool<byte>.Shared.Rent(Math.Max(_names.Length * 2, _namesUsed + length));
+        _names.AsSpan(0, _namesUsed).CopyTo(grown);
+        ArrayPool<byte>.Shared.Return(_names, clearArray: true);
+        _names = grown;
     }
 
     public override void WriteStartObject() => Push(new Pending(Kind.Open, 0, 0, false));
