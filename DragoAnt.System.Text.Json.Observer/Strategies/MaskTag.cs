@@ -52,5 +52,9 @@ public readonly record struct MaskTag(MaskKind Kind)
     /// </summary>
     public static MaskTag Omit => new(MaskKind.Omit);
 
+    /// <summary>
+    /// Lets a <see cref="MaskKind"/> stand for its tag.
+    /// </summary>
+    /// <param name="kind">How the value is masked.</param>
     public static implicit operator MaskTag(MaskKind kind) => new(kind);
 }

@@ -5,18 +5,13 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// <summary>
 /// Property path matching class.
 /// </summary>
-public sealed class PropertyPathMatch
+internal sealed class PropertyPathMatch
 {
     public const StringComparison DefaultComparison = StringComparison.OrdinalIgnoreCase;
     private readonly NameMatcher[] _matches;
 
     public PropertyPathMatch(PropMatchingStrategy[] matches)
         : this(matches.Select(m => m.Matcher).ToArray())
-    {
-    }
-
-    public PropertyPathMatch(params Func<string?, bool>[] matches)
-        : this(matches.Select(NameMatcher (m) => new NameMatcher.FuncNameMatcher(m)).ToArray())
     {
     }
 

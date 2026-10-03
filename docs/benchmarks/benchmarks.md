@@ -20,17 +20,25 @@ This report provides reproducible BenchmarkDotNet measurements comparing **Drago
 
 ## Executive Summary
 
-| Payload Shape & Size | Observer (bytes) | DOM `JsonNode` | [JsonMasking 2.0.0](https://github.com/ThiagoBarradas/jsonmasking) | Speedup vs JsonMasking | Memory vs JsonMasking |
+Figures from the raw table below (bytes path = `ReadOnlySpan<byte>` into a reused `IBufferWriter<byte>`, observer built once):
+
+| Payload Shape & Size | Observer (bytes path) | DOM `JsonNode` | [JsonMasking 2.0.0](https://github.com/ThiagoBarradas/jsonmasking) | Speedup vs JsonMasking | Memory vs JsonMasking |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **1 KB Flat** | **0 B** / 8.3 µs | 11,000 B / 8.0 µs | 57,633 B / 98.0 µs | **11.8× faster** | **17× less RAM** |
-| **8 KB Flat** | **0 B** / 70.8 µs | 86,865 B / 61.8 µs | 468,078 B / 902.0 µs | **12.8× faster** | **703× less RAM** |
-| **64 KB Flat** | **0 B** / 534.0 µs | 709,628 B (LOH!) | 3,594,477 B (LOH!) / 8,173.0 µs | **15.3× faster** | **5,364× less RAM** |
-| **64 KB Array** | **60 KB** / 639.6 µs | 923,927 B (LOH!) | 3,904,063 B (LOH!) / 7,538.2 µs | **11.8× faster** | **64× less RAM** |
+| **1 KB Flat** | 664 B / 8.3 µs | 11,000 B / 8.0 µs | 57,633 B / 98.0 µs | **11.8× faster** | **87× less** |
+| **8 KB Flat** | 665 B / 70.8 µs | 86,865 B / 61.8 µs | 468,078 B / 902.0 µs | **12.7× faster** | **704× less** |
+| **64 KB Flat** | 670 B / 534.0 µs | 709,628 B (LOH) | 3,594,477 B (LOH) / 8,173.0 µs | **15.3× faster** | **5,364× less** |
+| **64 KB Array** | 60,726 B / 639.6 µs | 923,927 B (LOH) | 3,904,063 B (LOH) / 7,538.2 µs | **11.8× faster** | **64× less** |
 
 ### Key Findings
-1. **0 B Heap Allocations:** On the byte streaming API (`ReadOnlySpan<byte>` to pooled `IBufferWriter<byte>`), Observer performs a single forward pass without allocating any objects on the managed heap.
-2. **Zero LOH Gen2 Collections:** Conventional DOM maskers allocate 3.5 MB+ on 64 KB payloads, landing straight in the Large Object Heap. Observer never touches the LOH.
-3. **Linear Speed:** Throughput scales linearly with body size and stays within ~2× of a bare unmasked reader-writer copy.
+1. **Small, bounded allocations on the bytes path:** a constant ~0.7 KB per call for flat bodies; it grows with nesting and array length in this run (1.2–44 KB nested, 0.9–61 KB arrays) because the benchmark's rules hand decoded values to masking functions.
+2. **No Large Object Heap:** DOM maskers allocate 0.7–3.9 MB on 64 KB bodies, straight into the LOH; the observer stays far below the 85,000-byte threshold.
+3. **Linear speed:** time grows linearly with body size, at 2.0–3.3× a bare unmasked reader-writer copy.
+
+> These numbers were measured before the final 2.0 changes. Since then, rules with a constant or tag mask no longer decode the value, and the repository's allocation test (`AllocationTests`) measures about 240 B per call on the bytes path for 1 KB to 64 KB bodies, nested and arrays included. Re-run the benchmarks to refresh this report:
+>
+> ```sh
+> dotnet run -c Release --project DragoAnt.System.Text.Json.Observer.Benchmarks
+> ```
 
 ---
 

@@ -7,4 +7,25 @@
     <Using Remove="System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes" />
   </ItemGroup>
 
+  <!-- Tests run on Microsoft.Testing.Platform v2 only: the VSTest adapter, test SDK and coverlet are not needed. -->
+  <ItemGroup Condition="'$(IsTestsProject)'=='True' Or '$(IsTestsLibProject)'=='True'">
+    <PackageReference Remove="FluentAssertions" />
+    <PackageReference Remove="Microsoft.NET.Test.Sdk" />
+    <PackageReference Remove="xunit.runner.visualstudio" />
+    <PackageReference Remove="coverlet.collector" />
+    <PackageReference Include="AwesomeAssertions" />
+    <Using Remove="FluentAssertions" />
+    <Using Include="AwesomeAssertions" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsTestsProject)'=='True'">
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+  </ItemGroup>
+
+  <!-- A library that sets EnforcePublicApiDocs fails its build on a public member without an XML doc comment. -->
+  <PropertyGroup Condition="'$(EnforcePublicApiDocs)'=='true'">
+    <NoWarn>$([System.String]::Copy('$(NoWarn)').Replace('CS1591',''))</NoWarn>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+  </PropertyGroup>
+
 </Project>

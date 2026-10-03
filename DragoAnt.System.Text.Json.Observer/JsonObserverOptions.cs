@@ -3,10 +3,13 @@ using DragoAnt.System.Text.Json.Observer.Strategies;
 namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
-/// Limits and output settings for masking a UTF-8 JSON payload.
+/// Limits and output settings of one masking call; the same for the string and the UTF-8 API.
 /// </summary>
-/// <param name="MaxOutputBytes">Output size limit; when reached the output is closed and the status is <see cref="MaskStatus.Truncated"/>.</param>
-/// <param name="MaxValueBytes">Longest string value written as is; a longer one is cut and ends with an ellipsis.</param>
+/// <param name="MaxOutputBytes">Output size limit in UTF-8 bytes; when reached the output is closed and the status is <see cref="MaskStatus.Truncated"/>.</param>
+/// <param name="MaxValueBytes">
+/// Longest string value written, in UTF-8 bytes; a longer one is cut, ends with an ellipsis and makes the status <see cref="MaskStatus.Truncated"/>.
+/// A rule's masking function also receives a longer value cut to this length.
+/// </param>
 /// <param name="MaxDepth">Deepest nesting accepted; a deeper payload is <see cref="MaskStatus.Invalid"/>.</param>
 /// <param name="RelaxedEscaping">Write non-ASCII and HTML-sensitive characters unescaped, which keeps logs readable.</param>
 /// <param name="HashKey">
@@ -14,16 +17,21 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// so hashes correlate within one process only.
 /// </param>
 /// <param name="MaskStrategy">Strategy for rules added with a <see cref="MaskTag"/>; <see cref="Utf8MaskStrategy.Default"/> when <c>null</c>.</param>
+/// <param name="IgnoreNulls">Drop properties and array items whose value is <c>null</c>, and objects and arrays left empty by that.</param>
+/// <param name="Indented">Write the output indented.</param>
 public sealed record JsonObserverOptions(
     int MaxOutputBytes = int.MaxValue,
     int MaxValueBytes = int.MaxValue,
     int MaxDepth = 64,
     bool RelaxedEscaping = true,
     ReadOnlyMemory<byte> HashKey = default,
-    Utf8MaskStrategy? MaskStrategy = null)
+    Utf8MaskStrategy? MaskStrategy = null,
+    bool IgnoreNulls = false,
+    bool Indented = false)
 {
     /// <summary>
-    /// Defaults: no size limits, depth 64, relaxed escaping, a per-process hash key and the built-in strategy.
+    /// Defaults: no size limits, depth 64, relaxed escaping, a per-process hash key, the built-in strategy,
+    /// <c>null</c> values kept and compact output.
     /// </summary>
     public static JsonObserverOptions Default { get; } = new();
 }

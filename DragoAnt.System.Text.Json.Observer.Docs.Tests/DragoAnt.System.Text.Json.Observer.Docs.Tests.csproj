@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj" />
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer.Http\DragoAnt.System.Text.Json.Observer.Http.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" Link="docs\README.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\DragoAnt.System.Text.Json.Observer\package.readme.md" Link="docs\package.readme.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
