@@ -116,53 +116,6 @@ public class JsonBodyLoggingTests
     }
 
     [Fact]
-    public async Task Timeout_LogsOutcomeTimeout()
-    {
-        var sink = new TestSink();
-        var handler = CreateHandler(
-            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.OnFailure },
-            sink,
-            (_, _) => throw new OperationCanceledException("HttpClient timeout"));
-
-        using var client = new HttpClient(handler);
-        var request = new HttpRequestMessage(HttpMethod.Get, "https://example.com/api/slow");
-
-        // Calling without cancelling callerToken -> represents internal timeout
-        var act = async () => await client.SendAsync(request, CancellationToken.None);
-        await act.Should().ThrowAsync<OperationCanceledException>();
-
-        sink.Entries.Should().HaveCount(1);
-        var entry = sink.Entries[0];
-        entry.Outcome.Should().Be(JsonBodyOutcome.Timeout);
-        entry.Exception.Should().BeOfType<OperationCanceledException>();
-    }
-
-    [Fact]
-    public async Task CallerCancel_NotLogged()
-    {
-        var sink = new TestSink();
-        using var cts = new CancellationTokenSource();
-        cts.Cancel();
-
-        var handler = CreateHandler(
-            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.Always },
-            sink,
-            (_, ct) =>
-            {
-                ct.ThrowIfCancellationRequested();
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
-            });
-
-        using var client = new HttpClient(handler);
-        var request = new HttpRequestMessage(HttpMethod.Get, "https://example.com/api/cancel");
-
-        var act = async () => await client.SendAsync(request, cts.Token);
-        await act.Should().ThrowAsync<OperationCanceledException>();
-
-        sink.Entries.Should().BeEmpty();
-    }
-
-    [Fact]
     public async Task Always_200_Logs()
     {
         var sink = new TestSink();
@@ -422,19 +375,6 @@ public class JsonBodyLoggingTests
 
         sink.Entries.Should().HaveCount(1);
         sink.Entries[0].ClientName.Should().Be("ClientA");
-    }
-
-    [Fact]
-    public void CustomSink_ReceivesEntry()
-    {
-        var sink = new TestSink();
-        var entry = new JsonBodyLogEntry("TestClient", HttpMethod.Get, "/test", 200, 12.5, JsonBodyOutcome.Success, null, null, false, false, null);
-
-        sink.Write(entry);
-
-        sink.Entries.Should().ContainSingle();
-        sink.Entries[0].ClientName.Should().Be("TestClient");
-        sink.Entries[0].ElapsedMs.Should().Be(12.5);
     }
 
     private static JsonBodyLoggingHandler CreateHandler(

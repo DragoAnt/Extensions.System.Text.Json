@@ -211,25 +211,45 @@ If the JSON stream is cut short by a network timeout or HTTP size cap:
 dotnet add package DragoAnt.System.Text.Json.Observer.Http
 ```
 
-Attach automatic, stream-preserving body logging to your `HttpClient`:
+`JsonBodyLoggingHandler` logs masked JSON request and response bodies of an `HttpClient`. Register it per named client, and register an `IJsonBodyMaskerProvider` that picks the masker by body model type:
 
 ```csharp
-services.AddHttpClient("PaymentApi", client => client.BaseAddress = new Uri("https://api.payments.com"))
+using System.Net.Http.Json;
+using DragoAnt.System.Text.Json.Observer;
+using DragoAnt.System.Text.Json.Observer.Http;
+
+services.AddSingleton<IJsonBodyMaskerProvider, PaymentMaskers>();
+services.AddHttpClient("PaymentApi", client => client.BaseAddress = new Uri("https://api.example.com/"))
     .AddJsonBodyLogging(options =>
     {
-        options.MaxBodyBytes = 32 * 1024;
-        options.When = JsonBodyLogWhen.Always;
+        options.When = JsonBodyLogWhen.OnFailure;
+        options.MaxBodyBytes = 8 * 1024;
     });
+
+// At the call site: attach the body model types and an operation name.
+using var request = new HttpRequestMessage(HttpMethod.Post, "charges")
+{
+    Content = JsonContent.Create(charge),
+}.WithBodyLogging<ChargeRequest, ChargeResponse>("Charge");
+using var response = await httpClient.SendAsync(request, cancellationToken);
+
+public sealed class PaymentMaskers : IJsonBodyMaskerProvider
+{
+    private static readonly JsonObserver Charge = JsonObserver.Obj(rules => rules.Match("cardNumber").MaskStr("****"));
+
+    // null logs the body as "[body withheld]".
+    public JsonObserver? GetMasker(Type? modelType, string clientName) =>
+        modelType == typeof(ChargeRequest) ? Charge : null;
+}
 ```
 
-Using typed requests with `WithBodyLogging<TReq, TResp>`:
+Without an `IJsonBodyMaskerProvider` every value of an object or array body is masked. Each call becomes one `JsonBodyLogEntry`, written by an `IJsonBodyLogSink` — by default one structured `ILogger` message, `Information` for a success and `Warning` otherwise.
 
-```csharp
-var response = await httpClient.WithBodyLogging<PaymentRequest, PaymentResponse>()
-    .PostAsJsonAsync("/charge", request);
-```
-
-The underlying `JsonBodyLoggingHandler` replays the payload via `PrefixRemainderStream`, ensuring downstream callers read the complete uncorrupted stream even when logged up to `MaxBodyBytes`.
+- **What is logged** — `When`: `Never`, `OnFailure` (default: a non-success status, an exception, or a cancellation) or `Always`. A cancellation and an `HttpClient.Timeout` reach the handler as one token, so both are logged with the outcome `Canceled`. The original exception is rethrown with its stack trace.
+- **Bodies** — at most `MaxBodyBytes` (default 4096; 0 turns bodies off) of each body is read and masked. `RequestBodyStatus` / `ResponseBodyStatus` say what was logged: `Masked`, `Truncated`, `Invalid`, `NotJson`, `Incomplete`, `Withheld`, `Skipped` (non-JSON media type, a non-UTF-8 charset, a `Content-Encoding`), `NotBuffered` (a request stream that cannot be read twice), `Raw` or `Failed`. When no JSON could be written the body is a marker such as `[body not JSON]`.
+- **The caller is unaffected** — the response is returned as soon as its headers arrive (`ResponseHeadersRead` keeps streaming), its body stays readable in full, and a failure inside logging is reported through the handler's logger instead of reaching the caller. The response body is captured in the background, so its entry is written when the captured part ends, the body ends, or the caller disposes the response.
+- **Not logged** — the query string (`Path` is the path only). `IncludeSensitive = true` logs bodies unmasked, marks the entry `BodyUnmasked` and logs a warning; use it for local debugging only.
+- **Options** are named per client and read on every call, so a reload applies to the next call; `services.ConfigureAll<JsonBodyLoggingOptions>(...)` changes every client. Add the handler with `AddJsonBodyLogging`, not `AddHttpMessageHandler<JsonBodyLoggingHandler>()`.
 
 ### Reader and writer options
 
