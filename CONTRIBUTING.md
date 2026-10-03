@@ -16,7 +16,7 @@ You need the .NET SDK pinned in [global.json](./global.json), plus the .NET 8 an
 ```sh
 dotnet restore
 dotnet build -c Release --no-restore
-dotnet test --solution DragoAnt.System.Text.Json.sln -c Release --no-build
+dotnet test --solution DragoAnt.System.Text.Json.slnx -c Release --no-build
 ```
 
 Tests use xUnit v3 on Microsoft.Testing.Platform, with Verify snapshots. When a snapshot changes on purpose, review the `*.received.*` file and replace the matching `*.verified.*` file with it.
