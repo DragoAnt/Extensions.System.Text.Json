@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     name: Build and test
-    uses: DragoAnt/.github/.github/workflows/dotnet-build.yml@6c9ee08d87ec6e0d8f8b4dd4b76845f1bcb1d33f # feat/org-defaults, re-point to main after merge
+    uses: DragoAnt/.github/.github/workflows/dotnet-build.yml@c9f20c11ebd297193a910d965d33bdf37c0d6c42 # main
     with:
       version: 0.0.0-ci.${{ github.run_number }}
       coverage-threshold: 70
