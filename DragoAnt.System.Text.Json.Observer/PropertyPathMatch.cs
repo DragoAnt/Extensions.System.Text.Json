@@ -15,11 +15,6 @@ internal sealed class PropertyPathMatch
     {
     }
 
-    public PropertyPathMatch(params Func<string?, bool>[] matches)
-        : this(matches.Select(NameMatcher (m) => new NameMatcher.FuncNameMatcher(m)).ToArray())
-    {
-    }
-
     private PropertyPathMatch(NameMatcher[] matches)
     {
         if (matches.Length == 0)

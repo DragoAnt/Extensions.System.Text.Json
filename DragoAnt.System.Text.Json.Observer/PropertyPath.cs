@@ -16,15 +16,6 @@ public ref struct PropertyPath
     private byte[]? _scratch;
     private int _scratchUsed;
 
-    /// <summary>
-    /// Creates an empty path.
-    /// </summary>
-    /// <param name="capacity">Initial number of levels.</param>
-    internal PropertyPath(int capacity)
-        : this(capacity, default)
-    {
-    }
-
     internal PropertyPath(int capacity, ReadOnlySpan<byte> input)
     {
         _input = input;
