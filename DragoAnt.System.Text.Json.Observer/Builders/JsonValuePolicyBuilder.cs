@@ -98,7 +98,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// or a function; a <c>null</c> result writes <c>null</c>.
         /// </param>
         public JsonValuePolicyBuilder<TContext> MaskStr(StringMaskingStrategy<TContext> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyStringPolicy(strategy));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyStringPolicy(strategy, strategy.Constant));
 
         /// <summary>
         /// Hands a string or <c>null</c> value to <paramref name="strategy"/> and writes it unchanged.
@@ -196,7 +196,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// or a function; a <c>null</c> result writes <c>null</c>.
         /// </param>
         public JsonValuePolicyBuilder<TContext> MaskAny(StringMaskingStrategy<TContext> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy, strategy.Constant));
 
         /// <summary>
         /// Masks the whole value, whatever its JSON type, with the <see cref="Utf8MaskStrategy"/> of the call

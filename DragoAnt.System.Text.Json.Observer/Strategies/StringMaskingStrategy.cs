@@ -5,10 +5,26 @@ namespace DragoAnt.System.Text.Json.Observer.Strategies;
 /// <summary>
 /// Replacement of a masked value: a constant string, a regular expression whose matches become <c>*</c>, or a function.
 /// </summary>
-/// <param name="strategy">Returns the replacement for a value; <c>null</c> writes <c>null</c>.</param>
-public readonly ref struct StringMaskingStrategy<TContext>(Func<string?, TContext, string?> strategy)
+public readonly ref struct StringMaskingStrategy<TContext>
 {
-    private Func<string?, TContext, string?> Strategy { get; } = strategy;
+    /// <summary>
+    /// A replacement computed by a function.
+    /// </summary>
+    /// <param name="strategy">Returns the replacement for a value; <c>null</c> writes <c>null</c>.</param>
+    public StringMaskingStrategy(Func<string?, TContext, string?> strategy)
+    {
+        Strategy = strategy;
+    }
+
+    private StringMaskingStrategy(string constant)
+    {
+        Strategy = (_, _) => constant;
+        Constant = constant;
+    }
+
+    private Func<string?, TContext, string?> Strategy { get; }
+
+    internal string? Constant { get; }
 
     /// <summary>
     /// The replacement as a function.
@@ -32,7 +48,7 @@ public readonly ref struct StringMaskingStrategy<TContext>(Func<string?, TContex
     /// Replaces every value with the same text.
     /// </summary>
     /// <param name="strategy">Replacement, for example <c>"***"</c>.</param>
-    public static implicit operator StringMaskingStrategy<TContext>(string strategy) => new((_, _) => strategy);
+    public static implicit operator StringMaskingStrategy<TContext>(string strategy) => new(strategy);
 
     /// <summary>
     /// Replaces every match of <paramref name="strategy"/> in the value with <paramref name="replacement"/>; <c>null</c> stays <c>null</c>.

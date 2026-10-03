@@ -83,7 +83,7 @@ public readonly struct JsonObjBuilder<TContext>
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskStr(StringMaskingStrategy{TContext})"/>
         public JsonObjBuilder<TContext> MaskStr(StringMaskingStrategy<TContext> strategy) =>
-            MaskWhole(JsonObserverItem<TContext>.ApplyStringPolicy(strategy));
+            MaskWhole(JsonObserverItem<TContext>.ApplyStringPolicy(strategy, strategy.Constant));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadStr"/>
         public JsonObjBuilder<TContext> ReadStr(Action<string?, TContext> strategy)
@@ -127,7 +127,7 @@ public readonly struct JsonObjBuilder<TContext>
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(StringMaskingStrategy{TContext})"/>
         public JsonObjBuilder<TContext> MaskAny(StringMaskingStrategy<TContext> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy, strategy.Constant));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(MaskTag)"/>
         public JsonObjBuilder<TContext> MaskAny(MaskTag tag)

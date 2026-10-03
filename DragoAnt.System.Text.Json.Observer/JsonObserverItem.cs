@@ -195,17 +195,21 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// Masks a value of any JSON type: a string arrives decoded, a number or boolean as its literal, an object or array
     /// is skipped unread and arrives as <c>null</c>; a <c>null</c> value stays <c>null</c>.
     /// </summary>
-    public static JsonObserverDelegate<TContext> ApplyAnyPolicy(Func<string?, TContext, string?> maskingRule) =>
+    public static JsonObserverDelegate<TContext> ApplyAnyPolicy(Func<string?, TContext, string?> maskingRule, string? constant = null) =>
         ApplyMaskPolicy(
-            (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: true), context),
+            constant is not null
+                ? (ref Utf8JsonReader _, TContext _, int _) => constant
+                : (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: true), context),
             keepNull: true);
 
     /// <summary>
     /// Like <see cref="ApplyAnyPolicy"/>, but the function is also called for <c>null</c>.
     /// </summary>
-    public static JsonObserverDelegate<TContext> ApplyStringPolicy(Func<string?, TContext, string?> maskingRule) =>
+    public static JsonObserverDelegate<TContext> ApplyStringPolicy(Func<string?, TContext, string?> maskingRule, string? constant = null) =>
         ApplyMaskPolicy(
-            (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: true), context),
+            constant is not null
+                ? (ref Utf8JsonReader _, TContext _, int _) => constant
+                : (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: true), context),
             keepNull: false);
 
     /// <summary>
