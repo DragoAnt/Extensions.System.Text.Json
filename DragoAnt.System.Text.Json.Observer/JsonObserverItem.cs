@@ -505,6 +505,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             RuntimeHelpers.EnsureSufficientExecutionStack();
             writer.WriteStartArray();
 
+            var index = 0;
             while (true)
             {
                 if (propPath.Stopped || writer.Stopped || !reader.Read())
@@ -524,7 +525,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                     case Null:
                         var tokenType = reader.TokenType;
 
-                        propPath.AddPropertyName(null);
+                        propPath.AddArrayItem(index++);
                         var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
 
                         if (matchPolicy is not null)

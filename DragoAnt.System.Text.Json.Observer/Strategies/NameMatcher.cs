@@ -57,7 +57,7 @@ internal abstract class NameMatcher
 
         public override bool Match(ref PropertyPath path, int index)
         {
-            if (!path.TryGetUtf8(index, out var name))
+            if (!path.TryGetPropertyNameUtf8(index, out var name))
             {
                 return false;
             }
@@ -114,7 +114,7 @@ internal abstract class NameMatcher
 
         public override bool Match(ref PropertyPath path, int index)
         {
-            if (!path.TryGetUtf8(index, out var name))
+            if (!path.TryGetPropertyNameUtf8(index, out var name))
             {
                 return false;
             }

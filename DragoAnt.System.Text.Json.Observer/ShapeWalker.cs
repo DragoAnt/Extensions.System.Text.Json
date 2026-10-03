@@ -116,6 +116,7 @@ internal sealed class ShapeWalker
     {
         RuntimeHelpers.EnsureSufficientExecutionStack();
         writer.WriteStartArray();
+        var index = 0;
         while (true)
         {
             if (propPath.Stopped || writer.Stopped || !reader.Read())
@@ -132,7 +133,9 @@ internal sealed class ShapeWalker
                 case Comment:
                     break;
                 default:
+                    propPath.AddArrayItem(index++);
                     Write(ref reader, writer, ref propPath, item);
+                    propPath.RemovePropertyName();
                     break;
             }
         }
