@@ -23,7 +23,7 @@ public class JsonMaskingTests
     private readonly JsonObserver _requestMasking = GetRequestMasking(BlockList);
 
 
-    private static JsonObserver GetRequestMasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
+    internal static JsonObserver GetRequestMasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
     {
         return JsonObserver.Obj(Relative(policyBuilder => policyBuilder
                 .Match(PropMatches.EndsWith("card"), "saved", "id").MaskStr(MaskingRules.CustomerId)
@@ -48,7 +48,7 @@ public class JsonMaskingTests
 
     private readonly JsonObserver _ignoreNullsRequestMasking = GetRequestUnmasking(NullList);
 
-    private static JsonObserver GetRequestUnmasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
+    internal static JsonObserver GetRequestUnmasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
     {
         return JsonObserver.Obj(b => b
                 .Match("routing").Obj(sb => sb.Match("method").Unmasked()),
@@ -63,7 +63,7 @@ public class JsonMaskingTests
                 defaultValuePolicy));
     }
 
-    private static readonly Dictionary<string, string> SensitiveValues = new()
+    internal static readonly Dictionary<string, string> SensitiveValues = new()
     {
         { "cardId", "0c7ed9e5-1c7f-42bd-9efd-e267edd17e57" },
         { "userEntered", "Excepturi quia voluptatem." },
@@ -84,7 +84,7 @@ public class JsonMaskingTests
     };
 
     //language=json
-    private static readonly string TestJson =
+    internal static readonly string TestJson =
         $$"""
           {
             // Comment

@@ -163,13 +163,29 @@ public abstract class JsonWriter
             return;
         }
 
-        if (reader.HasValueSequence)
+        if (!reader.HasValueSequence)
         {
-            WriteRawValue(reader.ValueSequence.ToArray());
+            WriteRawValue(reader.ValueSpan);
             return;
         }
 
-        WriteRawValue(reader.ValueSpan);
+        var length = checked((int)reader.ValueSequence.Length);
+        byte[]? rented = null;
+        var buffer = length <= StackallocThreshold
+            ? stackalloc byte[StackallocThreshold]
+            : rented = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            reader.ValueSequence.CopyTo(buffer);
+            WriteRawValue(buffer[..length]);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented, clearArray: true);
+            }
+        }
     }
 
     private sealed class EmptyJsonWriter : JsonWriter

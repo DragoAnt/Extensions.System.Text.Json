@@ -44,7 +44,7 @@ public abstract class AllocationTests
         perCall.Should().BeLessThanOrEqualTo(budget, $"{shape} {size} B allocates {perCall} B per call");
     }
 
-    private static string Payload(string shape, int size)
+    internal static string Payload(string shape, int size)
     {
         var json = new StringBuilder();
         var i = 0;

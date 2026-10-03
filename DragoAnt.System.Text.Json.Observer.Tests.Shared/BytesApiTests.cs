@@ -8,12 +8,12 @@ public abstract class BytesApiTests
 {
     private const string Secret = "S3cr3tV4l";
 
-    private static readonly JsonObserver Observer = JsonObserver.Any(
+    internal static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
         Relative(b => b.Match("password").MaskAny("***").Match("pin").MaskAny("***"), BlockList));
 
-    private static readonly string[] Payloads =
+    internal static readonly string[] Payloads =
     [
         $$$"""{"user":"bob","password":"{{{Secret}}}","card":{"pin":"{{{Secret}}}","exp":"12/30"},"items":[{"id":1,"password":["{{{Secret}}}",{"x":"{{{Secret}}}"}]},{"id":2,"note":"ok"}],"active":true,"amount":1.5e3}""",
         $$$$$"""[{"password":{"value":"{{{{{Secret}}}}}","deep":[1,2,{"s":"{{{{{Secret}}}}}"}]}},null,"text",[{"pin":12345678}],{"a":{"b":{"c":{"password":"{{{{{Secret}}}}}"}}}}]""",

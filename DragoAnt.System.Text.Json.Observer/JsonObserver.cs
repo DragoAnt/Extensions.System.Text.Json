@@ -164,6 +164,19 @@ public sealed class JsonObserver
     /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
     public MaskResult Mask(ReadOnlySpan<byte> utf8, IBufferWriter<byte> output, JsonObserverOptions? options = null)
         => _masking.Mask(utf8, output, JsonObserveringEmptyContext.Instance, options);
+
+    /// <summary>
+    /// Masks a UTF-8 JSON payload held in several buffers, for example read from a <c>PipeReader</c>, into
+    /// <paramref name="output"/> without copying it into one buffer first. Never throws, and writes exactly what
+    /// <see cref="Mask(ReadOnlySpan{byte}, IBufferWriter{byte}, JsonObserverOptions?)"/> writes for the same bytes,
+    /// however they are split.
+    /// </summary>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short, for example by a size limit. A leading byte order mark is skipped.</param>
+    /// <param name="output">Receives the masked JSON.</param>
+    /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
+    public MaskResult Mask(in ReadOnlySequence<byte> utf8, IBufferWriter<byte> output, JsonObserverOptions? options = null)
+        => _masking.Mask(utf8, output, JsonObserveringEmptyContext.Instance, options);
 }
 
 /// <summary>
@@ -246,9 +259,39 @@ public sealed class JsonObserver<TContext>
     public MaskResult Mask(ReadOnlySpan<byte> utf8, IBufferWriter<byte> output, TContext context, JsonObserverOptions? options = null)
     {
         options ??= JsonObserverOptions.Default;
+        utf8 = SkipBom(utf8);
+        var reader = CreateReader(utf8, options);
+        return Mask(ref reader, utf8, output, context, options);
+    }
+
+    /// <summary>
+    /// Masks a UTF-8 JSON payload held in several buffers, for example read from a <c>PipeReader</c>, into
+    /// <paramref name="output"/> and hands values to <paramref name="context"/>, without copying it into one buffer first.
+    /// Never throws, and behaves exactly like <see cref="Mask(ReadOnlySpan{byte}, IBufferWriter{byte}, TContext, JsonObserverOptions?)"/>
+    /// for the same bytes, however they are split.
+    /// </summary>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short, for example by a size limit. A leading byte order mark is skipped.</param>
+    /// <param name="output">Receives the masked JSON.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
+    /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
+    public MaskResult Mask(in ReadOnlySequence<byte> utf8, IBufferWriter<byte> output, TContext context, JsonObserverOptions? options = null)
+    {
+        if (utf8.IsSingleSegment)
+        {
+            return Mask(utf8.FirstSpan, output, context, options);
+        }
+
+        options ??= JsonObserverOptions.Default;
+        var reader = CreateReader(SkipBom(utf8), options);
+        return Mask(ref reader, default, output, context, options);
+    }
+
+    private MaskResult Mask(ref Utf8JsonReader reader, ReadOnlySpan<byte> input, IBufferWriter<byte> output, TContext context, JsonObserverOptions options)
+    {
         using var bounded = new BoundedJsonWriter(options);
         using var ignoreNulls = options.IgnoreNulls ? new IgnoreNullsJsonWriter(bounded) : null;
-        var (status, failedAt) = Observe(utf8, (JsonWriter?)ignoreNulls ?? bounded, context, options);
+        var (status, failedAt) = Observe(ref reader, input, (JsonWriter?)ignoreNulls ?? bounded, context, options);
         if (status == MaskStatus.NotJson)
         {
             return new MaskResult(MaskStatus.NotJson, 0, 0);
@@ -314,24 +357,70 @@ public sealed class JsonObserver<TContext>
     /// <returns>Status and the input offset where reading stopped.</returns>
     public MaskResult Read(ReadOnlySpan<byte> utf8, TContext context, JsonObserverOptions? options = null)
     {
-        var (status, failedAt) = Observe(utf8, JsonWriter.Empty, context, options ?? JsonObserverOptions.Default);
+        options ??= JsonObserverOptions.Default;
+        utf8 = SkipBom(utf8);
+        var reader = CreateReader(utf8, options);
+        var (status, failedAt) = Observe(ref reader, utf8, JsonWriter.Empty, context, options);
         return new MaskResult(status, 0, failedAt);
     }
 
-    private (MaskStatus Status, long FailedAt) Observe(ReadOnlySpan<byte> utf8, JsonWriter writer, TContext context, JsonObserverOptions options)
+    /// <summary>
+    /// Hands values of a UTF-8 JSON payload held in several buffers to <paramref name="context"/> without writing
+    /// anything or copying the payload into one buffer. Never throws, and behaves exactly like
+    /// <see cref="Read(ReadOnlySpan{byte}, TContext, JsonObserverOptions?)"/> for the same bytes, however they are split.
+    /// </summary>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short. A leading byte order mark is skipped.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
+    /// <param name="options">Limits; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status and the input offset where reading stopped.</returns>
+    public MaskResult Read(in ReadOnlySequence<byte> utf8, TContext context, JsonObserverOptions? options = null)
     {
-        if (utf8.StartsWith(Utf8Bom))
+        if (utf8.IsSingleSegment)
         {
-            utf8 = utf8[Utf8Bom.Length..];
+            return Read(utf8.FirstSpan, context, options);
         }
 
-        var reader = new Utf8JsonReader(utf8, isFinalBlock: false, new JsonReaderState(new JsonReaderOptions
+        options ??= JsonObserverOptions.Default;
+        var reader = CreateReader(SkipBom(utf8), options);
+        var (status, failedAt) = Observe(ref reader, default, JsonWriter.Empty, context, options);
+        return new MaskResult(status, 0, failedAt);
+    }
+
+    private static ReadOnlySpan<byte> SkipBom(ReadOnlySpan<byte> utf8) => utf8.StartsWith(Utf8Bom) ? utf8[Utf8Bom.Length..] : utf8;
+
+    private static ReadOnlySequence<byte> SkipBom(in ReadOnlySequence<byte> utf8)
+    {
+        if (utf8.Length < Utf8Bom.Length)
         {
-            CommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true,
-            MaxDepth = Math.Max(options.MaxDepth, 1),
-        }));
-        var propPath = new PropertyPath(_maxDepth, utf8) { PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive };
+            return utf8;
+        }
+
+        Span<byte> head = stackalloc byte[3];
+        utf8.Slice(0, Utf8Bom.Length).CopyTo(head);
+        return head.SequenceEqual(Utf8Bom) ? utf8.Slice(Utf8Bom.Length) : utf8;
+    }
+
+    private static JsonReaderState ReaderState(JsonObserverOptions options) => new(new JsonReaderOptions
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+        MaxDepth = Math.Max(options.MaxDepth, 1),
+    });
+
+    private static Utf8JsonReader CreateReader(ReadOnlySpan<byte> utf8, JsonObserverOptions options) =>
+        new(utf8, isFinalBlock: false, ReaderState(options));
+
+    private static Utf8JsonReader CreateReader(in ReadOnlySequence<byte> utf8, JsonObserverOptions options) =>
+        new(utf8, isFinalBlock: false, ReaderState(options));
+
+    private (MaskStatus Status, long FailedAt) Observe(
+        ref Utf8JsonReader reader,
+        ReadOnlySpan<byte> input,
+        JsonWriter writer,
+        TContext context,
+        JsonObserverOptions options)
+    {
+        var propPath = new PropertyPath(_maxDepth, input) { PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive };
         try
         {
             if (!reader.Read() || reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))

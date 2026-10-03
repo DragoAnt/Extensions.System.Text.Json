@@ -118,7 +118,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     public static JsonObserverDelegate<TContext> ReadRaw(Action<string?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
         ApplyReadPolicy(
             (ref Utf8JsonReader reader, TContext context) =>
-                read(Encoding.UTF8.GetString(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan), context),
+                read(reader.HasValueSequence ? Encoding.UTF8.GetString(reader.ValueSequence) : Encoding.UTF8.GetString(reader.ValueSpan), context),
             static type => type is JsonTokenType.String or Number or True or False or Null,
             valuePolicy);
 
