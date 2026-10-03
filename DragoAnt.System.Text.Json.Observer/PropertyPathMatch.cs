@@ -5,7 +5,7 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// <summary>
 /// Property path matching class.
 /// </summary>
-public sealed class PropertyPathMatch
+internal sealed class PropertyPathMatch
 {
     public const StringComparison DefaultComparison = StringComparison.OrdinalIgnoreCase;
     private readonly NameMatcher[] _matches;

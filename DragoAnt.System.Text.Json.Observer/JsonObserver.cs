@@ -7,16 +7,20 @@ using DragoAnt.System.Text.Json.Observer.Builders;
 
 namespace DragoAnt.System.Text.Json.Observer;
 
+/// <summary>
+/// Masks JSON in one streaming pass from <see cref="Utf8JsonReader"/> to <see cref="Utf8JsonWriter"/>, without deserializing it.
+/// Build it once with a factory method and share it: it is thread-safe.
+/// </summary>
 public sealed class JsonObserver
 {
     private readonly JsonObserver<JsonObserveringEmptyContext> _masking;
 
     /// <summary>
-    /// Mask any - object or array.
+    /// Creates an observer for a payload whose root is an object or an array.
     /// </summary>
-    /// <param name="initObj">Init masking for object.</param>
-    /// <param name="initArray">Init masking for array.</param>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="initObj">Adds the rules for a root object.</param>
+    /// <param name="initArray">Adds the rules for a root array.</param>
+    /// <param name="defaultMasking">Policy for values no rule matches; <see cref="JsonObserverValuePolicies.AllowList"/> when <c>null</c>.</param>
     public static JsonObserver Any(
         Action<JsonObjBuilder<JsonObserveringEmptyContext>> initObj,
         Action<JsonArrayBuilder<JsonObserveringEmptyContext>> initArray,
@@ -24,45 +28,47 @@ public sealed class JsonObserver
         new(Any<JsonObserveringEmptyContext>(initObj, initArray, defaultMasking));
 
     /// <summary>
-    /// Mask object.
+    /// Creates an observer for a root object that applies one policy to every value, for example
+    /// <see cref="JsonObserverValuePolicies.Relative"/>. A root array is <see cref="MaskStatus.Invalid"/>.
     /// </summary>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="defaultMasking">Policy for every value; <see cref="JsonObserverValuePolicies.AllowList"/> when <c>null</c>.</param>
     public static JsonObserver Obj(JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking) =>
         new(Obj<JsonObserveringEmptyContext>(defaultMasking));
 
     /// <summary>
-    /// Mask object.
+    /// Creates an observer for a root object. A root array is <see cref="MaskStatus.Invalid"/>; use <see cref="Any"/> for both.
     /// </summary>
-    /// <param name="init">Init masking.</param>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="init">Adds the rules for the object's properties.</param>
+    /// <param name="defaultMasking">Policy for values no rule matches; <see cref="JsonObserverValuePolicies.AllowList"/> when <c>null</c>.</param>
     public static JsonObserver Obj(
         Action<JsonObjBuilder<JsonObserveringEmptyContext>> init,
         JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking = null) =>
         new(Obj<JsonObserveringEmptyContext>(init, defaultMasking));
 
     /// <summary>
-    /// Mask array.
+    /// Creates an observer for a root array that applies one policy to every value. A root object is <see cref="MaskStatus.Invalid"/>.
     /// </summary>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="defaultMasking">Policy for every value; <see cref="JsonObserverValuePolicies.AllowList"/> when <c>null</c>.</param>
     public static JsonObserver Array(JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking) =>
         new(Array<JsonObserveringEmptyContext>(defaultMasking));
 
     /// <summary>
-    /// Mask array.
+    /// Creates an observer for a root array. A root object is <see cref="MaskStatus.Invalid"/>; use <see cref="Any"/> for both.
     /// </summary>
-    /// <param name="init">Init masking.</param>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="init">Adds the rules for the array's items.</param>
+    /// <param name="defaultMasking">Policy for values no rule matches; <see cref="JsonObserverValuePolicies.AllowList"/> when <c>null</c>.</param>
     public static JsonObserver Array(
         Action<JsonArrayBuilder<JsonObserveringEmptyContext>> init,
         JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultMasking = null) =>
         new(Array<JsonObserveringEmptyContext>(init, defaultMasking));
 
     /// <summary>
-    /// Mask any - object or array.
+    /// Creates an observer that also extracts values into a <typeparamref name="TContext"/>, for a root object or array.
     /// </summary>
-    /// <param name="initObj">Init masking for object.</param>
-    /// <param name="initArray">Init masking for array.</param>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="initObj">Adds the rules for a root object.</param>
+    /// <param name="initArray">Adds the rules for a root array.</param>
+    /// <param name="defaultMasking">Policy for values no rule matches; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
+    /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Any<TContext>(
         Action<JsonObjBuilder<TContext>> initObj,
         Action<JsonArrayBuilder<TContext>> initArray,
@@ -70,42 +76,47 @@ public sealed class JsonObserver
         new(JsonObserverItem<TContext>.Any(initObj, initArray, defaultMasking));
 
     /// <summary>
-    /// Mask object.
+    /// Creates an observer with a context for a root object that applies one policy to every value.
     /// </summary>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="defaultMasking">Policy for every value; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
+    /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Obj<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
         new(JsonObserverItem<TContext>.Obj(_ => { }, defaultMasking));
 
     /// <summary>
-    /// Mask object.
+    /// Creates an observer that also extracts values into a <typeparamref name="TContext"/>, for a root object.
     /// </summary>
-    /// <param name="init">Init masking.</param>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="init">Adds the rules for the object's properties.</param>
+    /// <param name="defaultMasking">Policy for values no rule matches; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
+    /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Obj<TContext>(
         Action<JsonObjBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
         new(JsonObserverItem<TContext>.Obj(init, defaultMasking));
 
     /// <summary>
-    /// Mask array.
+    /// Creates an observer with a context for a root array that applies one policy to every value.
     /// </summary>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="defaultMasking">Policy for every value; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
+    /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Array<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
         new(JsonObserverItem<TContext>.Array(_ => { }, defaultMasking));
 
     /// <summary>
-    /// Mask array.
+    /// Creates an observer that also extracts values into a <typeparamref name="TContext"/>, for a root array.
     /// </summary>
-    /// <param name="init">Init masking.</param>
-    /// <param name="defaultMasking">Default masking for unknown scenarios.</param>
+    /// <param name="init">Adds the rules for the array's items.</param>
+    /// <param name="defaultMasking">Policy for values no rule matches; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
+    /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Array<TContext>(
         Action<JsonArrayBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
         new(JsonObserverItem<TContext>.Array(init, defaultMasking));
 
     /// <summary>
-    /// Masks against an expected structure: values of known properties are written as is, sensitive ones are masked
-    /// with their tag, and anything the shape does not describe is handled by <see cref="JsonShapeOptions.Unknown"/>.
+    /// Creates an observer that masks against an expected structure: values of known properties are written as is,
+    /// sensitive ones are masked with their tag, and anything the shape does not describe is handled by
+    /// <see cref="JsonShapeOptions.Unknown"/>.
     /// </summary>
     /// <param name="shape">Expected structure, for example from <see cref="JsonShape.FromTypeInfo"/>. It cannot change afterwards.</param>
     /// <param name="options">Treatment of unknown properties and of <c>null</c>.</param>

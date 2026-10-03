@@ -79,7 +79,7 @@ public sealed class JsonShape
     /// <summary>
     /// Known properties of an <see cref="JsonShapeKind.Object"/>.
     /// </summary>
-    public IReadOnlyList<(string Name, JsonShape Shape)> Members => _members ?? [];
+    public IReadOnlyList<(string Name, JsonShape Shape)> Members => (IReadOnlyList<(string Name, JsonShape Shape)>?)_members?.AsReadOnly() ?? [];
 
     /// <summary>
     /// A value written as is.

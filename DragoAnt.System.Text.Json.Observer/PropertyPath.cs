@@ -4,10 +4,10 @@ using System.Text;
 namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
-/// JSON property path.
+/// Path of the value a rule is called for: one level per enclosing property or array item, from the root down.
 /// </summary>
 /// <remarks>
-/// Names are kept as UTF-8 slices of the input; a <see cref="string"/> is created only when asked for.
+/// Valid only during the call it is passed to. Names are kept as UTF-8 and decoded only when asked for.
 /// </remarks>
 public ref struct PropertyPath
 {
@@ -20,7 +20,7 @@ public ref struct PropertyPath
     /// Creates an empty path.
     /// </summary>
     /// <param name="capacity">Initial number of levels.</param>
-    public PropertyPath(int capacity)
+    internal PropertyPath(int capacity)
         : this(capacity, default)
     {
     }
@@ -39,9 +39,14 @@ public ref struct PropertyPath
     /// <summary>
     /// Capacity of internal array.
     /// </summary>
-    public int MaxLength { get; set; } = 0;
+    internal int MaxLength { get; private set; }
 
     internal readonly int CurrentDepth => Depth;
+
+    /// <summary>
+    /// Number of levels in the path.
+    /// </summary>
+    public readonly int Length => Depth + 1;
 
     /// <summary>
     /// The input ended inside a value: every rule must stop reading.
@@ -132,8 +137,10 @@ public ref struct PropertyPath
     internal readonly ReadOnlySpan<byte> CurrentUtf8 => TryGetUtf8(Depth, out var name) ? name : default;
 
     /// <summary>
-    /// Get property name by depth level.
+    /// Name of the level at <paramref name="index"/>, 0 being the root's property.
     /// </summary>
+    /// <param name="index">Level, from 0 to <see cref="Length"/> - 1.</param>
+    /// <returns>The decoded name; <c>null</c> for an array item or an index out of range.</returns>
     public string? GetPropertyName(int index)
     {
         if (index < 0 || index > Depth)
@@ -152,10 +159,15 @@ public ref struct PropertyPath
     }
 
     /// <summary>
-    /// Get property name indexed from the end of path.
+    /// Name of a level counted from the deepest one.
     /// </summary>
+    /// <param name="reversedIndex">0 for the value's own name, 1 for its parent, and so on.</param>
+    /// <returns>The decoded name; <c>null</c> for an array item or an index out of range.</returns>
     public string? GetPropertyNameReverse(int reversedIndex) => GetPropertyName(Depth - reversedIndex);
 
+    /// <summary>
+    /// The names from the root down, joined with dots; an array item is an empty segment.
+    /// </summary>
     public override string ToString()
     {
         var names = new string?[Depth + 1];
@@ -170,7 +182,7 @@ public ref struct PropertyPath
     /// <summary>
     /// Returns the pooled buffers. The path must not be used afterwards.
     /// </summary>
-    public void Dispose()
+    internal void Dispose()
     {
         var segments = _segments;
         _segments = [];

@@ -4,16 +4,25 @@ using static System.Text.Json.JsonTokenType;
 namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
-/// Value masking policies.
+/// Default policies for values no rule matches, for observers without a context. Pass one as the default policy of a factory or a rule.
 /// </summary>
 public static class JsonObserverValuePolicies
 {
+    /// <summary>
+    /// The default policy, <see cref="AllowList"/>.
+    /// </summary>
     public static readonly JsonObserverValueDelegate<JsonObserveringEmptyContext> Default
         = JsonObserverValuePolicies<JsonObserveringEmptyContext>.Default;
 
+    /// <summary>
+    /// Writes every value unchanged: only values matched by a rule are masked.
+    /// </summary>
     public static readonly JsonObserverValueDelegate<JsonObserveringEmptyContext> BlockList
         = JsonObserverValuePolicies<JsonObserveringEmptyContext>.BlockList;
 
+    /// <summary>
+    /// Writes every string, number and boolean as <c>"***"</c> and keeps <c>null</c>: only values allowed by a rule are shown.
+    /// </summary>
     public static readonly JsonObserverValueDelegate<JsonObserveringEmptyContext> AllowList
         = JsonObserverValuePolicies<JsonObserveringEmptyContext>.AllowList;
 
@@ -27,17 +36,19 @@ public static class JsonObserverValuePolicies
     internal const string LegacyAllowListMessage =
         "The 1.x allow list keeps booleans and the type of masked values. Use AllowList, or JsonObserver.FromShape for a structure-aware allow list.";
 
+    /// <summary>
+    /// Writes every value as <c>null</c>.
+    /// </summary>
     public static readonly JsonObserverValueDelegate<JsonObserveringEmptyContext> NullList
         = JsonObserverValuePolicies<JsonObserveringEmptyContext>.NullList;
 
     /// <summary>
-    /// Initialize relative policy.
+    /// A default policy with its own rules that match the end of a property's path at any depth, for example every
+    /// <c>password</c> or every <c>card.number</c>, wherever it is nested.
     /// </summary>
-    /// <param name="init">Policy building action.</param>
-    /// <param name="defaultValuePolicy">Default policy.</param>
-    /// <remarks>
-    /// Initializes policies for any property with or without considering depth.
-    /// </remarks>
+    /// <param name="init">Adds the rules, see <see cref="JsonValuePolicyBuilder{TContext}"/>.</param>
+    /// <param name="defaultValuePolicy">Policy for values none of these rules match; <see cref="AllowList"/> when <c>null</c>.</param>
+    /// <returns>A policy to pass where a default policy is expected.</returns>
     public static JsonObserverValueDelegate<JsonObserveringEmptyContext> Relative(
         Action<JsonValuePolicyBuilder<JsonObserveringEmptyContext>> init,
         JsonObserverValueDelegate<JsonObserveringEmptyContext>? defaultValuePolicy = null)
@@ -45,20 +56,22 @@ public static class JsonObserverValuePolicies
 }
 
 /// <summary>
-/// Value masking policies.
+/// Default policies for values no rule matches. Pass one as the default policy of a factory or a rule.
 /// </summary>
 public static class JsonObserverValuePolicies<TContext>
 {
+    /// <summary>
+    /// The default policy, <see cref="AllowList"/>.
+    /// </summary>
     public static readonly JsonObserverValueDelegate<TContext> Default = AllowList;
 
     /// <summary>
-    /// Initialize relative property value masking policy.
+    /// A default policy with its own rules that match the end of a property's path at any depth, for example every
+    /// <c>password</c> or every <c>card.number</c>, wherever it is nested.
     /// </summary>
-    /// <param name="init">Policy building action.</param>
-    /// <param name="defaultValuePolicy">Default policy.</param>
-    /// <remarks>
-    /// Initializes policies for any property with or without considering depth.
-    /// </remarks>
+    /// <param name="init">Adds the rules, see <see cref="JsonValuePolicyBuilder{TContext}"/>.</param>
+    /// <param name="defaultValuePolicy">Policy for values none of these rules match; <see cref="AllowList"/> when <c>null</c>.</param>
+    /// <returns>A policy to pass where a default policy is expected.</returns>
     public static JsonObserverValueDelegate<TContext> Relative(
         Action<JsonValuePolicyBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultValuePolicy = null)
@@ -74,11 +87,8 @@ public static class JsonObserverValuePolicies<TContext>
     }
 
     /// <summary>
-    /// Null list policy approach. All not specified properties will be null
+    /// Writes every value as <c>null</c>.
     /// </summary>
-    /// <remarks>
-    /// Masks properties from specified list otherwise set null.
-    /// </remarks>
     public static void NullList(ref Utf8JsonReader reader, JsonWriter writer, TContext context, ref PropertyPath propPath)
     {
         switch (reader.TokenType)
@@ -103,11 +113,8 @@ public static class JsonObserverValuePolicies<TContext>
     }
 
     /// <summary>
-    /// Block (or black) list policy approach.
+    /// Writes every value unchanged: only values matched by a rule are masked.
     /// </summary>
-    /// <remarks>
-    /// Masks properties from specified list.
-    /// </remarks>
     public static void BlockList(ref Utf8JsonReader reader, JsonWriter writer, TContext context, ref PropertyPath propPath)
     {
         switch (reader.TokenType)
