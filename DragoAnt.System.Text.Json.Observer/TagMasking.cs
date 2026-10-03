@@ -5,6 +5,8 @@ namespace DragoAnt.System.Text.Json.Observer;
 
 internal static class TagMasking
 {
+    private const int StackallocThreshold = 256;
+
     /// <summary>
     /// Writes the strategy's replacement for the current value and moves past it; a container is never read.
     /// </summary>
@@ -17,7 +19,7 @@ internal static class TagMasking
         {
             case JsonTokenType.StartObject:
             case JsonTokenType.StartArray:
-                strategy.Mask(default, tokenType, tag, writer, options);
+                strategy.Mask(new Utf8MaskContext(default, tokenType, tag, options, propPath), writer);
                 if (!reader.TrySkip())
                 {
                     propPath.Stop();
@@ -25,15 +27,16 @@ internal static class TagMasking
 
                 return;
             case JsonTokenType.Null:
-                strategy.Mask(default, tokenType, tag, writer, options);
+                strategy.Mask(new Utf8MaskContext(default, tokenType, tag, options, propPath), writer);
                 return;
             case JsonTokenType.String when reader.HasValueSequence || reader.ValueIsEscaped:
+            {
                 var length = reader.HasValueSequence ? checked((int)reader.ValueSequence.Length) : reader.ValueSpan.Length;
                 var buffer = ArrayPool<byte>.Shared.Rent(length);
                 try
                 {
                     var written = reader.CopyString(buffer);
-                    strategy.Mask(buffer.AsSpan(0, written), tokenType, tag, writer, options);
+                    strategy.Mask(new Utf8MaskContext(buffer.AsSpan(0, written), tokenType, tag, options, propPath), writer);
                 }
                 finally
                 {
@@ -41,8 +44,29 @@ internal static class TagMasking
                 }
 
                 return;
+            }
+            case not JsonTokenType.String when reader.HasValueSequence:
+            {
+                var length = checked((int)reader.ValueSequence.Length);
+                byte[]? rented = null;
+                var buffer = length <= StackallocThreshold ? stackalloc byte[StackallocThreshold] : rented = ArrayPool<byte>.Shared.Rent(length);
+                try
+                {
+                    reader.ValueSequence.CopyTo(buffer);
+                    strategy.Mask(new Utf8MaskContext(buffer[..length], tokenType, tag, options, propPath), writer);
+                }
+                finally
+                {
+                    if (rented is not null)
+                    {
+                        ArrayPool<byte>.Shared.Return(rented, clearArray: true);
+                    }
+                }
+
+                return;
+            }
             default:
-                strategy.Mask(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan, tokenType, tag, writer, options);
+                strategy.Mask(new Utf8MaskContext(reader.ValueSpan, tokenType, tag, options, propPath), writer);
                 return;
         }
     }

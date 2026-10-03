@@ -5,16 +5,31 @@ namespace DragoAnt.System.Text.Json.Observer.Strategies;
 /// <summary>
 /// Masks a sensitive value given as UTF-8. One instance serves every rule: the rule's <see cref="MaskTag"/> says how.
 /// </summary>
+/// <remarks>
+/// Override <see cref="Mask(in Utf8MaskContext, JsonWriter)"/> to also see the property name and path of the value,
+/// or the shorter overload when the value and the tag are enough. A strategy that overrides neither masks like
+/// <see cref="Default"/>.
+/// </remarks>
 public abstract class Utf8MaskStrategy
 {
     /// <summary>
     /// Built-in strategy: <see cref="MaskKind.Full"/>, <see cref="MaskKind.Last4"/>, <see cref="MaskKind.Hash"/>
-    /// (HMAC-SHA256 with <see cref="JsonObserverOptions.HashKey"/>) and <see cref="MaskKind.Omit"/>.
+    /// (HMAC-SHA256 with <see cref="JsonObserverOptions.HashKey"/>), <see cref="MaskKind.Omit"/>; anything else,
+    /// <see cref="MaskKind.Custom"/> included, becomes <c>"***"</c>.
     /// </summary>
     public static Utf8MaskStrategy Default { get; } = new DefaultUtf8MaskStrategy();
 
     /// <summary>
-    /// Writes the masked replacement of one value.
+    /// Writes the masked replacement of one value, knowing where it is. This is the method the observer calls; by
+    /// default it forwards to <see cref="Mask(ReadOnlySpan{byte}, JsonTokenType, MaskTag, JsonWriter, JsonObserverOptions)"/>.
+    /// </summary>
+    /// <param name="context">The value, its JSON type, the rule's tag, the call's options and the value's path.</param>
+    /// <param name="writer">Receives exactly one value.</param>
+    public virtual void Mask(in Utf8MaskContext context, JsonWriter writer) =>
+        Mask(context.Value, context.TokenType, context.Tag, writer, context.Options);
+
+    /// <summary>
+    /// Writes the masked replacement of one value. By default it masks like <see cref="Default"/>.
     /// </summary>
     /// <param name="value">
     /// The unescaped text of a string, the literal of a number or boolean, or empty for an object or array.
@@ -23,7 +38,8 @@ public abstract class Utf8MaskStrategy
     /// <param name="tag">How the rule asks for the value to be masked.</param>
     /// <param name="writer">Receives exactly one value.</param>
     /// <param name="options">Options of the current call.</param>
-    public abstract void Mask(ReadOnlySpan<byte> value, JsonTokenType tokenType, MaskTag tag, JsonWriter writer, JsonObserverOptions options);
+    public virtual void Mask(ReadOnlySpan<byte> value, JsonTokenType tokenType, MaskTag tag, JsonWriter writer, JsonObserverOptions options) =>
+        Default.Mask(value, tokenType, tag, writer, options);
 
     private sealed class DefaultUtf8MaskStrategy : Utf8MaskStrategy
     {
