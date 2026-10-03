@@ -2,6 +2,7 @@
   <PropertyGroup>
     <IsPackable>False</IsPackable>
     <IsTestsLibProject>True</IsTestsLibProject>
+    <ExcludeFromCodeCoverage>True</ExcludeFromCodeCoverage>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Bogus" />

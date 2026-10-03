@@ -141,18 +141,10 @@ public class JsonMaskingTests
           }
           """;
 
-    private string? Mask(string testValue, JsonObserver mask, bool ignoreNulls = false, bool ignoreComments = false)
+    private string? Mask(string testValue, JsonObserver mask, bool ignoreNulls = false)
     {
         _outputHelper.WriteLine($"Before: {Environment.NewLine}{testValue}{Environment.NewLine}");
-        var maskedJson = mask.Mask(testValue, new JsonReaderOptions
-            {
-                CommentHandling = JsonCommentHandling.Allow,
-            },
-            new JsonWriterOptions
-            {
-                Indented = true,
-            },
-            ignoreNulls: ignoreNulls, ignoreComments: ignoreComments);
+        var maskedJson = mask.Mask(testValue, new JsonObserverOptions(IgnoreNulls: ignoreNulls, Indented: true));
         _outputHelper.WriteLine($"After: {Environment.NewLine}{maskedJson}");
         return maskedJson;
     }
@@ -175,7 +167,7 @@ public class JsonMaskingTests
     public async Task Mask_ForAllRules_MaskingData_IgnoreNulls_And_Comments()
     {
         // Act
-        var maskedRequest = Mask(TestJson, _ignoreNullsRequestMasking, true, true);
+        var maskedRequest = Mask(TestJson, _ignoreNullsRequestMasking, ignoreNulls: true);
 
         // Assert
         await Verify(maskedRequest, _verifySettings);

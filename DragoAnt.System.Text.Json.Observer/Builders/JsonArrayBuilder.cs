@@ -4,172 +4,119 @@ using static System.Text.Json.JsonTokenType;
 namespace DragoAnt.System.Text.Json.Observer.Builders;
 
 /// <summary>
-/// Policy builder for JSON arrays.
+/// Rules for the items of one JSON array. Every rule applies to every item; the first rule that accepts an item wins.
 /// </summary>
-/// <remarks>
-/// This builder is for values inside specified parent with defined path.
-/// </remarks>
-public readonly struct JsonArrayBuilder<TContext>(JsonObserverValueDelegate<TContext>? builderDefaultValuePolicy)
+/// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
+public readonly struct JsonArrayBuilder<TContext>
 {
     private readonly List<JsonObserverItem<TContext>> _policies = [];
+    private readonly JsonObserverValueDelegate<TContext>? _builderDefaultValuePolicy;
+
+    internal JsonArrayBuilder(JsonObserverValueDelegate<TContext>? builderDefaultValuePolicy)
+    {
+        _builderDefaultValuePolicy = builderDefaultValuePolicy;
+    }
 
     /// <summary>
-    /// Masking initialization for specified object inside array.
+    /// Rules for the items that are objects.
     /// </summary>
-    /// <param name="init">Masking condition builder.</param>
-    /// <param name="defaultValuePolicy">Default masking policy.</param>
+    /// <param name="init">Adds the rules for each object's properties.</param>
+    /// <param name="defaultValuePolicy">Policy for the objects' values no rule matches; the enclosing one when <c>null</c>.</param>
     public JsonArrayBuilder<TContext> Obj(
         Action<JsonObjBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultValuePolicy = null) =>
-        Obj(JsonObserverItem<TContext>.Obj(init, defaultValuePolicy ?? builderDefaultValuePolicy));
+        Obj(JsonObserverItem<TContext>.Obj(init, defaultValuePolicy ?? _builderDefaultValuePolicy));
 
     /// <summary>
-    /// Masking initialization for the array.
+    /// Rules for the items that are arrays.
     /// </summary>
-    /// <param name="init">Masking condition builder.</param>
-    /// <param name="defaultValuePolicy">Default masking policy.</param>
+    /// <param name="init">Adds the rules for each nested array's items.</param>
+    /// <param name="defaultValuePolicy">Policy for the nested arrays' values no rule matches; the enclosing one when <c>null</c>.</param>
     public JsonArrayBuilder<TContext> Array(
         Action<JsonArrayBuilder<TContext>> init,
         JsonObserverValueDelegate<TContext>? defaultValuePolicy = null) =>
-        Array(JsonObserverItem<TContext>.Array(init, defaultValuePolicy ?? builderDefaultValuePolicy));
+        Array(JsonObserverItem<TContext>.Array(init, defaultValuePolicy ?? _builderDefaultValuePolicy));
 
-    /// <summary>
-    /// Add masking for value <see cref="JsonTokenType.String"/>
-    /// </summary>
-    /// <param name="strategy">Masking strategy</param>
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskStr(Func{string, TContext, string})"/>
     public JsonArrayBuilder<TContext> MaskStr(Func<string?, TContext, string?> strategy)
         => MaskStr((StringMaskingStrategy<TContext>)strategy);
 
-    /// <summary>
-    /// Add masking for value <see cref="JsonTokenType.String"/>
-    /// </summary>
-    /// <param name="strategy">Masking strategy</param>
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskStr(StringMaskingStrategy{TContext})"/>
     public JsonArrayBuilder<TContext> MaskStr(StringMaskingStrategy<TContext> strategy) =>
-        MaskValue(JsonObserverItem<TContext>.ApplyValueStringPolicy(strategy, builderDefaultValuePolicy));
+        MaskWhole(JsonObserverItem<TContext>.ApplyStringPolicy(strategy, strategy.Constant));
 
-    /// <summary>
-        /// Reads value <see cref="JsonTokenType.String"/>
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> ReadStr(Action<string?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadStr(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadStr"/>
+    public JsonArrayBuilder<TContext> ReadStr(Action<string?, TContext> strategy)
+        => MaskValue(JsonObserverItem<TContext>.ReadStr(strategy, _builderDefaultValuePolicy));
 
-        /// <summary>
-        /// Add masking for value <see cref="JsonTokenType.Number"/>
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> MaskInt(Func<int?, TContext, string?> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueIntPolicy(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskInt"/>
+    public JsonArrayBuilder<TContext> MaskInt(Func<int?, TContext, string?> strategy)
+        => MaskWhole(JsonObserverItem<TContext>.ApplyIntPolicy(strategy));
 
-        /// <summary>
-        /// Reads value <see cref="JsonTokenType.Number"/>
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> ReadInt(Action<int?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadInt(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadInt"/>
+    public JsonArrayBuilder<TContext> ReadInt(Action<int?, TContext> strategy)
+        => MaskValue(JsonObserverItem<TContext>.ReadInt(strategy, _builderDefaultValuePolicy));
 
-        /// <summary>
-        /// Add masking for value <see cref="JsonTokenType.Number"/>
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> MaskLong(Func<long?, TContext, string?> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueLongPolicy(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskLong"/>
+    public JsonArrayBuilder<TContext> MaskLong(Func<long?, TContext, string?> strategy)
+        => MaskWhole(JsonObserverItem<TContext>.ApplyLongPolicy(strategy));
 
-        /// <summary>
-        /// Reads for value <see cref="JsonTokenType.Number"/>
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> ReadLong(Action<long?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadLong(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadLong"/>
+    public JsonArrayBuilder<TContext> ReadLong(Action<long?, TContext> strategy)
+        => MaskValue(JsonObserverItem<TContext>.ReadLong(strategy, _builderDefaultValuePolicy));
 
-        /// <summary>
-        /// Add masking for value <see cref="JsonTokenType.Number"/>
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> MaskDecimal(Func<decimal?, TContext, string?> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueDecimalPolicy(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskDecimal"/>
+    public JsonArrayBuilder<TContext> MaskDecimal(Func<decimal?, TContext, string?> strategy)
+        => MaskWhole(JsonObserverItem<TContext>.ApplyDecimalPolicy(strategy));
 
-        /// <summary>
-        /// Reads value <see cref="JsonTokenType.Number"/>
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> ReadDecimal(Action<decimal?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadDecimal(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadDecimal"/>
+    public JsonArrayBuilder<TContext> ReadDecimal(Action<decimal?, TContext> strategy)
+        => MaskValue(JsonObserverItem<TContext>.ReadDecimal(strategy, _builderDefaultValuePolicy));
 
-        /// <summary>
-        /// Add masking for value <see cref="JsonTokenType.True"/>  or <see cref="JsonTokenType.False"/>.
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> MaskBool(Func<bool?, TContext, string?> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueBoolPolicy(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskBool"/>
+    public JsonArrayBuilder<TContext> MaskBool(Func<bool?, TContext, string?> strategy)
+        => MaskWhole(JsonObserverItem<TContext>.ApplyBoolPolicy(strategy));
 
-        /// <summary>
-        /// Reads value <see cref="JsonTokenType.True"/> or <see cref="JsonTokenType.False"/>.
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> ReadBool(Action<bool?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadBool(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadBool"/>
+    public JsonArrayBuilder<TContext> ReadBool(Action<bool?, TContext> strategy)
+        => MaskValue(JsonObserverItem<TContext>.ReadBool(strategy, _builderDefaultValuePolicy));
 
-        /// <summary>
-        /// Masks the whole value whatever its JSON type: a string, number or boolean is passed to the strategy as text,
-        /// an object or array is skipped unread and the strategy receives <c>null</c>; a <c>null</c> value stays <c>null</c>.
-        /// </summary>
-        /// <param name="strategy">Masking strategy; a <c>null</c> result is written as <c>null</c>.</param>
-        public JsonArrayBuilder<TContext> MaskAny(Func<string?, TContext, string?> strategy)
-            => MaskAny((StringMaskingStrategy<TContext>)strategy);
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(Func{string, TContext, string})"/>
+    public JsonArrayBuilder<TContext> MaskAny(Func<string?, TContext, string?> strategy)
+        => MaskAny((StringMaskingStrategy<TContext>)strategy);
 
-        /// <summary>
-        /// Masks the whole value whatever its JSON type: a string, number or boolean is passed to the strategy as text,
-        /// an object or array is skipped unread and the strategy receives <c>null</c>; a <c>null</c> value stays <c>null</c>.
-        /// </summary>
-        /// <param name="strategy">Masking strategy; a <c>null</c> result is written as <c>null</c>.</param>
-        public JsonArrayBuilder<TContext> MaskAny(StringMaskingStrategy<TContext> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(StringMaskingStrategy{TContext})"/>
+    public JsonArrayBuilder<TContext> MaskAny(StringMaskingStrategy<TContext> strategy)
+        => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy, strategy.Constant));
 
-        /// <summary>
-        /// Masks the whole value whatever its JSON type with the <see cref="Utf8MaskStrategy"/> of the call,
-        /// which receives <paramref name="tag"/>; a <c>null</c> value stays <c>null</c>.
-        /// </summary>
-        /// <param name="tag">How the strategy masks the value.</param>
-        public JsonArrayBuilder<TContext> MaskAny(MaskTag tag)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyTagPolicy(tag));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(MaskTag)"/>
+    public JsonArrayBuilder<TContext> MaskAny(MaskTag tag)
+        => MaskWhole(JsonObserverItem<TContext>.ApplyTagPolicy(tag));
 
-        /// <summary>
-        /// Add masking for any value.
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> MaskRawValue(Func<string?, TContext, string?> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ApplyValueRawPolicy(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskRawValue"/>
+    public JsonArrayBuilder<TContext> MaskRawValue(Func<string?, TContext, string?> strategy)
+        => MaskWhole(JsonObserverItem<TContext>.ApplyRawPolicy(strategy));
 
-        /// <summary>
-        /// Reads any value as string.
-        /// </summary>
-        /// <param name="strategy">Masking strategy</param>
-        public JsonArrayBuilder<TContext> ReadRaw(Action<string?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadRaw(strategy, builderDefaultValuePolicy));
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadRaw"/>
+    public JsonArrayBuilder<TContext> ReadRaw(Action<string?, TContext> strategy)
+        => MaskValue(JsonObserverItem<TContext>.ReadRaw(strategy, _builderDefaultValuePolicy));
 
-    /// <summary>
-    /// Masking rule for value property.
-    /// </summary>
-    /// <param name="policy">Masking policy.</param>
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskValue(JsonObserverValueDelegate{TContext})"/>
     public JsonArrayBuilder<TContext> MaskValue(JsonObserverValueDelegate<TContext> policy) =>
         MaskValue(
             (ref Utf8JsonReader reader, JsonWriter writer, TContext context, int depth, ref PropertyPath propPath, JsonObserverValueDelegate<TContext> _) =>
                 policy(ref reader, writer, context, ref propPath));
 
-    /// <summary>
-    /// Masking rule for value property.
-    /// </summary>
-    /// <param name="policy">Masking policy.</param>
-    internal JsonArrayBuilder<TContext> MaskWhole(JsonObserverDelegate<TContext> policy) => Add(_ => true, policy);
-
+    /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskValue(JsonObserverDelegate{TContext})"/>
     public JsonArrayBuilder<TContext> MaskValue(JsonObserverDelegate<TContext> policy)
         => Add(type => type.IsValueToken(), policy);
 
     /// <summary>
-    /// Make the array always visible.
+    /// Writes the string, number, boolean and <c>null</c> items unchanged; object and array items get the next rule or the default policy.
     /// </summary>
     public JsonArrayBuilder<TContext> Unmasked() => MaskValue(JsonObserverValuePolicies<TContext>.BlockList);
+
+    internal JsonArrayBuilder<TContext> MaskWhole(JsonObserverDelegate<TContext> policy) => Add(_ => true, policy);
 
     internal static JsonObserverDelegate<TContext> Build(JsonArrayBuilder<TContext> builder) => builder.Build();
 
@@ -177,7 +124,7 @@ public readonly struct JsonArrayBuilder<TContext>(JsonObserverValueDelegate<TCon
 
     private JsonArrayBuilder<TContext> Obj(JsonObserverDelegate<TContext> policy) => Add(type => type == StartObject, policy);
 
-    private JsonObserverDelegate<TContext> Build() => JsonObserverItem<TContext>.ApplyArrayPolicy([.. _policies], builderDefaultValuePolicy);
+    private JsonObserverDelegate<TContext> Build() => JsonObserverItem<TContext>.ApplyArrayPolicy([.. _policies], _builderDefaultValuePolicy);
 
     private JsonArrayBuilder<TContext> Add(Func<JsonTokenType, bool> typeMatch, JsonObserverDelegate<TContext> policy)
     {

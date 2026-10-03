@@ -1,7 +1,7 @@
 namespace DragoAnt.System.Text.Json.Observer.Strategies;
 
 /// <summary>
-/// Property matching strategy.
+/// A property name test. A string converts to an exact, case-insensitive match; <see cref="PropMatches"/> has the others.
 /// </summary>
 public readonly struct PropMatchingStrategy
 {
@@ -23,7 +23,19 @@ public readonly struct PropMatchingStrategy
 
     internal NameMatcher Matcher => _matcher ?? NameMatcher.Never;
 
+    /// <summary>
+    /// The name test as a function of the decoded name.
+    /// </summary>
+    /// <param name="strategy">Name test.</param>
     public static implicit operator Func<string?, bool>(PropMatchingStrategy strategy) => strategy.Matcher.MatchString;
+    /// <summary>
+    /// A custom name test; the name is decoded to a <see cref="string"/> for it.
+    /// </summary>
+    /// <param name="strategy">Name test; receives <c>null</c> for an array item.</param>
     public static implicit operator PropMatchingStrategy(Func<string?, bool> strategy) => new(strategy);
+    /// <summary>
+    /// Matches the exact name, case-insensitively.
+    /// </summary>
+    /// <param name="pattern">Property name.</param>
     public static implicit operator PropMatchingStrategy(string pattern) => new(NameMatcher.Exact(pattern));
 }

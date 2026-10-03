@@ -54,7 +54,9 @@ public static class Probes
         }
     }
 
-    private static Func<string, JsonReaderOptions, string?> Wrap(JsonObserver observer) => (json, options) => observer.Mask(json, options);
+    private static Func<string, JsonReaderOptions, string?> Wrap(JsonObserver observer) => (json, options) => observer.Mask(json, ToOptions(options));
+
+    private static JsonObserverOptions ToOptions(JsonReaderOptions options) => new(MaxDepth: options.MaxDepth == 0 ? 64 : options.MaxDepth);
 
     private static string? MaskAndExtract(string json, JsonReaderOptions options)
     {
@@ -65,7 +67,7 @@ public static class Probes
                     .Match("password").MaskStr((_, _) => "***")
                     .Match("pin").MaskStr((_, _) => "***"),
                 JsonObserverValuePolicies<ProbeContext>.BlockList));
-        return observer.Mask(json, new ProbeContext(), options);
+        return observer.Mask(json, new ProbeContext(), ToOptions(options));
     }
 
     private sealed class ProbeContext
