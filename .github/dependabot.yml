@@ -47,8 +47,3 @@ updates:
       - dependency-name: Microsoft.Extensions.*
         update-types:
           - version-update:semver-major
-
-  - package-ecosystem: gitsubmodule
-    directory: /
-    schedule:
-      interval: weekly

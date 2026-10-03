@@ -4,10 +4,10 @@ Issues and pull requests are welcome. For anything larger than a small fix, open
 
 ## Build and test
 
-The build imports shared MSBuild files from the `.msbuild` git submodule, so clone with submodules:
+The shared MSBuild settings come from [DragoAnt.MSBuildKit](https://github.com/DragoAnt/MSBuildKit), committed under `.toolkit/`, so a plain clone builds:
 
 ```sh
-git clone --recurse-submodules https://github.com/DragoAnt/Extensions.System.Text.Json.git
+git clone https://github.com/DragoAnt/Extensions.System.Text.Json.git
 cd Extensions.System.Text.Json
 ```
 
@@ -45,6 +45,16 @@ Benchmarks live in `DragoAnt.System.Text.Json.Observer.Benchmarks` (BenchmarkDot
 ```sh
 dotnet run -c Release --project DragoAnt.System.Text.Json.Observer.Benchmarks
 ```
+
+### Build kit
+
+`.toolkit/` is installed by DragoAnt.MSBuildKit; don't edit it by hand. Move to another kit release with its update script and commit the result:
+
+```sh
+sh .toolkit/update.sh --version 0.2.0      # or: pwsh .toolkit/update.ps1 -Version 0.2.0
+```
+
+Repository settings live in `Directory.Build.props` (target frameworks, copyright), `Directory.Version.props` (the next release's `VersionPrefix`) and `Directory.Packages.props` (package versions the kit does not provide).
 
 ## Pull requests
 
