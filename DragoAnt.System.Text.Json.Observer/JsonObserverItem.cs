@@ -585,6 +585,9 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 case False:
                     effective(ref reader, writer, context, ref propPath);
                     break;
+                case Null when effective.Target is RelativeValuePolicy<TContext>:
+                    effective(ref reader, writer, context, ref propPath);
+                    break;
                 case Null:
                     writer.WriteNullValue();
                     break;
