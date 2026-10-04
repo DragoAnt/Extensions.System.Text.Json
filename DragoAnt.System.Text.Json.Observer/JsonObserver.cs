@@ -72,8 +72,11 @@ public sealed class JsonObserver
     public static JsonObserver<TContext> Any<TContext>(
         Action<JsonObjBuilder<TContext>> initObj,
         Action<JsonArrayBuilder<TContext>> initArray,
-        JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserverItem<TContext>.Any(initObj, initArray, defaultMasking));
+        JsonObserverValueDelegate<TContext>? defaultMasking = null)
+    {
+        var (masking, obj, array) = JsonObserverItem<TContext>.Any(initObj, initArray, defaultMasking);
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(obj, array));
+    }
 
     /// <summary>
     /// Creates an observer with a context for a root object that applies one policy to every value.
@@ -81,7 +84,7 @@ public sealed class JsonObserver
     /// <param name="defaultMasking">Policy for every value; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
     /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Obj<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
-        new(JsonObserverItem<TContext>.Obj(_ => { }, defaultMasking));
+        Obj<TContext>(_ => { }, defaultMasking);
 
     /// <summary>
     /// Creates an observer that also extracts values into a <typeparamref name="TContext"/>, for a root object.
@@ -91,8 +94,11 @@ public sealed class JsonObserver
     /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Obj<TContext>(
         Action<JsonObjBuilder<TContext>> init,
-        JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserverItem<TContext>.Obj(init, defaultMasking));
+        JsonObserverValueDelegate<TContext>? defaultMasking = null)
+    {
+        var (masking, set) = JsonObserverItem<TContext>.Obj(init, defaultMasking);
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(set, null));
+    }
 
     /// <summary>
     /// Creates an observer with a context for a root array that applies one policy to every value.
@@ -100,7 +106,7 @@ public sealed class JsonObserver
     /// <param name="defaultMasking">Policy for every value; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
     /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Array<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
-        new(JsonObserverItem<TContext>.Array(_ => { }, defaultMasking));
+        Array<TContext>(_ => { }, defaultMasking);
 
     /// <summary>
     /// Creates an observer that also extracts values into a <typeparamref name="TContext"/>, for a root array.
@@ -110,8 +116,11 @@ public sealed class JsonObserver
     /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Array<TContext>(
         Action<JsonArrayBuilder<TContext>> init,
-        JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserverItem<TContext>.Array(init, defaultMasking));
+        JsonObserverValueDelegate<TContext>? defaultMasking = null)
+    {
+        var (masking, set) = JsonObserverItem<TContext>.Array(init, defaultMasking);
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(null, set));
+    }
 
     /// <summary>
     /// Creates an observer that masks against an expected structure: values of known properties are written as is,
@@ -124,7 +133,7 @@ public sealed class JsonObserver
     {
         ArgumentNullException.ThrowIfNull(shape);
         var walker = new ShapeWalker(shape, options ?? JsonShapeOptions.Default);
-        return new JsonObserver(new JsonObserver<JsonObserveringEmptyContext>(walker.Invoke));
+        return new JsonObserver(new JsonObserver<JsonObserveringEmptyContext>(walker.Invoke, walker));
     }
 
     private JsonObserver(JsonObserver<JsonObserveringEmptyContext> masking)
@@ -164,6 +173,23 @@ public sealed class JsonObserver
     /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
     public MaskResult Mask(ReadOnlySpan<byte> utf8, IBufferWriter<byte> output, JsonObserverOptions? options = null)
         => _masking.Mask(utf8, output, JsonObserveringEmptyContext.Instance, options);
+
+    /// <summary>
+    /// Masks a UTF-8 JSON payload held in several buffers, for example read from a <c>PipeReader</c>, into
+    /// <paramref name="output"/> without copying it into one buffer first. Never throws, and writes exactly what
+    /// <see cref="Mask(ReadOnlySpan{byte}, IBufferWriter{byte}, JsonObserverOptions?)"/> writes for the same bytes,
+    /// however they are split.
+    /// </summary>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short, for example by a size limit. A leading byte order mark is skipped.</param>
+    /// <param name="output">Receives the masked JSON.</param>
+    /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
+    public MaskResult Mask(in ReadOnlySequence<byte> utf8, IBufferWriter<byte> output, JsonObserverOptions? options = null)
+        => _masking.Mask(utf8, output, JsonObserveringEmptyContext.Instance, options);
+
+    /// <inheritdoc cref="JsonObserver{TContext}.Explain"/>
+    public JsonPathExplanation Explain(string path, JsonTokenType valueKind = JsonTokenType.String, JsonObserverOptions? options = null)
+        => _masking.Explain(path, valueKind, options);
 }
 
 /// <summary>
@@ -174,12 +200,33 @@ public sealed class JsonObserver
 public sealed class JsonObserver<TContext>
 {
     private readonly JsonObserverDelegate<TContext> _maskDelegate;
+    private readonly PathExplainer _explainer;
     private int _maxDepth = 6;
 
-    internal JsonObserver(JsonObserverDelegate<TContext> maskDelegate)
+    internal JsonObserver(JsonObserverDelegate<TContext> maskDelegate, PathExplainer explainer)
     {
         _maskDelegate = maskDelegate;
+        _explainer = explainer;
     }
+
+    /// <summary>
+    /// Tells which rule or policy handles the value at <paramref name="path"/> and what it does with it, without
+    /// masking anything: useful to check a configuration, to document it, or to find out why a value was masked.
+    /// </summary>
+    /// <param name="path">
+    /// A JSON path such as <c>items[2].sku</c>, <c>$.order.card.number</c> or <c>$['a.b']</c>; the first segment decides
+    /// whether the root is an object or an array.
+    /// </param>
+    /// <param name="valueKind">
+    /// JSON type of the value at the path: a scalar type, <see cref="JsonTokenType.Null"/>, or
+    /// <see cref="JsonTokenType.StartObject"/> / <see cref="JsonTokenType.StartArray"/> for a container; rules can differ by type.
+    /// </param>
+    /// <param name="options">The call's options, for <see cref="JsonObserverOptions.PropertyNameCaseInsensitive"/>.</param>
+    /// <returns>The deciding rule, its action, the outcome and the steps that lead there.</returns>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is not a JSON path.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="valueKind"/> is not a value type or a container start.</exception>
+    public JsonPathExplanation Explain(string path, JsonTokenType valueKind = JsonTokenType.String, JsonObserverOptions? options = null)
+        => _explainer.Explain(path, valueKind, (options ?? JsonObserverOptions.Default).PropertyNameCaseInsensitive);
 
     private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 
@@ -212,11 +259,12 @@ public sealed class JsonObserver<TContext>
         }
 
         byte[]? input = null;
+        PooledBufferWriter? output = null;
         try
         {
             input = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetByteCount(json));
             var utf8 = input.AsSpan(0, Encoding.UTF8.GetBytes(json, input));
-            using var output = new PooledBufferWriter(Math.Clamp(utf8.Length, 256, 64 * 1024));
+            output = PooledBufferWriter.Rent(Math.Clamp(utf8.Length, 256, 64 * 1024));
             result = Mask(utf8, output, context, options);
             return Encoding.UTF8.GetString(output.WrittenSpan);
         }
@@ -227,6 +275,7 @@ public sealed class JsonObserver<TContext>
         }
         finally
         {
+            output?.Return();
             if (input is not null)
             {
                 ArrayPool<byte>.Shared.Return(input, clearArray: true);
@@ -246,9 +295,39 @@ public sealed class JsonObserver<TContext>
     public MaskResult Mask(ReadOnlySpan<byte> utf8, IBufferWriter<byte> output, TContext context, JsonObserverOptions? options = null)
     {
         options ??= JsonObserverOptions.Default;
-        using var bounded = new BoundedJsonWriter(options);
-        using var ignoreNulls = options.IgnoreNulls ? new IgnoreNullsJsonWriter(bounded) : null;
-        var (status, failedAt) = Observe(utf8, (JsonWriter?)ignoreNulls ?? bounded, context, options);
+        utf8 = SkipBom(utf8);
+        var reader = CreateReader(utf8, options);
+        return Mask(ref reader, utf8, output, context, options);
+    }
+
+    /// <summary>
+    /// Masks a UTF-8 JSON payload held in several buffers, for example read from a <c>PipeReader</c>, into
+    /// <paramref name="output"/> and hands values to <paramref name="context"/>, without copying it into one buffer first.
+    /// Never throws, and behaves exactly like <see cref="Mask(ReadOnlySpan{byte}, IBufferWriter{byte}, TContext, JsonObserverOptions?)"/>
+    /// for the same bytes, however they are split.
+    /// </summary>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short, for example by a size limit. A leading byte order mark is skipped.</param>
+    /// <param name="output">Receives the masked JSON.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
+    /// <param name="options">Limits and output settings; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
+    public MaskResult Mask(in ReadOnlySequence<byte> utf8, IBufferWriter<byte> output, TContext context, JsonObserverOptions? options = null)
+    {
+        if (utf8.IsSingleSegment)
+        {
+            return Mask(utf8.FirstSpan, output, context, options);
+        }
+
+        options ??= JsonObserverOptions.Default;
+        var reader = CreateReader(SkipBom(utf8), options);
+        return Mask(ref reader, default, output, context, options);
+    }
+
+    private MaskResult Mask(ref Utf8JsonReader reader, ReadOnlySpan<byte> input, IBufferWriter<byte> output, TContext context, JsonObserverOptions options)
+    {
+        using var bounded = BoundedJsonWriter.Rent(options);
+        using var ignoreNulls = options.IgnoreNulls ? IgnoreNullsJsonWriter.Rent(bounded) : null;
+        var (status, failedAt) = Observe(ref reader, input, (JsonWriter?)ignoreNulls ?? bounded, context, options);
         if (status == MaskStatus.NotJson)
         {
             return new MaskResult(MaskStatus.NotJson, 0, 0);
@@ -314,24 +393,70 @@ public sealed class JsonObserver<TContext>
     /// <returns>Status and the input offset where reading stopped.</returns>
     public MaskResult Read(ReadOnlySpan<byte> utf8, TContext context, JsonObserverOptions? options = null)
     {
-        var (status, failedAt) = Observe(utf8, JsonWriter.Empty, context, options ?? JsonObserverOptions.Default);
+        options ??= JsonObserverOptions.Default;
+        utf8 = SkipBom(utf8);
+        var reader = CreateReader(utf8, options);
+        var (status, failedAt) = Observe(ref reader, utf8, JsonWriter.Empty, context, options);
         return new MaskResult(status, 0, failedAt);
     }
 
-    private (MaskStatus Status, long FailedAt) Observe(ReadOnlySpan<byte> utf8, JsonWriter writer, TContext context, JsonObserverOptions options)
+    /// <summary>
+    /// Hands values of a UTF-8 JSON payload held in several buffers to <paramref name="context"/> without writing
+    /// anything or copying the payload into one buffer. Never throws, and behaves exactly like
+    /// <see cref="Read(ReadOnlySpan{byte}, TContext, JsonObserverOptions?)"/> for the same bytes, however they are split.
+    /// </summary>
+    /// <param name="utf8">UTF-8 JSON payload; it may be cut short. A leading byte order mark is skipped.</param>
+    /// <param name="context">Receives the values read rules extract.</param>
+    /// <param name="options">Limits; <see cref="JsonObserverOptions.Default"/> when omitted.</param>
+    /// <returns>Status and the input offset where reading stopped.</returns>
+    public MaskResult Read(in ReadOnlySequence<byte> utf8, TContext context, JsonObserverOptions? options = null)
     {
-        if (utf8.StartsWith(Utf8Bom))
+        if (utf8.IsSingleSegment)
         {
-            utf8 = utf8[Utf8Bom.Length..];
+            return Read(utf8.FirstSpan, context, options);
         }
 
-        var reader = new Utf8JsonReader(utf8, isFinalBlock: false, new JsonReaderState(new JsonReaderOptions
+        options ??= JsonObserverOptions.Default;
+        var reader = CreateReader(SkipBom(utf8), options);
+        var (status, failedAt) = Observe(ref reader, default, JsonWriter.Empty, context, options);
+        return new MaskResult(status, 0, failedAt);
+    }
+
+    private static ReadOnlySpan<byte> SkipBom(ReadOnlySpan<byte> utf8) => utf8.StartsWith(Utf8Bom) ? utf8[Utf8Bom.Length..] : utf8;
+
+    private static ReadOnlySequence<byte> SkipBom(in ReadOnlySequence<byte> utf8)
+    {
+        if (utf8.Length < Utf8Bom.Length)
         {
-            CommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true,
-            MaxDepth = Math.Max(options.MaxDepth, 1),
-        }));
-        var propPath = new PropertyPath(_maxDepth, utf8);
+            return utf8;
+        }
+
+        Span<byte> head = stackalloc byte[3];
+        utf8.Slice(0, Utf8Bom.Length).CopyTo(head);
+        return head.SequenceEqual(Utf8Bom) ? utf8.Slice(Utf8Bom.Length) : utf8;
+    }
+
+    private static JsonReaderState ReaderState(JsonObserverOptions options) => new(new JsonReaderOptions
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+        MaxDepth = Math.Max(options.MaxDepth, 1),
+    });
+
+    private static Utf8JsonReader CreateReader(ReadOnlySpan<byte> utf8, JsonObserverOptions options) =>
+        new(utf8, isFinalBlock: false, ReaderState(options));
+
+    private static Utf8JsonReader CreateReader(in ReadOnlySequence<byte> utf8, JsonObserverOptions options) =>
+        new(utf8, isFinalBlock: false, ReaderState(options));
+
+    private (MaskStatus Status, long FailedAt) Observe(
+        ref Utf8JsonReader reader,
+        ReadOnlySpan<byte> input,
+        JsonWriter writer,
+        TContext context,
+        JsonObserverOptions options)
+    {
+        var propPath = new PropertyPath(_maxDepth, input) { PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive };
         try
         {
             if (!reader.Read() || reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))

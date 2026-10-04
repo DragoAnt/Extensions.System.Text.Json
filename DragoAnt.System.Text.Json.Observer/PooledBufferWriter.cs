@@ -2,13 +2,59 @@ using System.Buffers;
 
 namespace DragoAnt.System.Text.Json.Observer;
 
-internal sealed class PooledBufferWriter(int initialCapacity = 1024) : IBufferWriter<byte>, IDisposable
+/// <summary>
+/// Buffer writer over pooled arrays. <see cref="Dispose"/> returns the array; <see cref="Reset"/> makes the instance
+/// usable again, so a thread can keep one instance and allocate nothing per call.
+/// </summary>
+internal sealed class PooledBufferWriter : IBufferWriter<byte>, IDisposable
 {
-    private byte[] _buffer = ArrayPool<byte>.Shared.Rent(initialCapacity);
+    [ThreadStatic]
+    private static PooledBufferWriter? t_cached;
+
+    private byte[] _buffer;
+
+    public PooledBufferWriter(int initialCapacity = 1024)
+    {
+        _buffer = ArrayPool<byte>.Shared.Rent(initialCapacity);
+    }
 
     public int WrittenCount { get; private set; }
 
     public ReadOnlySpan<byte> WrittenSpan => _buffer.AsSpan(0, WrittenCount);
+
+    /// <summary>
+    /// Takes this thread's spare instance, or creates one; give it back with <see cref="Return"/>.
+    /// </summary>
+    public static PooledBufferWriter Rent(int initialCapacity)
+    {
+        var cached = t_cached;
+        if (cached is null)
+        {
+            return new PooledBufferWriter(initialCapacity);
+        }
+
+        t_cached = null;
+        cached.Reset(initialCapacity);
+        return cached;
+    }
+
+    /// <summary>
+    /// Returns the array to the pool and keeps the instance as this thread's spare.
+    /// </summary>
+    public void Return()
+    {
+        Dispose();
+        t_cached = this;
+    }
+
+    public void Reset(int initialCapacity = 1024)
+    {
+        WrittenCount = 0;
+        if (_buffer.Length == 0)
+        {
+            _buffer = ArrayPool<byte>.Shared.Rent(initialCapacity);
+        }
+    }
 
     public void Advance(int count) => WrittenCount += count;
 
@@ -28,6 +74,7 @@ internal sealed class PooledBufferWriter(int initialCapacity = 1024) : IBufferWr
     {
         var buffer = _buffer;
         _buffer = [];
+        WrittenCount = 0;
         if (buffer.Length > 0)
         {
             ArrayPool<byte>.Shared.Return(buffer);
@@ -44,7 +91,11 @@ internal sealed class PooledBufferWriter(int initialCapacity = 1024) : IBufferWr
 
         var grown = ArrayPool<byte>.Shared.Rent(Math.Max(required, _buffer.Length * 2));
         WrittenSpan.CopyTo(grown);
-        ArrayPool<byte>.Shared.Return(_buffer);
+        if (_buffer.Length > 0)
+        {
+            ArrayPool<byte>.Shared.Return(_buffer);
+        }
+
         _buffer = grown;
     }
 }

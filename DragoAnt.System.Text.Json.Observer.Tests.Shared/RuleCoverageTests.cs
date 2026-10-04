@@ -79,7 +79,7 @@ public abstract class RuleCoverageTests
         }), BlockList));
 
         observer.Mask("""{"a":{"b":[{"c":1}]}}""").Should().Be("""{"a":{"b":[{"c":"x"}]}}""");
-        seen.Should().Equal("4|a|c||a.b..c|");
+        seen.Should().Equal("4|a|c||a.b[0].c|");
     }
 
     [Fact]

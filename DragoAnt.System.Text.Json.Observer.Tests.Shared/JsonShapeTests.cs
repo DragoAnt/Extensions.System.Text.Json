@@ -8,7 +8,7 @@ public abstract class JsonShapeTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
 
-    private static JsonObserver Observer(JsonSerializerOptions? options = null, JsonShapeOptions? shapeOptions = null) =>
+    internal static JsonObserver Observer(JsonSerializerOptions? options = null, JsonShapeOptions? shapeOptions = null) =>
         JsonObserver.FromShape(
             JsonShape.FromTypeInfo((options ?? Web).GetTypeInfo(typeof(Customer)), Classify),
             shapeOptions);

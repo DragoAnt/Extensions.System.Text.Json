@@ -70,7 +70,7 @@ Console.WriteLine($"{result.Status} {Encoding.UTF8.GetString(output.WrittenSpan)
 
 ## More
 
-- [Documentation](https://github.com/DragoAnt/Extensions.System.Text.Json#readme): rule kinds, allow-lists from your types (`JsonShape`), options, performance.
+- [Documentation](https://github.com/DragoAnt/Extensions.System.Text.Json#readme): rule kinds, custom mask strategies, `Explain(path)`, allow-lists from your types (`JsonShape`), `ReadOnlySequence<byte>` input, options, performance.
 - [Changelog](https://github.com/DragoAnt/Extensions.System.Text.Json/blob/main/CHANGELOG.md), including the breaking changes from 1.x.
 - `DragoAnt.System.Text.Json.Observer.Http` logs masked `HttpClient` request and response bodies.
 - [Issues](https://github.com/DragoAnt/Extensions.System.Text.Json/issues)
