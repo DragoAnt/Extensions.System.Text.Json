@@ -133,7 +133,68 @@ Every `Mask*` rule masks the **whole value whatever its JSON type** — a sensit
 | `Unmasked()` | — writes a string, number, boolean or `null` unchanged | |
 | `ReadStr` / `ReadInt` / `ReadLong` / `ReadDecimal` / `ReadBool` / `ReadRaw` | hands the value to the context and writes it unchanged; a number that does not fit arrives as `null` | |
 
-A strategy is a constant string, a `Regex` whose matches become `*`, or a function of the value and the context; a `null` result writes `null`. A value longer than `MaxValueBytes` reaches the function cut to that length. `Hash` uses `JsonObserverOptions.HashKey`, or a random key per process when it is empty.
+The table holds for absolute and relative rules alike. A strategy is a constant string, a `Regex` whose matches become `*`, or a function of the value and the context; a `null` result writes `null`. A value longer than `MaxValueBytes` reaches the function cut to that length. `Hash` uses `JsonObserverOptions.HashKey`, or a random key per process when it is empty.
+
+### Custom mask strategies
+
+A `MaskTag` can carry a `Key` — a data classification, a redactor name — that only your `Utf8MaskStrategy` interprets; the built-in strategy falls back to the tag's kind (`MaskTag.Custom(key)` becomes `"***"`). Override `Mask(in Utf8MaskContext, JsonWriter)` to also see the property name and the path of the value, without allocations.
+
+```csharp
+using System.Text;
+using DragoAnt.System.Text.Json.Observer;
+using DragoAnt.System.Text.Json.Observer.Strategies;
+using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+
+var masker = JsonObserver.Obj(Relative(rules => rules
+        .Match("email").MaskAny(MaskTag.Custom("pii"))
+        .Match("password").MaskAny(MaskTag.Full),
+    BlockList));
+var options = new JsonObserverOptions(MaskStrategy: new LabelStrategy());
+
+Console.WriteLine(masker.Mask("""{"user":{"email":"a@b.c","password":"s3cret"},"items":[{"email":"x@y.z"}]}""", options));
+// Output:
+// {"user":{"email":"<pii at user.email>","password":"***"},"items":[{"email":"<pii at items[0].email>"}]}
+
+sealed class LabelStrategy : Utf8MaskStrategy
+{
+    public override void Mask(in Utf8MaskContext context, JsonWriter writer)
+    {
+        if (context.Tag.TryGetKey<string>(out var label))
+        {
+            writer.WriteStringValue($"<{label} at {context.Path.ToString()}>");
+            return;
+        }
+
+        Default.Mask(context, writer);
+    }
+}
+```
+
+`Utf8MaskContext` has `Value`, `TokenType`, `Tag`, `Options`, `PropertyName` (UTF-8), `IsArrayItem` and `Path`; `JsonWriter` takes `ReadOnlySpan<char>` values too, so a char-based redactor writes its result without an intermediate string.
+
+### Explain a path
+
+`Explain` tells which rule or policy handles a path and what it does — handy to check a configuration, to document it, or to find out why a value was masked. It walks the rules exactly as the masking pass does.
+
+```csharp
+using System.Text.Json;
+using DragoAnt.System.Text.Json.Observer;
+using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+
+var masker = JsonObserver.Obj(
+    root => root.Match("lines").Array(lines => lines.Obj(line => line.Match("sku").Unmasked())),
+    Relative(rules => rules.Match("password").MaskAny("***"), AllowList));
+
+Console.WriteLine(masker.Explain("lines[2].sku"));
+Console.WriteLine(masker.Explain("lines[2].qty", JsonTokenType.Number));
+Console.WriteLine(masker.Explain("user.password"));
+// Output:
+// lines[2].sku: Unchanged by Match("lines") > object item > Match("sku") → Unmasked()
+// lines[2].qty: Masked by default policy AllowList → writes "***"
+// user.password: Masked by relative Match("password") → MaskAny("***")
+```
+
+The result also lists one step per level (`Steps`) and the `Outcome`: `Unchanged`, `Masked`, `Read`, `Custom` or `Invalid`. Observers built from a `JsonShape` explain against the shape.
 
 ### Allow-list from your types
 
@@ -156,7 +217,9 @@ Console.WriteLine(masker.Mask("""{"name":"Alice","card":"4111111111111111","adde
 sealed record Customer(string Name, string Card);
 ```
 
-`JsonShapeOptions` choose what happens to unknown members (`MaskWhole`, `Descend`, `PassThrough`) and whether `null` stays. On .NET 8, source-generated metadata carries no attributes, so classify by name there.
+`JsonShapeOptions` choose what happens to unknown members (`MaskWhole`, `Descend`, `PassThrough`) and whether `null` stays; `JsonShapeOptions.FromSerializerOptions(options)` also matches names with the serializer's `PropertyNameCaseInsensitive`. On .NET 8, source-generated metadata carries no attributes, so classify by name there.
+
+Every node and member keeps its metadata for integrations: `JsonShape.Members` lists `JsonShapeProperty` items with the `JsonPropertyInfo`, the CLR member, `PropertyType`, `IsRequired`, `IsNullable` and `GetCustomAttributes<T>()`, and nodes and members carry `Annotations` that an integration fills — for example from the `annotate` callback of `FromTypeInfo`.
 
 ---
 
@@ -187,7 +250,7 @@ Console.WriteLine(result.Status);
 
 ### UTF-8 API for the hot path
 
-`Mask(ReadOnlySpan<byte>, IBufferWriter<byte>, JsonObserverOptions?)` masks bytes into a writer you reuse; the string API produces exactly the same output for the same text.
+`Mask(ReadOnlySpan<byte>, IBufferWriter<byte>, JsonObserverOptions?)` masks bytes into a writer you reuse; the string API produces exactly the same output for the same text. A payload held in several buffers, for example from a `PipeReader`, goes to `Mask(in ReadOnlySequence<byte>, …)` as is: the output is the same however the bytes are split.
 
 ```csharp
 using System.Buffers;
@@ -217,12 +280,13 @@ Console.WriteLine($"{result.Status} {Encoding.UTF8.GetString(output.WrittenSpan)
 | `HashKey`, `MaskStrategy` | random per process, built-in | used by `MaskTag` rules |
 | `IgnoreNulls` | `false` | drops `null` properties and items, and objects and arrays left empty by that |
 | `Indented` | `false` | indented output |
+| `PropertyNameCaseInsensitive` | `true` | match rule names and shapes ignoring case; pass the serializer's setting to match names as deserialization does |
 
 Input may contain comments and trailing commas; a UTF-8 byte order mark is skipped. Comments are not written.
 
 ## Performance
 
-Masking walks the tokens once. With constant-string or tag rules, the UTF-8 API allocates a small constant amount per call — about 240 B in the repository's allocation test, the same for 1 KB and 64 KB bodies; a masking function receives a decoded `string`, which it allocates. The [benchmark report](./docs/benchmarks/benchmarks.md) compares speed and memory with a DOM masker and [JsonMasking](https://github.com/ThiagoBarradas/jsonmasking): for an 8 KB flat body the observer took 71 µs against 902 µs, and allocated 665 B against 468 KB. See the [OSS analogs comparison](./docs/comparisons/analogs.md) for how other libraries handle cut-off JSON.
+Masking walks the tokens once. With constant-string or tag rules, the UTF-8 API allocates nothing per call once warm — the repository's allocation test pins 0 B for 1 KB and 64 KB bodies, spans and multi-segment sequences; a masking function receives a decoded `string`, which it allocates. The [benchmark report](./docs/benchmarks/benchmarks.md) compares speed and memory with a DOM masker and [JsonMasking](https://github.com/ThiagoBarradas/jsonmasking): for an 8 KB flat body the observer took 71 µs against 902 µs, and allocated 665 B against 468 KB. See the [OSS analogs comparison](./docs/comparisons/analogs.md) for how other libraries handle cut-off JSON.
 
 ## HTTP client body logging (`DragoAnt.System.Text.Json.Observer.Http`)
 
