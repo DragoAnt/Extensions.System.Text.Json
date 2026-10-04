@@ -263,16 +263,20 @@ public abstract class JsonWriter
 /// <summary>
 /// Drops <c>null</c> values: a property name and an opened container are written only once a non-null value follows.
 /// </summary>
-internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDisposable
+internal sealed class IgnoreNullsJsonWriter : JsonWriter, IDisposable
 {
-    private Pending[] _pending = ArrayPool<Pending>.Shared.Rent(16);
-    private byte[] _names = ArrayPool<byte>.Shared.Rent(256);
+    [ThreadStatic]
+    private static IgnoreNullsJsonWriter? t_cached;
+
+    private JsonWriter _inner = Empty;
+    private Pending[] _pending = [];
+    private byte[] _names = [];
     private int _count;
     private int _namesUsed;
 
-    internal override JsonObserverOptions Options => inner.Options;
+    internal override JsonObserverOptions Options => _inner.Options;
 
-    internal override bool Stopped => inner.Stopped;
+    internal override bool Stopped => _inner.Stopped;
 
     public override void WriteNullValue()
     {
@@ -283,14 +287,14 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
         else if (_count == 0 || !_pending[_count - 1].IsArray)
         {
             Flush();
-            inner.WriteNullValue();
+            _inner.WriteNullValue();
         }
     }
 
     public override void WriteBooleanValue(bool value)
     {
         Flush();
-        inner.WriteBooleanValue(value);
+        _inner.WriteBooleanValue(value);
     }
 
     public override void WriteStringValue(string? value)
@@ -302,49 +306,49 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
         }
 
         Flush();
-        inner.WriteStringValue(value);
+        _inner.WriteStringValue(value);
     }
 
     public override void WriteStringValue(ReadOnlySpan<byte> utf8Value)
     {
         Flush();
-        inner.WriteStringValue(utf8Value);
+        _inner.WriteStringValue(utf8Value);
     }
 
     public override void WriteRawValue(ReadOnlySpan<byte> utf8Json)
     {
         Flush();
-        inner.WriteRawValue(utf8Json);
+        _inner.WriteRawValue(utf8Json);
     }
 
     public override void WriteNumberValue(long value)
     {
         Flush();
-        inner.WriteNumberValue(value);
+        _inner.WriteNumberValue(value);
     }
 
     public override void WriteNumberValue(decimal value)
     {
         Flush();
-        inner.WriteNumberValue(value);
+        _inner.WriteNumberValue(value);
     }
 
     public override void WriteStringValue(ReadOnlySpan<char> value)
     {
         Flush();
-        inner.WriteStringValue(value);
+        _inner.WriteStringValue(value);
     }
 
     public override void WriteBase64StringValue(ReadOnlySpan<byte> bytes)
     {
         Flush();
-        inner.WriteBase64StringValue(bytes);
+        _inner.WriteBase64StringValue(bytes);
     }
 
     public override void WriteNumberValue(double value)
     {
         Flush();
-        inner.WriteNumberValue(value);
+        _inner.WriteNumberValue(value);
     }
 
     public override void WritePropertyName(string propertyName) => WritePropertyName(propertyName.AsSpan());
@@ -386,12 +390,32 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
 
     public override void WriteEndArray() => End(isArray: true);
 
+    /// <summary>
+    /// Takes this thread's spare writer, or creates one, writing to <paramref name="inner"/>; <see cref="Dispose"/> gives it back.
+    /// </summary>
+    public static IgnoreNullsJsonWriter Rent(JsonWriter inner)
+    {
+        var writer = t_cached ?? new IgnoreNullsJsonWriter();
+        t_cached = null;
+        writer._inner = inner;
+        writer._pending = ArrayPool<Pending>.Shared.Rent(16);
+        writer._names = ArrayPool<byte>.Shared.Rent(256);
+        writer._count = 0;
+        writer._namesUsed = 0;
+        return writer;
+    }
+
+    /// <summary>
+    /// Returns the pooled buffers and keeps the writer as this thread's spare.
+    /// </summary>
     public void Dispose()
     {
         ArrayPool<Pending>.Shared.Return(_pending);
         ArrayPool<byte>.Shared.Return(_names, clearArray: true);
         _pending = [];
         _names = [];
+        _inner = Empty;
+        t_cached = this;
     }
 
     private void End(bool isArray)
@@ -413,11 +437,11 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
 
         if (isArray)
         {
-            inner.WriteEndArray();
+            _inner.WriteEndArray();
         }
         else
         {
-            inner.WriteEndObject();
+            _inner.WriteEndObject();
         }
 
         if (_count > 0 && _pending[_count - 1].Kind == Kind.Written)
@@ -430,13 +454,13 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
     {
         if (isArray)
         {
-            inner.WriteStartArray();
-            inner.WriteEndArray();
+            _inner.WriteStartArray();
+            _inner.WriteEndArray();
         }
         else
         {
-            inner.WriteStartObject();
-            inner.WriteEndObject();
+            _inner.WriteStartObject();
+            _inner.WriteEndObject();
         }
     }
 
@@ -451,14 +475,14 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
             switch (pending.Kind)
             {
                 case Kind.Name:
-                    inner.WritePropertyName(_names.AsSpan(pending.Start, pending.Length));
+                    _inner.WritePropertyName(_names.AsSpan(pending.Start, pending.Length));
                     break;
                 case Kind.Open when pending.IsArray:
-                    inner.WriteStartArray();
+                    _inner.WriteStartArray();
                     pending = pending with { Kind = Kind.Written };
                     continue;
                 case Kind.Open:
-                    inner.WriteStartObject();
+                    _inner.WriteStartObject();
                     pending = pending with { Kind = Kind.Written };
                     continue;
                 default:

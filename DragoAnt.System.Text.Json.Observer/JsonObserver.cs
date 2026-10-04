@@ -225,11 +225,12 @@ public sealed class JsonObserver<TContext>
         }
 
         byte[]? input = null;
+        PooledBufferWriter? output = null;
         try
         {
             input = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetByteCount(json));
             var utf8 = input.AsSpan(0, Encoding.UTF8.GetBytes(json, input));
-            using var output = new PooledBufferWriter(Math.Clamp(utf8.Length, 256, 64 * 1024));
+            output = PooledBufferWriter.Rent(Math.Clamp(utf8.Length, 256, 64 * 1024));
             result = Mask(utf8, output, context, options);
             return Encoding.UTF8.GetString(output.WrittenSpan);
         }
@@ -240,6 +241,7 @@ public sealed class JsonObserver<TContext>
         }
         finally
         {
+            output?.Return();
             if (input is not null)
             {
                 ArrayPool<byte>.Shared.Return(input, clearArray: true);
@@ -289,8 +291,8 @@ public sealed class JsonObserver<TContext>
 
     private MaskResult Mask(ref Utf8JsonReader reader, ReadOnlySpan<byte> input, IBufferWriter<byte> output, TContext context, JsonObserverOptions options)
     {
-        using var bounded = new BoundedJsonWriter(options);
-        using var ignoreNulls = options.IgnoreNulls ? new IgnoreNullsJsonWriter(bounded) : null;
+        using var bounded = BoundedJsonWriter.Rent(options);
+        using var ignoreNulls = options.IgnoreNulls ? IgnoreNullsJsonWriter.Rent(bounded) : null;
         var (status, failedAt) = Observe(ref reader, input, (JsonWriter?)ignoreNulls ?? bounded, context, options);
         if (status == MaskStatus.NotJson)
         {
