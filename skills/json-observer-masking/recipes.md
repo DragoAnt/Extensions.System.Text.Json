@@ -69,7 +69,7 @@ static class Utf8Masking
 }
 ```
 
-In a real hot path, write `output.WrittenSpan` straight to the log sink instead of decoding it to a string. With constant or tag rules, each call allocates a small constant amount (a few hundred bytes, whatever the body size); a rule with a masking function allocates the `string` it receives. Measure with `GC.GetAllocatedBytesForCurrentThread()` rather than assuming.
+In a real hot path, write `output.WrittenSpan` straight to the log sink instead of decoding it to a string. With constant or tag rules, a warm call allocates nothing; a rule with a masking function allocates the `string` it receives. Measure with `GC.GetAllocatedBytesForCurrentThread()` rather than assuming.
 
 ## Cut-off or invalid bodies
 

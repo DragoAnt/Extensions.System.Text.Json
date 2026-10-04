@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Buffers.Text;
+using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 
@@ -10,29 +12,36 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// </summary>
 internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
 {
+    [ThreadStatic]
+    private static BoundedJsonWriter? t_cached;
+
     private static ReadOnlySpan<byte> Ellipsis => [0xE2, 0x80, 0xA6];
 
     private readonly PooledBufferWriter _buffer;
     private readonly Utf8JsonWriter _writer;
-    private readonly int _maxOutputBytes;
-    private readonly int _maxValueBytes;
-    private bool[] _isArray = ArrayPool<bool>.Shared.Rent(64);
+    private readonly bool _relaxedEscaping;
+    private readonly bool _indented;
+    private readonly int _writerMaxDepth;
+    private int _maxOutputBytes;
+    private int _maxValueBytes;
+    private bool[] _isArray = [];
     private int _depth;
     private int _safeLength;
     private int _safeDepth;
 
-    public BoundedJsonWriter(JsonObserverOptions options)
+    private BoundedJsonWriter(JsonObserverOptions options)
     {
-        Options = options;
-        _maxOutputBytes = Math.Max(options.MaxOutputBytes, 0);
-        _maxValueBytes = Math.Max(options.MaxValueBytes, 0);
+        _relaxedEscaping = options.RelaxedEscaping;
+        _indented = options.Indented;
+        _writerMaxDepth = WriterMaxDepth(options);
         _buffer = new PooledBufferWriter();
         _writer = new Utf8JsonWriter(_buffer, new JsonWriterOptions
         {
             Encoder = options.RelaxedEscaping ? JavaScriptEncoder.UnsafeRelaxedJsonEscaping : null,
-            MaxDepth = Math.Min(Math.Max(options.MaxDepth, 1), int.MaxValue - 1) + 1,
+            MaxDepth = _writerMaxDepth,
             Indented = options.Indented,
         });
+        Start(options);
     }
 
     public bool Exhausted { get; private set; }
@@ -42,7 +51,44 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
     /// </summary>
     public bool ValuesTruncated { get; private set; }
 
-    internal override JsonObserverOptions Options { get; }
+    internal override JsonObserverOptions Options => _options;
+
+    private JsonObserverOptions _options = null!;
+
+    /// <summary>
+    /// Takes this thread's spare writer when its fixed settings fit <paramref name="options"/>, or creates one;
+    /// <see cref="Dispose"/> gives it back. A nested call on the same thread gets a writer of its own.
+    /// </summary>
+    public static BoundedJsonWriter Rent(JsonObserverOptions options)
+    {
+        var cached = t_cached;
+        if (cached is null || cached._relaxedEscaping != options.RelaxedEscaping || cached._indented != options.Indented ||
+            cached._writerMaxDepth != WriterMaxDepth(options))
+        {
+            return new BoundedJsonWriter(options);
+        }
+
+        t_cached = null;
+        cached._buffer.Reset();
+        cached._writer.Reset(cached._buffer);
+        cached.Start(options);
+        return cached;
+    }
+
+    private static int WriterMaxDepth(JsonObserverOptions options) => Math.Min(Math.Max(options.MaxDepth, 1), int.MaxValue - 1) + 1;
+
+    private void Start(JsonObserverOptions options)
+    {
+        _options = options;
+        _maxOutputBytes = Math.Max(options.MaxOutputBytes, 0);
+        _maxValueBytes = Math.Max(options.MaxValueBytes, 0);
+        _isArray = ArrayPool<bool>.Shared.Rent(64);
+        _depth = 0;
+        _safeLength = 0;
+        _safeDepth = 0;
+        Exhausted = false;
+        ValuesTruncated = false;
+    }
 
     internal override bool Stopped => Exhausted;
 
@@ -83,6 +129,16 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
             return;
         }
 
+        WriteStringValue(value.AsSpan());
+    }
+
+    public override void WriteStringValue(ReadOnlySpan<char> value)
+    {
+        if (Exhausted)
+        {
+            return;
+        }
+
         if ((long)value.Length * 3 <= _maxValueBytes)
         {
             _writer.WriteStringValue(value);
@@ -90,7 +146,7 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
             return;
         }
 
-        var chars = value.AsSpan(0, (int)Math.Min(value.Length, (long)_maxValueBytes + 1));
+        var chars = value[..(int)Math.Min(value.Length, (long)_maxValueBytes + 1)];
         if (chars.Length < value.Length && char.IsHighSurrogate(chars[^1]))
         {
             chars = chars[..^1];
@@ -189,7 +245,61 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         Completed();
     }
 
+    public override void WriteNumberValue(double value)
+    {
+        if (Exhausted)
+        {
+            return;
+        }
+
+        if (!double.IsFinite(value))
+        {
+            Span<char> text = stackalloc char[16];
+            value.TryFormat(text, out var length, provider: CultureInfo.InvariantCulture);
+            WriteStringValue(text[..length]);
+            return;
+        }
+
+        _writer.WriteNumberValue(value);
+        Completed();
+    }
+
+    public override void WriteBase64StringValue(ReadOnlySpan<byte> bytes)
+    {
+        if (Exhausted)
+        {
+            return;
+        }
+
+        var length = Base64.GetMaxEncodedToUtf8Length(bytes.Length);
+        if (length <= _maxValueBytes)
+        {
+            _writer.WriteBase64StringValue(bytes);
+            Completed();
+            return;
+        }
+
+        var encoded = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            Base64.EncodeToUtf8(bytes, encoded, out _, out var written);
+            WriteStringValue(encoded.AsSpan(0, written));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(encoded, clearArray: true);
+        }
+    }
+
     public override void WritePropertyName(string propertyName)
+    {
+        if (!Exhausted)
+        {
+            _writer.WritePropertyName(propertyName);
+        }
+    }
+
+    public override void WritePropertyName(ReadOnlySpan<char> propertyName)
     {
         if (!Exhausted)
         {
@@ -237,9 +347,12 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         return length;
     }
 
+    /// <summary>
+    /// Returns the pooled buffers and keeps the writer as this thread's spare.
+    /// </summary>
     public void Dispose()
     {
-        _writer.Dispose();
+        _writer.Reset(_buffer);
         _buffer.Dispose();
         var isArray = _isArray;
         _isArray = [];
@@ -247,6 +360,9 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         {
             ArrayPool<bool>.Shared.Return(isArray);
         }
+
+        _options = JsonObserverOptions.Default;
+        t_cached = this;
     }
 
     private void Start(bool isArray)

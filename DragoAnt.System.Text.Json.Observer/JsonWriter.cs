@@ -90,6 +90,31 @@ public abstract class JsonWriter
     public abstract void WriteRawValue(ReadOnlySpan<byte> utf8Json);
 
     /// <summary>
+    /// Writes a string value given as UTF-16 text, for example the output of a char-based redactor, without a
+    /// <see cref="string"/> allocation.
+    /// </summary>
+    /// <param name="value">Unescaped text; an empty span writes <c>""</c>.</param>
+    public abstract void WriteStringValue(ReadOnlySpan<char> value);
+
+    /// <summary>
+    /// Writes a property name given as UTF-16 text; the value written next belongs to it.
+    /// </summary>
+    /// <param name="propertyName">Unescaped name.</param>
+    public abstract void WritePropertyName(ReadOnlySpan<char> propertyName);
+
+    /// <summary>
+    /// Writes bytes as a Base64 string value, for example a hash or an encrypted value.
+    /// </summary>
+    /// <param name="bytes">Bytes to encode.</param>
+    public abstract void WriteBase64StringValue(ReadOnlySpan<byte> bytes);
+
+    /// <summary>
+    /// Writes a number; <see cref="double.NaN"/> and infinities, which JSON cannot represent, are written as strings.
+    /// </summary>
+    /// <param name="value">Value to write.</param>
+    public abstract void WriteNumberValue(double value);
+
+    /// <summary>
     /// Options of the current call; rules with a <see cref="Strategies.MaskTag"/> read their strategy and hash key here.
     /// </summary>
     internal virtual JsonObserverOptions Options => JsonObserverOptions.Default;
@@ -138,13 +163,29 @@ public abstract class JsonWriter
             return;
         }
 
-        if (reader.HasValueSequence)
+        if (!reader.HasValueSequence)
         {
-            WriteRawValue(reader.ValueSequence.ToArray());
+            WriteRawValue(reader.ValueSpan);
             return;
         }
 
-        WriteRawValue(reader.ValueSpan);
+        var length = checked((int)reader.ValueSequence.Length);
+        byte[]? rented = null;
+        var buffer = length <= StackallocThreshold
+            ? stackalloc byte[StackallocThreshold]
+            : rented = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            reader.ValueSequence.CopyTo(buffer);
+            WriteRawValue(buffer[..length]);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented, clearArray: true);
+            }
+        }
     }
 
     private sealed class EmptyJsonWriter : JsonWriter
@@ -185,6 +226,22 @@ public abstract class JsonWriter
         {
         }
 
+        public override void WriteStringValue(ReadOnlySpan<char> value)
+        {
+        }
+
+        public override void WritePropertyName(ReadOnlySpan<char> propertyName)
+        {
+        }
+
+        public override void WriteBase64StringValue(ReadOnlySpan<byte> bytes)
+        {
+        }
+
+        public override void WriteNumberValue(double value)
+        {
+        }
+
         public override void WriteStartObject()
         {
         }
@@ -206,16 +263,20 @@ public abstract class JsonWriter
 /// <summary>
 /// Drops <c>null</c> values: a property name and an opened container are written only once a non-null value follows.
 /// </summary>
-internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDisposable
+internal sealed class IgnoreNullsJsonWriter : JsonWriter, IDisposable
 {
-    private Pending[] _pending = ArrayPool<Pending>.Shared.Rent(16);
-    private byte[] _names = ArrayPool<byte>.Shared.Rent(256);
+    [ThreadStatic]
+    private static IgnoreNullsJsonWriter? t_cached;
+
+    private JsonWriter _inner = Empty;
+    private Pending[] _pending = [];
+    private byte[] _names = [];
     private int _count;
     private int _namesUsed;
 
-    internal override JsonObserverOptions Options => inner.Options;
+    internal override JsonObserverOptions Options => _inner.Options;
 
-    internal override bool Stopped => inner.Stopped;
+    internal override bool Stopped => _inner.Stopped;
 
     public override void WriteNullValue()
     {
@@ -226,14 +287,14 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
         else if (_count == 0 || !_pending[_count - 1].IsArray)
         {
             Flush();
-            inner.WriteNullValue();
+            _inner.WriteNullValue();
         }
     }
 
     public override void WriteBooleanValue(bool value)
     {
         Flush();
-        inner.WriteBooleanValue(value);
+        _inner.WriteBooleanValue(value);
     }
 
     public override void WriteStringValue(string? value)
@@ -245,48 +306,80 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
         }
 
         Flush();
-        inner.WriteStringValue(value);
+        _inner.WriteStringValue(value);
     }
 
     public override void WriteStringValue(ReadOnlySpan<byte> utf8Value)
     {
         Flush();
-        inner.WriteStringValue(utf8Value);
+        _inner.WriteStringValue(utf8Value);
     }
 
     public override void WriteRawValue(ReadOnlySpan<byte> utf8Json)
     {
         Flush();
-        inner.WriteRawValue(utf8Json);
+        _inner.WriteRawValue(utf8Json);
     }
 
     public override void WriteNumberValue(long value)
     {
         Flush();
-        inner.WriteNumberValue(value);
+        _inner.WriteNumberValue(value);
     }
 
     public override void WriteNumberValue(decimal value)
     {
         Flush();
-        inner.WriteNumberValue(value);
+        _inner.WriteNumberValue(value);
     }
 
-    public override void WritePropertyName(string propertyName) => WritePropertyName(Encoding.UTF8.GetBytes(propertyName));
+    public override void WriteStringValue(ReadOnlySpan<char> value)
+    {
+        Flush();
+        _inner.WriteStringValue(value);
+    }
+
+    public override void WriteBase64StringValue(ReadOnlySpan<byte> bytes)
+    {
+        Flush();
+        _inner.WriteBase64StringValue(bytes);
+    }
+
+    public override void WriteNumberValue(double value)
+    {
+        Flush();
+        _inner.WriteNumberValue(value);
+    }
+
+    public override void WritePropertyName(string propertyName) => WritePropertyName(propertyName.AsSpan());
+
+    public override void WritePropertyName(ReadOnlySpan<char> propertyName)
+    {
+        EnsureNames(Encoding.UTF8.GetMaxByteCount(propertyName.Length));
+        var written = Encoding.UTF8.GetBytes(propertyName, _names.AsSpan(_namesUsed));
+        Push(new Pending(Kind.Name, _namesUsed, written, false));
+        _namesUsed += written;
+    }
 
     public override void WritePropertyName(ReadOnlySpan<byte> utf8PropertyName)
     {
-        if (_namesUsed + utf8PropertyName.Length > _names.Length)
-        {
-            var grown = ArrayPool<byte>.Shared.Rent(Math.Max(_names.Length * 2, _namesUsed + utf8PropertyName.Length));
-            _names.AsSpan(0, _namesUsed).CopyTo(grown);
-            ArrayPool<byte>.Shared.Return(_names, clearArray: true);
-            _names = grown;
-        }
-
+        EnsureNames(utf8PropertyName.Length);
         utf8PropertyName.CopyTo(_names.AsSpan(_namesUsed));
         Push(new Pending(Kind.Name, _namesUsed, utf8PropertyName.Length, false));
         _namesUsed += utf8PropertyName.Length;
+    }
+
+    private void EnsureNames(int length)
+    {
+        if (_namesUsed + length <= _names.Length)
+        {
+            return;
+        }
+
+        var grown = ArrayPool<byte>.Shared.Rent(Math.Max(_names.Length * 2, _namesUsed + length));
+        _names.AsSpan(0, _namesUsed).CopyTo(grown);
+        ArrayPool<byte>.Shared.Return(_names, clearArray: true);
+        _names = grown;
     }
 
     public override void WriteStartObject() => Push(new Pending(Kind.Open, 0, 0, false));
@@ -297,12 +390,32 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
 
     public override void WriteEndArray() => End(isArray: true);
 
+    /// <summary>
+    /// Takes this thread's spare writer, or creates one, writing to <paramref name="inner"/>; <see cref="Dispose"/> gives it back.
+    /// </summary>
+    public static IgnoreNullsJsonWriter Rent(JsonWriter inner)
+    {
+        var writer = t_cached ?? new IgnoreNullsJsonWriter();
+        t_cached = null;
+        writer._inner = inner;
+        writer._pending = ArrayPool<Pending>.Shared.Rent(16);
+        writer._names = ArrayPool<byte>.Shared.Rent(256);
+        writer._count = 0;
+        writer._namesUsed = 0;
+        return writer;
+    }
+
+    /// <summary>
+    /// Returns the pooled buffers and keeps the writer as this thread's spare.
+    /// </summary>
     public void Dispose()
     {
         ArrayPool<Pending>.Shared.Return(_pending);
         ArrayPool<byte>.Shared.Return(_names, clearArray: true);
         _pending = [];
         _names = [];
+        _inner = Empty;
+        t_cached = this;
     }
 
     private void End(bool isArray)
@@ -324,11 +437,11 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
 
         if (isArray)
         {
-            inner.WriteEndArray();
+            _inner.WriteEndArray();
         }
         else
         {
-            inner.WriteEndObject();
+            _inner.WriteEndObject();
         }
 
         if (_count > 0 && _pending[_count - 1].Kind == Kind.Written)
@@ -341,13 +454,13 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
     {
         if (isArray)
         {
-            inner.WriteStartArray();
-            inner.WriteEndArray();
+            _inner.WriteStartArray();
+            _inner.WriteEndArray();
         }
         else
         {
-            inner.WriteStartObject();
-            inner.WriteEndObject();
+            _inner.WriteStartObject();
+            _inner.WriteEndObject();
         }
     }
 
@@ -362,14 +475,14 @@ internal sealed class IgnoreNullsJsonWriter(JsonWriter inner) : JsonWriter, IDis
             switch (pending.Kind)
             {
                 case Kind.Name:
-                    inner.WritePropertyName(_names.AsSpan(pending.Start, pending.Length));
+                    _inner.WritePropertyName(_names.AsSpan(pending.Start, pending.Length));
                     break;
                 case Kind.Open when pending.IsArray:
-                    inner.WriteStartArray();
+                    _inner.WriteStartArray();
                     pending = pending with { Kind = Kind.Written };
                     continue;
                 case Kind.Open:
-                    inner.WriteStartObject();
+                    _inner.WriteStartObject();
                     pending = pending with { Kind = Kind.Written };
                     continue;
                 default:

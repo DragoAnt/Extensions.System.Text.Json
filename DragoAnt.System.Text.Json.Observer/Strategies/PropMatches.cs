@@ -29,7 +29,7 @@ public static class PropMatches
     /// Matches property name by regular expression.
     /// </summary>
     /// <param name="regex">Property name regular expression.</param>
-    public static PropMatchingStrategy Regex(Regex regex) => new(v => v is not null && regex.IsMatch(v));
+    public static PropMatchingStrategy Regex(Regex regex) => new(new NameMatcher.FuncNameMatcher(v => v is not null && regex.IsMatch(v), $"Regex(/{regex}/)"));
 
     /// <summary>
     /// Matches property by full name equality.

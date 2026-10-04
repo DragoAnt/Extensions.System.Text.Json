@@ -13,7 +13,7 @@ A common question is: **"Should we switch to an existing open-source library, or
 4. **Serialization Mismatch:** Libraries like [Json.Masker](https://github.com/myarichuk/Json.Masker) operate during object serialization. At the HTTP handler/middleware layer, bodies arrive as raw byte streams; deserializing them into C# objects just to re-serialize them with masking adds enormous CPU and memory overhead.
 5. **Lack of JSON Body Support:** Microsoft's official [Microsoft.Extensions.Compliance.Redaction](https://github.com/dotnet/extensions) redacts discrete string values by classification, but does not parse or traverse JSON bodies.
 
-**[DragoAnt.System.Text.Json.Observer 2.0](https://github.com/DragoAnt/Extensions.System.Text.Json)** is the **only** high-performance, single forward-pass streaming engine (`Utf8JsonReader` → `Utf8JsonWriter`) in .NET. On its bytes API (`ReadOnlySpan<byte>` → `IBufferWriter<byte>`), it allocates a small constant amount per call (about 240 B with constant or tag rules), stays fail-closed on truncated bodies, and runs at 2–3× the raw token-copy floor.
+**[DragoAnt.System.Text.Json.Observer 2.0](https://github.com/DragoAnt/Extensions.System.Text.Json)** is the **only** high-performance, single forward-pass streaming engine (`Utf8JsonReader` → `Utf8JsonWriter`) in .NET. On its bytes API (`ReadOnlySpan<byte>` → `IBufferWriter<byte>`), it allocates nothing per warm call with constant or tag rules, stays fail-closed on truncated bodies, and runs at 2–3× the raw token-copy floor.
 
 ---
 
@@ -141,7 +141,7 @@ When downstream log forwarders (e.g. Datadog, Elastic, Loki, CloudWatch) receive
    ```csharp
    ReadOnlySpan<byte> utf8Json = ...;
    var result = observer.Mask(utf8Json, bufferWriter);
-   // about 240 B per call with constant or tag rules, whatever the body size
+   // 0 B per warm call with constant or tag rules, whatever the body size
    ```
 2. **Pre-Encoded UTF-8 Property Matching:**
    Rules are compiled once into pre-encoded UTF-8 byte sequences. During traversal, property names are compared directly on `ReadOnlySpan<byte>` via case-insensitive SIMD/ASCII routines without allocating `string` instances.

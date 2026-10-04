@@ -9,7 +9,7 @@ public abstract class DefaultPolicyTests
     [Fact]
     public void SharedNestedRule_TwoParentsDifferentDefaults_EachUsesOwn()
     {
-        var shared = JsonObserverItem<JsonObserveringEmptyContext>.Obj(b => b.Match("pin").MaskStr((_, _) => "***"), null);
+        var shared = JsonObserverItem<JsonObserveringEmptyContext>.Obj(b => b.Match("pin").MaskStr((_, _) => "***"), null).Delegate;
         var blockList = JsonObserver.Obj(b => b.Match("a").Obj(shared), BlockList);
         var nullList = JsonObserver.Obj(b => b.Match("a").Obj(shared), NullList);
 

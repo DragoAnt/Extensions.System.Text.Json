@@ -15,20 +15,25 @@ namespace DragoAnt.System.Text.Json.Observer;
 internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propMatch, JsonObserverDelegate<TContext> masking)
 {
     /// <summary>
+    /// What the rule tests and does, for explanations.
+    /// </summary>
+    public RuleInfo<TContext> Info { get; init; } = RuleInfo<TContext>.Unknown;
+
+    /// <summary>
     /// Any payload object or array.
     /// </summary>
     /// <param name="initObj">Init masking for object.</param>
     /// <param name="initArray">Init masking for array.</param>
     /// <param name="defaultValueMasking">Default policy for unknown scenarios.</param>
-    public static JsonObserverDelegate<TContext> Any(
+    public static (JsonObserverDelegate<TContext> Delegate, RuleSet<TContext> Obj, RuleSet<TContext> Array) Any(
         Action<JsonObjBuilder<TContext>> initObj,
         Action<JsonArrayBuilder<TContext>> initArray,
         JsonObserverValueDelegate<TContext>? defaultValueMasking)
     {
-        var objMasking = Obj(initObj, defaultValueMasking);
-        var arrayMasking = Array(initArray, defaultValueMasking);
+        var (objMasking, objSet) = Obj(initObj, defaultValueMasking);
+        var (arrayMasking, arraySet) = Array(initArray, defaultValueMasking);
 
-        return (
+        return ((
             ref Utf8JsonReader reader,
             JsonWriter writer,
             TContext context,
@@ -58,7 +63,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 default:
                     throw new JsonObserverException("Wrong path");
             }
-        };
+        }, objSet, arraySet);
     }
 
     /// <summary>
@@ -66,7 +71,9 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     /// <param name="init">Init masking for object.</param>
     /// <param name="defaultValueMasking">Default masking for unknown scenarios.</param>
-    public static JsonObserverDelegate<TContext> Obj(Action<JsonObjBuilder<TContext>> init, JsonObserverValueDelegate<TContext>? defaultValueMasking)
+    public static (JsonObserverDelegate<TContext> Delegate, RuleSet<TContext> Set) Obj(
+        Action<JsonObjBuilder<TContext>> init,
+        JsonObserverValueDelegate<TContext>? defaultValueMasking)
     {
         var builder = new JsonObjBuilder<TContext>(defaultValueMasking);
         init(builder);
@@ -78,7 +85,9 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     /// <param name="init">Masking condition builder.</param>
     /// <param name="defaultValuePolicy">Default masking policy.</param>
-    public static JsonObserverDelegate<TContext> Array(Action<JsonArrayBuilder<TContext>> init, JsonObserverValueDelegate<TContext>? defaultValuePolicy)
+    public static (JsonObserverDelegate<TContext> Delegate, RuleSet<TContext> Set) Array(
+        Action<JsonArrayBuilder<TContext>> init,
+        JsonObserverValueDelegate<TContext>? defaultValuePolicy)
     {
         var builder = new JsonArrayBuilder<TContext>(defaultValuePolicy);
         init(builder);
@@ -118,7 +127,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     public static JsonObserverDelegate<TContext> ReadRaw(Action<string?, TContext> read, JsonObserverValueDelegate<TContext>? valuePolicy) =>
         ApplyReadPolicy(
             (ref Utf8JsonReader reader, TContext context) =>
-                read(Encoding.UTF8.GetString(reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan), context),
+                read(reader.HasValueSequence ? Encoding.UTF8.GetString(reader.ValueSequence) : Encoding.UTF8.GetString(reader.ValueSpan), context),
             static type => type is JsonTokenType.String or Number or True or False or Null,
             valuePolicy);
 
@@ -505,6 +514,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             RuntimeHelpers.EnsureSufficientExecutionStack();
             writer.WriteStartArray();
 
+            var index = 0;
             while (true)
             {
                 if (propPath.Stopped || writer.Stopped || !reader.Read())
@@ -524,7 +534,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                     case Null:
                         var tokenType = reader.TokenType;
 
-                        propPath.AddPropertyName(null);
+                        propPath.AddArrayItem(index++);
                         var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
 
                         if (matchPolicy is not null)
@@ -583,6 +593,9 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 case Number:
                 case True:
                 case False:
+                    effective(ref reader, writer, context, ref propPath);
+                    break;
+                case Null when effective.Target is RelativeValuePolicy<TContext>:
                     effective(ref reader, writer, context, ref propPath);
                     break;
                 case Null:

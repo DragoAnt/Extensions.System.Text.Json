@@ -7,7 +7,8 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// Path of the value a rule is called for: one level per enclosing property or array item, from the root down.
 /// </summary>
 /// <remarks>
-/// Valid only during the call it is passed to. Names are kept as UTF-8 and decoded only when asked for.
+/// Valid only during the call it is passed to. Names are kept as UTF-8 and decoded only when asked for; an array item
+/// keeps its index, so <see cref="ToString"/> renders <c>items[2].sku</c>.
 /// </remarks>
 public ref struct PropertyPath
 {
@@ -40,6 +41,11 @@ public ref struct PropertyPath
     public readonly int Length => Depth + 1;
 
     /// <summary>
+    /// Whether names are matched ignoring case in this call, see <see cref="JsonObserverOptions.PropertyNameCaseInsensitive"/>.
+    /// </summary>
+    public bool PropertyNameCaseInsensitive { readonly get; internal set; } = true;
+
+    /// <summary>
     /// The input ended inside a value: every rule must stop reading.
     /// </summary>
     internal bool Stopped { get; private set; }
@@ -66,14 +72,24 @@ public ref struct PropertyPath
     }
 
     /// <summary>
-    /// Add property name considering depth.
+    /// Adds an unescaped UTF-8 property name.
     /// </summary>
-    internal void AddPropertyName(string? name)
+    internal void AddPropertyName(ReadOnlySpan<byte> utf8Name)
     {
         ref var segment = ref Push();
-        segment = name is null
-            ? new Segment(SegmentKind.ArrayItem, 0, 0)
-            : new Segment(SegmentKind.Text, 0, 0) { Decoded = name };
+        var start = Reserve(utf8Name.Length);
+        utf8Name.CopyTo(_scratch.AsSpan(start));
+        _scratchUsed = start + utf8Name.Length;
+        segment = new Segment(SegmentKind.Scratch, start, utf8Name.Length);
+    }
+
+    /// <summary>
+    /// Adds the array item at <paramref name="index"/>.
+    /// </summary>
+    internal void AddArrayItem(int index)
+    {
+        ref var segment = ref Push();
+        segment = new Segment(SegmentKind.ArrayItem, index, 0);
     }
 
     internal void RemovePropertyName()
@@ -94,13 +110,16 @@ public ref struct PropertyPath
     }
 
     /// <summary>
-    /// UTF-8 name of the level at <paramref name="index"/>; <c>false</c> for an array item or a level out of range.
+    /// Gets the unescaped UTF-8 name of a level without decoding it.
     /// </summary>
-    internal readonly bool TryGetUtf8(int index, out ReadOnlySpan<byte> name)
+    /// <param name="index">Level, from 0 to <see cref="Length"/> - 1.</param>
+    /// <param name="utf8Name">The name; valid only during the call.</param>
+    /// <returns><c>false</c> for an array item or an index out of range.</returns>
+    public readonly bool TryGetPropertyNameUtf8(int index, out ReadOnlySpan<byte> utf8Name)
     {
         if (index < 0 || index > Depth)
         {
-            name = default;
+            utf8Name = default;
             return false;
         }
 
@@ -108,24 +127,45 @@ public ref struct PropertyPath
         switch (segment.Kind)
         {
             case SegmentKind.Input:
-                name = _input.Slice(segment.Start, segment.Length);
+                utf8Name = _input.Slice(segment.Start, segment.Length);
                 return true;
             case SegmentKind.Scratch:
-                name = _scratch.AsSpan(segment.Start, segment.Length);
-                return true;
-            case SegmentKind.Text:
-                name = Encoding.UTF8.GetBytes(segment.Decoded!);
+                utf8Name = _scratch.AsSpan(segment.Start, segment.Length);
                 return true;
             default:
-                name = default;
+                utf8Name = default;
                 return false;
         }
     }
 
     /// <summary>
+    /// Whether the level at <paramref name="index"/> is an array item.
+    /// </summary>
+    /// <param name="index">Level, from 0 to <see cref="Length"/> - 1.</param>
+    public readonly bool IsArrayItem(int index) => index >= 0 && index <= Depth && _segments[index].Kind == SegmentKind.ArrayItem;
+
+    /// <summary>
+    /// Gets the zero-based position of an array item level within its array.
+    /// </summary>
+    /// <param name="index">Level, from 0 to <see cref="Length"/> - 1.</param>
+    /// <param name="arrayIndex">Position of the item; -1 when the level is not an array item.</param>
+    /// <returns><c>true</c> when the level is an array item.</returns>
+    public readonly bool TryGetArrayIndex(int index, out int arrayIndex)
+    {
+        if (IsArrayItem(index))
+        {
+            arrayIndex = _segments[index].Start;
+            return true;
+        }
+
+        arrayIndex = -1;
+        return false;
+    }
+
+    /// <summary>
     /// UTF-8 name of the deepest level.
     /// </summary>
-    internal readonly ReadOnlySpan<byte> CurrentUtf8 => TryGetUtf8(Depth, out var name) ? name : default;
+    internal readonly ReadOnlySpan<byte> CurrentUtf8 => TryGetPropertyNameUtf8(Depth, out var name) ? name : default;
 
     /// <summary>
     /// Name of the level at <paramref name="index"/>, 0 being the root's property.
@@ -145,7 +185,7 @@ public ref struct PropertyPath
             return segment.Decoded;
         }
 
-        TryGetUtf8(index, out var utf8);
+        TryGetPropertyNameUtf8(index, out var utf8);
         return segment.Decoded = Encoding.UTF8.GetString(utf8);
     }
 
@@ -157,17 +197,40 @@ public ref struct PropertyPath
     public string? GetPropertyNameReverse(int reversedIndex) => GetPropertyName(Depth - reversedIndex);
 
     /// <summary>
-    /// The names from the root down, joined with dots; an array item is an empty segment.
+    /// The path from the root down: names joined with dots and array items as <c>[index]</c>, for example
+    /// <c>items[2].sku</c>; a name that is empty or holds <c>.</c>, <c>[</c>, <c>]</c> or <c>'</c> is written as <c>['name']</c>.
     /// </summary>
     public override string ToString()
     {
-        var names = new string?[Depth + 1];
+        var text = new StringBuilder();
         for (var i = 0; i <= Depth; i++)
         {
-            names[i] = GetPropertyName(i);
+            if (TryGetArrayIndex(i, out var arrayIndex))
+            {
+                text.Append('[').Append(arrayIndex).Append(']');
+                continue;
+            }
+
+            AppendName(text, GetPropertyName(i)!, first: i == 0);
         }
 
-        return string.Join('.', names);
+        return text.ToString();
+    }
+
+    internal static void AppendName(StringBuilder text, string name, bool first)
+    {
+        if (name.Length == 0 || name.AsSpan().IndexOfAny(".[]'") >= 0)
+        {
+            text.Append("['").Append(name.Replace("'", "\\'", StringComparison.Ordinal)).Append("']");
+            return;
+        }
+
+        if (!first)
+        {
+            text.Append('.');
+        }
+
+        text.Append(name);
     }
 
     /// <summary>
@@ -234,7 +297,6 @@ public ref struct PropertyPath
         ArrayItem,
         Input,
         Scratch,
-        Text,
     }
 
     internal struct Segment(SegmentKind kind, int start, int length)

@@ -33,13 +33,13 @@ public readonly struct JsonValuePolicyBuilder<TContext>
 
     internal static JsonObserverItem<TContext>[] BuildItems(JsonValuePolicyBuilder<TContext> builder) => [.. builder._policies];
 
-    private JsonValuePolicyBuilder<TContext> AddAnyProp(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy)
+    private JsonValuePolicyBuilder<TContext> AddAnyProp(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy, RuleInfo<TContext> info)
     {
-        _policies.Add(new JsonObserverItem<TContext>((int depth, ref PropertyPath path, JsonTokenType _) => propNameMatch(depth, ref path), policy));
+        _policies.Add(new JsonObserverItem<TContext>((int depth, ref PropertyPath path, JsonTokenType _) => propNameMatch(depth, ref path), policy) { Info = info });
         return this;
     }
 
-    private JsonValuePolicyBuilder<TContext> AddValueProp(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy)
+    private JsonValuePolicyBuilder<TContext> AddValueProp(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy, RuleInfo<TContext> info)
     {
         var item = new JsonObserverItem<TContext>((int depth, ref PropertyPath path, JsonTokenType type) =>
         {
@@ -51,7 +51,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
             }
 
             return (true, nextDepth);
-        }, policy);
+        }, policy) { Info = info };
         _policies.Add(item);
         return this;
     }
@@ -98,7 +98,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// or a function; a <c>null</c> result writes <c>null</c>.
         /// </param>
         public JsonValuePolicyBuilder<TContext> MaskStr(StringMaskingStrategy<TContext> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyStringPolicy(strategy, strategy.Constant));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyStringPolicy(strategy, strategy.Constant), RuleText.Strategy("MaskStr", strategy.Constant));
 
         /// <summary>
         /// Hands a string or <c>null</c> value to <paramref name="strategy"/> and writes it unchanged.
@@ -106,7 +106,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Receives the decoded value and the context.</param>
         public JsonValuePolicyBuilder<TContext> ReadStr(Action<string?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadStr(strategy, _builderDefaultValuePolicy));
+            => Read(JsonObserverItem<TContext>.ReadStr(strategy, _builderDefaultValuePolicy), RuleText.ReadStr);
 
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type. The strategy receives the number
@@ -115,7 +115,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Returns the replacement string; <c>null</c> writes <c>null</c>.</param>
         public JsonValuePolicyBuilder<TContext> MaskInt(Func<int?, TContext, string?> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyIntPolicy(strategy));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyIntPolicy(strategy), "MaskInt(function)");
 
         /// <summary>
         /// Hands a number or <c>null</c> value to <paramref name="strategy"/> and writes it unchanged; a number that does not
@@ -123,7 +123,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Receives the value and the context.</param>
         public JsonValuePolicyBuilder<TContext> ReadInt(Action<int?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadInt(strategy, _builderDefaultValuePolicy));
+            => Read(JsonObserverItem<TContext>.ReadInt(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadInt"));
 
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type. The strategy receives the number
@@ -132,7 +132,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Returns the replacement string; <c>null</c> writes <c>null</c>.</param>
         public JsonValuePolicyBuilder<TContext> MaskLong(Func<long?, TContext, string?> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyLongPolicy(strategy));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyLongPolicy(strategy), "MaskLong(function)");
 
         /// <summary>
         /// Hands a number or <c>null</c> value to <paramref name="strategy"/> and writes it unchanged; a number that does not
@@ -140,7 +140,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Receives the value and the context.</param>
         public JsonValuePolicyBuilder<TContext> ReadLong(Action<long?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadLong(strategy, _builderDefaultValuePolicy));
+            => Read(JsonObserverItem<TContext>.ReadLong(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadLong"));
 
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type. The strategy receives the number
@@ -149,7 +149,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Returns the replacement string; <c>null</c> writes <c>null</c>.</param>
         public JsonValuePolicyBuilder<TContext> MaskDecimal(Func<decimal?, TContext, string?> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyDecimalPolicy(strategy));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyDecimalPolicy(strategy), "MaskDecimal(function)");
 
         /// <summary>
         /// Hands a number or <c>null</c> value to <paramref name="strategy"/> and writes it unchanged; a number out of the
@@ -157,7 +157,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Receives the value, parsed with the invariant culture, and the context.</param>
         public JsonValuePolicyBuilder<TContext> ReadDecimal(Action<decimal?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadDecimal(strategy, _builderDefaultValuePolicy));
+            => Read(JsonObserverItem<TContext>.ReadDecimal(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadDecimal"));
 
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type. The strategy receives
@@ -165,7 +165,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Returns the replacement string; <c>null</c> writes <c>null</c>.</param>
         public JsonValuePolicyBuilder<TContext> MaskBool(Func<bool?, TContext, string?> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyBoolPolicy(strategy));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyBoolPolicy(strategy), "MaskBool(function)");
 
         /// <summary>
         /// Hands a boolean or <c>null</c> value to <paramref name="strategy"/> and writes it unchanged.
@@ -173,7 +173,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Receives the value and the context.</param>
         public JsonValuePolicyBuilder<TContext> ReadBool(Action<bool?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadBool(strategy, _builderDefaultValuePolicy));
+            => Read(JsonObserverItem<TContext>.ReadBool(strategy, _builderDefaultValuePolicy), RuleText.ReadBool);
 
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type: a string arrives decoded,
@@ -196,7 +196,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// or a function; a <c>null</c> result writes <c>null</c>.
         /// </param>
         public JsonValuePolicyBuilder<TContext> MaskAny(StringMaskingStrategy<TContext> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy, strategy.Constant));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyAnyPolicy(strategy, strategy.Constant), RuleText.Strategy("MaskAny", strategy.Constant));
 
         /// <summary>
         /// Masks the whole value, whatever its JSON type, with the <see cref="Utf8MaskStrategy"/> of the call
@@ -204,7 +204,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="tag">How the value is masked, for example <see cref="MaskTag.Last4"/>.</param>
         public JsonValuePolicyBuilder<TContext> MaskAny(MaskTag tag)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyTagPolicy(tag));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyTagPolicy(tag), RuleText.Tag(tag));
 
         /// <summary>
         /// Like <see cref="MaskStr(Func{string, TContext, string})"/>, but a string arrives as its raw JSON text,
@@ -212,7 +212,7 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Returns the replacement string; <c>null</c> writes <c>null</c>.</param>
         public JsonValuePolicyBuilder<TContext> MaskRawValue(Func<string?, TContext, string?> strategy)
-            => MaskWhole(JsonObserverItem<TContext>.ApplyRawPolicy(strategy));
+            => MaskWhole(JsonObserverItem<TContext>.ApplyRawPolicy(strategy), "MaskRawValue(function)");
 
         /// <summary>
         /// Hands a string, number, boolean or <c>null</c> value to <paramref name="strategy"/> as its raw JSON text and writes
@@ -220,21 +220,21 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="strategy">Receives the raw text (a string without quotes, escapes kept) and the context.</param>
         public JsonValuePolicyBuilder<TContext> ReadRaw(Action<string?, TContext> strategy)
-            => MaskValue(JsonObserverItem<TContext>.ReadRaw(strategy, _builderDefaultValuePolicy));
+            => Read(JsonObserverItem<TContext>.ReadRaw(strategy, _builderDefaultValuePolicy), RuleText.ReadRaw);
 
         /// <summary>
         /// Writes the value of the matched property unchanged. Applies to strings, numbers, booleans and <c>null</c>;
         /// an object or array gets the next matching rule or the default policy.
         /// </summary>
         public JsonValuePolicyBuilder<TContext> Unmasked() =>
-            MaskValue((
+            Value((
                     ref Utf8JsonReader reader,
                     JsonWriter writer,
                     TContext context,
                     int depth,
                     ref PropertyPath propPath,
                     JsonObserverValueDelegate<TContext> _) =>
-                JsonObserverValuePolicies<TContext>.BlockList(ref reader, writer, context, ref propPath));
+                JsonObserverValuePolicies<TContext>.BlockList(ref reader, writer, context, ref propPath), RuleText.Unmasked, JsonPathOutcome.Unchanged);
 
         /// <summary>
         /// Custom rule for a string, number, boolean or <c>null</c> value of the matched property; an object or array
@@ -257,9 +257,19 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// </summary>
         /// <param name="policy">Called with the reader on the value; it must write exactly one value.</param>
         public JsonValuePolicyBuilder<TContext> MaskValue(JsonObserverDelegate<TContext> policy)
-            => _builder.AddValueProp(_builder._relative ? _propNameMatch.RelativeMatch : _propNameMatch.AbsoluteMatch, policy);
+            => Value(policy, RuleText.CustomValue, JsonPathOutcome.Custom);
 
-        internal JsonValuePolicyBuilder<TContext> MaskWhole(JsonObserverDelegate<TContext> policy)
-            => _builder.AddAnyProp(_builder._relative ? _propNameMatch.RelativeMatch : _propNameMatch.AbsoluteMatch, policy);
+        internal JsonValuePolicyBuilder<TContext> MaskWhole(JsonObserverDelegate<TContext> policy, string action)
+            => _builder.AddAnyProp(Match, policy, Info(action, JsonPathOutcome.Masked));
+
+        private JsonValuePolicyBuilder<TContext> Read(JsonObserverDelegate<TContext> policy, string action)
+            => Value(policy, action, JsonPathOutcome.Read);
+
+        private JsonValuePolicyBuilder<TContext> Value(JsonObserverDelegate<TContext> policy, string action, JsonPathOutcome outcome)
+            => _builder.AddValueProp(Match, policy, Info(action, outcome));
+
+        private JsonPropertyPathMatchDelegate Match => _builder._relative ? _propNameMatch.RelativeMatch : _propNameMatch.AbsoluteMatch;
+
+        private RuleInfo<TContext> Info(string action, JsonPathOutcome outcome) => new(_propNameMatch.Describe(), action, outcome);
     }
 }

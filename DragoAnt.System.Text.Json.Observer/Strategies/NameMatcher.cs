@@ -9,76 +9,85 @@ internal abstract class NameMatcher
 {
     public static readonly NameMatcher Never = new FuncNameMatcher(_ => false);
 
-    public abstract bool MatchString(string? name);
+    public abstract string Describe();
 
-    public virtual bool Match(ref PropertyPath path, int index) => MatchString(path.GetPropertyName(index));
+    public bool MatchString(string? name) => MatchString(name, PropertyPathMatch.DefaultComparison);
 
-    public static NameMatcher Exact(string pattern) =>
-        IsAscii(pattern) ? new AsciiNameMatcher(AsciiNameMatcher.Mode.Equals, pattern) : new FuncNameMatcher(v => PropertyPathMatch.DefaultPropertyNameEquals(pattern, v));
+    public abstract bool MatchString(string? name, StringComparison comparison);
 
-    public static NameMatcher StartsWith(string pattern) =>
-        IsAscii(pattern)
-            ? new AsciiNameMatcher(AsciiNameMatcher.Mode.StartsWith, pattern)
-            : new FuncNameMatcher(v => v?.StartsWith(pattern, PropertyPathMatch.DefaultComparison) == true);
+    public virtual bool Match(ref PropertyPath path, int index) => MatchString(path.GetPropertyName(index), ComparisonOf(ref path));
 
-    public static NameMatcher EndsWith(string pattern) =>
-        IsAscii(pattern)
-            ? new AsciiNameMatcher(AsciiNameMatcher.Mode.EndsWith, pattern)
-            : new FuncNameMatcher(v => v?.EndsWith(pattern, PropertyPathMatch.DefaultComparison) == true);
+    private protected static StringComparison ComparisonOf(ref PropertyPath path) =>
+        path.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
-    public static NameMatcher Contains(string pattern) =>
-        IsAscii(pattern)
-            ? new AsciiNameMatcher(AsciiNameMatcher.Mode.Contains, pattern)
-            : new FuncNameMatcher(v => v?.Contains(pattern, PropertyPathMatch.DefaultComparison) == true);
+    public static NameMatcher Exact(string pattern) => new TextNameMatcher(TextNameMatcher.Mode.Equals, pattern);
+
+    public static NameMatcher StartsWith(string pattern) => new TextNameMatcher(TextNameMatcher.Mode.StartsWith, pattern);
+
+    public static NameMatcher EndsWith(string pattern) => new TextNameMatcher(TextNameMatcher.Mode.EndsWith, pattern);
+
+    public static NameMatcher Contains(string pattern) => new TextNameMatcher(TextNameMatcher.Mode.Contains, pattern);
 
     public static NameMatcher OneOf(string[] names) => new OneOfNameMatcher(names);
 
-    private static bool IsAscii(string value) => Ascii.IsValid(value);
-
-    internal sealed class FuncNameMatcher(Func<string?, bool> match) : NameMatcher
+    internal sealed class FuncNameMatcher(Func<string?, bool> match, string? description = null) : NameMatcher
     {
-        public override bool MatchString(string? name) => match(name);
+        public override string Describe() => description ?? "custom name test";
+
+        public override bool MatchString(string? name, StringComparison comparison) => match(name);
     }
 
     /// <summary>
-    /// ASCII pattern compared to ASCII names byte by byte; any other name falls back to the string comparison.
+    /// Pattern compared byte by byte when both it and the name are ASCII; any other name falls back to the string comparison.
     /// </summary>
-    private sealed class AsciiNameMatcher(AsciiNameMatcher.Mode mode, string pattern) : NameMatcher
+    private sealed class TextNameMatcher(TextNameMatcher.Mode mode, string pattern) : NameMatcher
     {
-        private readonly byte[] _utf8 = Encoding.ASCII.GetBytes(pattern);
+        private readonly byte[]? _ascii = Ascii.IsValid(pattern) ? Encoding.ASCII.GetBytes(pattern) : null;
 
-        public override bool MatchString(string? name) => name is not null && mode switch
+        public override string Describe() => mode switch
         {
-            Mode.Equals => string.Equals(name, pattern, PropertyPathMatch.DefaultComparison),
-            Mode.StartsWith => name.StartsWith(pattern, PropertyPathMatch.DefaultComparison),
-            Mode.EndsWith => name.EndsWith(pattern, PropertyPathMatch.DefaultComparison),
-            _ => name.Contains(pattern, PropertyPathMatch.DefaultComparison),
+            Mode.Equals => $"\"{pattern}\"",
+            _ => $"{mode}(\"{pattern}\")",
+        };
+
+        public override bool MatchString(string? name, StringComparison comparison) => name is not null && mode switch
+        {
+            Mode.Equals => string.Equals(name, pattern, comparison),
+            Mode.StartsWith => name.StartsWith(pattern, comparison),
+            Mode.EndsWith => name.EndsWith(pattern, comparison),
+            _ => name.Contains(pattern, comparison),
         };
 
         public override bool Match(ref PropertyPath path, int index)
         {
-            if (!path.TryGetUtf8(index, out var name))
+            if (!path.TryGetPropertyNameUtf8(index, out var name))
             {
                 return false;
             }
 
-            if (!Ascii.IsValid(name))
+            if (_ascii is null || !Ascii.IsValid(name))
             {
-                return MatchString(path.GetPropertyName(index));
+                return MatchString(path.GetPropertyName(index), ComparisonOf(ref path));
             }
 
-            ReadOnlySpan<byte> utf8 = _utf8;
+            ReadOnlySpan<byte> utf8 = _ascii;
+            var ignoreCase = path.PropertyNameCaseInsensitive;
             return mode switch
             {
-                Mode.Equals => name.Length == utf8.Length && Ascii.EqualsIgnoreCase(name, utf8),
-                Mode.StartsWith => name.Length >= utf8.Length && Ascii.EqualsIgnoreCase(name[..utf8.Length], utf8),
-                Mode.EndsWith => name.Length >= utf8.Length && Ascii.EqualsIgnoreCase(name[^utf8.Length..], utf8),
-                _ => ContainsIgnoreCase(name, utf8),
+                Mode.Equals => name.Length == utf8.Length && SameText(name, utf8, ignoreCase),
+                Mode.StartsWith => name.Length >= utf8.Length && SameText(name[..utf8.Length], utf8, ignoreCase),
+                Mode.EndsWith => name.Length >= utf8.Length && SameText(name[^utf8.Length..], utf8, ignoreCase),
+                _ => ContainsText(name, utf8, ignoreCase),
             };
         }
 
-        private static bool ContainsIgnoreCase(ReadOnlySpan<byte> name, ReadOnlySpan<byte> value)
+        private static bool ContainsText(ReadOnlySpan<byte> name, ReadOnlySpan<byte> value, bool ignoreCase)
         {
+            if (!ignoreCase)
+            {
+                return name.IndexOf(value) >= 0;
+            }
+
             for (var i = 0; i + value.Length <= name.Length; i++)
             {
                 if (Ascii.EqualsIgnoreCase(name.Slice(i, value.Length), value))
@@ -99,34 +108,45 @@ internal abstract class NameMatcher
         }
     }
 
+    private static bool SameText(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right, bool ignoreCase) =>
+        ignoreCase ? Ascii.EqualsIgnoreCase(left, right) : left.SequenceEqual(right);
+
     private sealed class OneOfNameMatcher : NameMatcher
     {
-        private readonly HashSet<string> _names;
+        private readonly string[] _names;
+        private readonly HashSet<string> _ignoreCase;
+        private readonly HashSet<string> _exact;
         private readonly byte[][]? _asciiNames;
 
         public OneOfNameMatcher(string[] names)
         {
-            _names = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+            _names = names;
+            _ignoreCase = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+            _exact = new HashSet<string>(names, StringComparer.Ordinal);
             _asciiNames = names.All(n => Ascii.IsValid(n)) ? names.Select(n => Encoding.ASCII.GetBytes(n)).ToArray() : null;
         }
 
-        public override bool MatchString(string? name) => name is not null && _names.Contains(name);
+        public override string Describe() => $"OneOf({string.Join(", ", _names.Select(n => $"\"{n}\""))})";
+
+        public override bool MatchString(string? name, StringComparison comparison) =>
+            name is not null && (comparison == StringComparison.Ordinal ? _exact : _ignoreCase).Contains(name);
 
         public override bool Match(ref PropertyPath path, int index)
         {
-            if (!path.TryGetUtf8(index, out var name))
+            if (!path.TryGetPropertyNameUtf8(index, out var name))
             {
                 return false;
             }
 
             if (_asciiNames is null || !Ascii.IsValid(name))
             {
-                return MatchString(path.GetPropertyName(index));
+                return MatchString(path.GetPropertyName(index), ComparisonOf(ref path));
             }
 
+            var ignoreCase = path.PropertyNameCaseInsensitive;
             foreach (var candidate in _asciiNames)
             {
-                if (candidate.Length == name.Length && Ascii.EqualsIgnoreCase(name, candidate))
+                if (candidate.Length == name.Length && SameText(name, candidate, ignoreCase))
                 {
                     return true;
                 }
