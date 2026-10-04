@@ -15,20 +15,25 @@ namespace DragoAnt.System.Text.Json.Observer;
 internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propMatch, JsonObserverDelegate<TContext> masking)
 {
     /// <summary>
+    /// What the rule tests and does, for explanations.
+    /// </summary>
+    public RuleInfo<TContext> Info { get; init; } = RuleInfo<TContext>.Unknown;
+
+    /// <summary>
     /// Any payload object or array.
     /// </summary>
     /// <param name="initObj">Init masking for object.</param>
     /// <param name="initArray">Init masking for array.</param>
     /// <param name="defaultValueMasking">Default policy for unknown scenarios.</param>
-    public static JsonObserverDelegate<TContext> Any(
+    public static (JsonObserverDelegate<TContext> Delegate, RuleSet<TContext> Obj, RuleSet<TContext> Array) Any(
         Action<JsonObjBuilder<TContext>> initObj,
         Action<JsonArrayBuilder<TContext>> initArray,
         JsonObserverValueDelegate<TContext>? defaultValueMasking)
     {
-        var objMasking = Obj(initObj, defaultValueMasking);
-        var arrayMasking = Array(initArray, defaultValueMasking);
+        var (objMasking, objSet) = Obj(initObj, defaultValueMasking);
+        var (arrayMasking, arraySet) = Array(initArray, defaultValueMasking);
 
-        return (
+        return ((
             ref Utf8JsonReader reader,
             JsonWriter writer,
             TContext context,
@@ -58,7 +63,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 default:
                     throw new JsonObserverException("Wrong path");
             }
-        };
+        }, objSet, arraySet);
     }
 
     /// <summary>
@@ -66,7 +71,9 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     /// <param name="init">Init masking for object.</param>
     /// <param name="defaultValueMasking">Default masking for unknown scenarios.</param>
-    public static JsonObserverDelegate<TContext> Obj(Action<JsonObjBuilder<TContext>> init, JsonObserverValueDelegate<TContext>? defaultValueMasking)
+    public static (JsonObserverDelegate<TContext> Delegate, RuleSet<TContext> Set) Obj(
+        Action<JsonObjBuilder<TContext>> init,
+        JsonObserverValueDelegate<TContext>? defaultValueMasking)
     {
         var builder = new JsonObjBuilder<TContext>(defaultValueMasking);
         init(builder);
@@ -78,7 +85,9 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     /// <param name="init">Masking condition builder.</param>
     /// <param name="defaultValuePolicy">Default masking policy.</param>
-    public static JsonObserverDelegate<TContext> Array(Action<JsonArrayBuilder<TContext>> init, JsonObserverValueDelegate<TContext>? defaultValuePolicy)
+    public static (JsonObserverDelegate<TContext> Delegate, RuleSet<TContext> Set) Array(
+        Action<JsonArrayBuilder<TContext>> init,
+        JsonObserverValueDelegate<TContext>? defaultValuePolicy)
     {
         var builder = new JsonArrayBuilder<TContext>(defaultValuePolicy);
         init(builder);

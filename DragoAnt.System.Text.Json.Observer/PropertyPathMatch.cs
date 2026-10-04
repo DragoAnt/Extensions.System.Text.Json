@@ -25,6 +25,8 @@ internal sealed class PropertyPathMatch
         _matches = matches;
     }
 
+    public string Describe() => $"Match({string.Join(", ", _matches.Select(m => m.Describe()))})";
+
     public (bool success, int depth) RelativeMatch(int depth, ref PropertyPath propPath)
     {
         var last = propPath.CurrentDepth;

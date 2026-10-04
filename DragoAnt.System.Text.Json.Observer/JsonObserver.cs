@@ -72,8 +72,11 @@ public sealed class JsonObserver
     public static JsonObserver<TContext> Any<TContext>(
         Action<JsonObjBuilder<TContext>> initObj,
         Action<JsonArrayBuilder<TContext>> initArray,
-        JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserverItem<TContext>.Any(initObj, initArray, defaultMasking));
+        JsonObserverValueDelegate<TContext>? defaultMasking = null)
+    {
+        var (masking, obj, array) = JsonObserverItem<TContext>.Any(initObj, initArray, defaultMasking);
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(obj, array));
+    }
 
     /// <summary>
     /// Creates an observer with a context for a root object that applies one policy to every value.
@@ -81,7 +84,7 @@ public sealed class JsonObserver
     /// <param name="defaultMasking">Policy for every value; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
     /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Obj<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
-        new(JsonObserverItem<TContext>.Obj(_ => { }, defaultMasking));
+        Obj<TContext>(_ => { }, defaultMasking);
 
     /// <summary>
     /// Creates an observer that also extracts values into a <typeparamref name="TContext"/>, for a root object.
@@ -91,8 +94,11 @@ public sealed class JsonObserver
     /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Obj<TContext>(
         Action<JsonObjBuilder<TContext>> init,
-        JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserverItem<TContext>.Obj(init, defaultMasking));
+        JsonObserverValueDelegate<TContext>? defaultMasking = null)
+    {
+        var (masking, set) = JsonObserverItem<TContext>.Obj(init, defaultMasking);
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(set, null));
+    }
 
     /// <summary>
     /// Creates an observer with a context for a root array that applies one policy to every value.
@@ -100,7 +106,7 @@ public sealed class JsonObserver
     /// <param name="defaultMasking">Policy for every value; <see cref="JsonObserverValuePolicies{TContext}.AllowList"/> when <c>null</c>.</param>
     /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Array<TContext>(JsonObserverValueDelegate<TContext>? defaultMasking) =>
-        new(JsonObserverItem<TContext>.Array(_ => { }, defaultMasking));
+        Array<TContext>(_ => { }, defaultMasking);
 
     /// <summary>
     /// Creates an observer that also extracts values into a <typeparamref name="TContext"/>, for a root array.
@@ -110,8 +116,11 @@ public sealed class JsonObserver
     /// <typeparam name="TContext">Type that read rules write extracted values to.</typeparam>
     public static JsonObserver<TContext> Array<TContext>(
         Action<JsonArrayBuilder<TContext>> init,
-        JsonObserverValueDelegate<TContext>? defaultMasking = null) =>
-        new(JsonObserverItem<TContext>.Array(init, defaultMasking));
+        JsonObserverValueDelegate<TContext>? defaultMasking = null)
+    {
+        var (masking, set) = JsonObserverItem<TContext>.Array(init, defaultMasking);
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(null, set));
+    }
 
     /// <summary>
     /// Creates an observer that masks against an expected structure: values of known properties are written as is,
@@ -124,7 +133,7 @@ public sealed class JsonObserver
     {
         ArgumentNullException.ThrowIfNull(shape);
         var walker = new ShapeWalker(shape, options ?? JsonShapeOptions.Default);
-        return new JsonObserver(new JsonObserver<JsonObserveringEmptyContext>(walker.Invoke));
+        return new JsonObserver(new JsonObserver<JsonObserveringEmptyContext>(walker.Invoke, walker));
     }
 
     private JsonObserver(JsonObserver<JsonObserveringEmptyContext> masking)
@@ -177,6 +186,10 @@ public sealed class JsonObserver
     /// <returns>Status, bytes written and the input offset where reading stopped.</returns>
     public MaskResult Mask(in ReadOnlySequence<byte> utf8, IBufferWriter<byte> output, JsonObserverOptions? options = null)
         => _masking.Mask(utf8, output, JsonObserveringEmptyContext.Instance, options);
+
+    /// <inheritdoc cref="JsonObserver{TContext}.Explain"/>
+    public JsonPathExplanation Explain(string path, JsonTokenType valueKind = JsonTokenType.String, JsonObserverOptions? options = null)
+        => _masking.Explain(path, valueKind, options);
 }
 
 /// <summary>
@@ -187,12 +200,33 @@ public sealed class JsonObserver
 public sealed class JsonObserver<TContext>
 {
     private readonly JsonObserverDelegate<TContext> _maskDelegate;
+    private readonly PathExplainer _explainer;
     private int _maxDepth = 6;
 
-    internal JsonObserver(JsonObserverDelegate<TContext> maskDelegate)
+    internal JsonObserver(JsonObserverDelegate<TContext> maskDelegate, PathExplainer explainer)
     {
         _maskDelegate = maskDelegate;
+        _explainer = explainer;
     }
+
+    /// <summary>
+    /// Tells which rule or policy handles the value at <paramref name="path"/> and what it does with it, without
+    /// masking anything: useful to check a configuration, to document it, or to find out why a value was masked.
+    /// </summary>
+    /// <param name="path">
+    /// A JSON path such as <c>items[2].sku</c>, <c>$.order.card.number</c> or <c>$['a.b']</c>; the first segment decides
+    /// whether the root is an object or an array.
+    /// </param>
+    /// <param name="valueKind">
+    /// JSON type of the value at the path: a scalar type, <see cref="JsonTokenType.Null"/>, or
+    /// <see cref="JsonTokenType.StartObject"/> / <see cref="JsonTokenType.StartArray"/> for a container; rules can differ by type.
+    /// </param>
+    /// <param name="options">The call's options, for <see cref="JsonObserverOptions.PropertyNameCaseInsensitive"/>.</param>
+    /// <returns>The deciding rule, its action, the outcome and the steps that lead there.</returns>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is not a JSON path.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="valueKind"/> is not a value type or a container start.</exception>
+    public JsonPathExplanation Explain(string path, JsonTokenType valueKind = JsonTokenType.String, JsonObserverOptions? options = null)
+        => _explainer.Explain(path, valueKind, (options ?? JsonObserverOptions.Default).PropertyNameCaseInsensitive);
 
     private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 

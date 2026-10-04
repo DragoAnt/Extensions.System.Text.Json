@@ -8,6 +8,10 @@ internal sealed class RelativeValuePolicy<TContext>(
     JsonObserverItem<TContext>[] items,
     JsonObserverValueDelegate<TContext> defaultValuePolicy)
 {
+    public JsonObserverItem<TContext>[] Items => items;
+
+    public JsonObserverValueDelegate<TContext> DefaultValuePolicy => defaultValuePolicy;
+
     public void Invoke(ref Utf8JsonReader reader, JsonWriter writer, TContext context, ref PropertyPath propPath)
         => policy(ref reader, writer, context, 0, ref propPath, defaultValuePolicy);
 
