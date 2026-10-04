@@ -131,8 +131,7 @@ Console.WriteLine(masker.Mask("""
 
 `JsonObserver.Obj(...)` expects a root object and `JsonObserver.Array(...)` a root array; the other root is `Invalid`. `JsonObserver.Any(obj, array, policy)` accepts both. In an array builder every rule applies to every item; `Obj(...)` handles the items that are objects.
 
-**An array item is one level of a property path.** A multi-name `Match` crosses one level per name, so `Match("lines", "sku")` never reaches `{"lines":[{"sku":…}]}`; put a match-anything test where the item is: `Match("lines", AnyItem, "sku")` with `AnyItem = new PropMatchingStrategy(_ => true)`. Use that form for **objects inside a nested array**: in 2.0.0, rules of an `Obj(...)` placed inside a property's `Array(...)` do not match (see [pitfalls.md](./pitfalls.md#rules-inside-a-nested-array-do-not-match)).
-
+**An array item is one level of a property path.** A multi-name `Match` crosses one level per name, so `Match("lines", "sku")` never reaches `{"lines":[{"sku":…}]}`; put a match-anything test where the item is: `Match("lines", AnyItem, "sku")` with `AnyItem = new PropMatchingStrategy(_ => true)`.
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Strategies;

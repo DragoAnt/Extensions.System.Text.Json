@@ -47,33 +47,6 @@ Console.WriteLine(fixedRules.Mask(json));
 // {"login":{"newPassword":"***"},"users":[{"password":"***"}]}
 ```
 
-## Rules inside a nested array do not match
-
-**Known issue in 2.0.0:** the rules of an `Obj(...)` placed inside a property's `Array(...)` — `root.Match("lines").Array(l => l.Obj(line => line.Match("qty")…))` — never match. Under `BlockList` the value stays in clear; under `AllowList` everything in the item is masked. An `Obj(...)` directly under a root `JsonObserver.Array(...)` works.
-
-**Fix:** address the items with a path that names the item level, or with relative rules.
-
-```csharp
-using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
-
-var anyItem = new PropMatchingStrategy(_ => true);
-const string json = """{"lines":[{"sku":"A1","qty":2}]}""";
-
-var broken = JsonObserver.Obj(root => root.Match("lines").Array(lines => lines.Obj(line => line.Match("qty").MaskAny("***"))), BlockList);
-var byPath = JsonObserver.Obj(root => root.Match("lines", anyItem, "qty").MaskAny("***"), BlockList);
-var byRelative = JsonObserver.Obj(Relative(rules => rules.Match("lines", anyItem, "qty").MaskAny("***"), BlockList));
-
-Console.WriteLine(broken.Mask(json));
-Console.WriteLine(byPath.Mask(json));
-Console.WriteLine(byRelative.Mask(json));
-// Output:
-// {"lines":[{"sku":"A1","qty":2}]}
-// {"lines":[{"sku":"A1","qty":"***"}]}
-// {"lines":[{"sku":"A1","qty":"***"}]}
-```
-
 ## A whole object was replaced by `"***"`
 
 **Cause:** every `Mask*` rule matches containers too and masks them whole. A mask rule written **before** an `Obj(...)`/`Array(...)` rule for the same name wins, because the first matching rule wins.
@@ -141,4 +114,4 @@ An observer compiles its rules when built and caches path buffers across calls. 
 
 ## Expecting zero allocations
 
-With constant or tag rules the UTF-8 API allocates a small constant amount per call (a few hundred bytes, whatever the body size). Masking functions receive a `string`, and the string API allocates the input and output strings. Set allocation budgets from measurements, not from "0 B".
+With constant or tag rules the UTF-8 API allocates nothing per call once warm. Masking functions receive a `string`, and the string API allocates the input and output strings. Measure with `GC.GetAllocatedBytesForCurrentThread()` after a warm-up rather than assuming.

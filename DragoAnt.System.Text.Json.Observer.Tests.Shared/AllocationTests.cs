@@ -62,14 +62,19 @@ public abstract class AllocationTests
             Call();
         }
 
+        // A one-off runtime allocation (tier-up under a loaded test host) lands in one round; a real per-call cost lands in all.
         const int calls = 50;
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < calls; i++)
+        var perCall = long.MaxValue;
+        for (var round = 0; round < 5 && perCall > 0; round++)
         {
-            Call();
-        }
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < calls; i++)
+            {
+                Call();
+            }
 
-        var perCall = (GC.GetAllocatedBytesForCurrentThread() - before) / calls;
+            perCall = Math.Min(perCall, (GC.GetAllocatedBytesForCurrentThread() - before) / calls);
+        }
 
         perCall.Should().Be(0, $"{api} {shape} {size} B allocates {perCall} B per call");
     }

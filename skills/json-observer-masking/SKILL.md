@@ -50,7 +50,6 @@ Console.WriteLine(masker.Mask("""{"user":"alice","password":"s3cret","card":{"nu
 
 - "Everything became `***`" → you used the default `AllowList`; pass `BlockList` (to the factory, or as `Relative`'s second argument).
 - "The secret is still visible" → the rule is absolute but the field is nested, or the name differs (`Password` vs `passwd`); use `Relative` and a `PropMatches`.
-- **Known 2.0.0 issue:** rules of an `Obj(...)` inside a property's `Array(...)` never match — under `BlockList` that value stays in clear. Use `Match("lines", anyItem, "qty")` instead ([pitfalls.md](./pitfalls.md#rules-inside-a-nested-array-do-not-match)).
 - A rule written before an `Obj(...)` rule for the same name wins and masks the whole object.
 - `JsonObserver.Obj(...)` on a root array returns `Invalid`; use `JsonObserver.Any(...)` when the root can be either.
 - Comments in the input are accepted and never written; a UTF-8 BOM is skipped.

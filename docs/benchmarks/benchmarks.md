@@ -34,7 +34,7 @@ Figures from the raw table below (bytes path = `ReadOnlySpan<byte>` into a reuse
 2. **No Large Object Heap:** DOM maskers allocate 0.7–3.9 MB on 64 KB bodies, straight into the LOH; the observer stays far below the 85,000-byte threshold.
 3. **Linear speed:** time grows linearly with body size, at 2.0–3.3× a bare unmasked reader-writer copy.
 
-> These numbers were measured before the final 2.0 changes. Since then, rules with a constant or tag mask no longer decode the value, and the repository's allocation test (`AllocationTests`) measures about 240 B per call on the bytes path for 1 KB to 64 KB bodies, nested and arrays included. Re-run the benchmarks to refresh this report:
+> These numbers were measured before the final 2.0 changes. Since then, rules with a constant or tag mask no longer decode the value, and the repository's allocation test (`AllocationTests`) pins 0 B per warm call on the bytes path for 1 KB to 64 KB bodies, nested and arrays included. Re-run the benchmarks to refresh this report:
 >
 > ```sh
 > dotnet run -c Release --project DragoAnt.System.Text.Json.Observer.Benchmarks
