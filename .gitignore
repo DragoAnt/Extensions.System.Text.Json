@@ -403,3 +403,6 @@ FodyWeavers.xsd
 *.received.*
 /examples/.idea/.idea.DragoAnt.Extensions.DependencyInjection.Examples/.idea/
 *.orig
+
+# Local AI agent context (never committed)
+/.claude/
