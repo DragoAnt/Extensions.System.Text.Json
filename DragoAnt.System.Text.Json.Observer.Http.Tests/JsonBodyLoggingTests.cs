@@ -54,7 +54,7 @@ public class JsonBodyLoggingTests
     public async Task OnFailure_500_LogsMaskedBoth()
     {
         var sink = new TestSink();
-        var masker = JsonObserver.Obj(rules => rules.Match("secret").MaskStr("*****"));
+        var masker = JsonObserver.Obj(rules => rules.Match("secret").Mask("*****", MaskNulls.Mask));
         var provider = new TestMaskerProvider { GetMaskerFunc = (_, _) => masker };
 
         var handler = CreateHandler(
@@ -264,7 +264,7 @@ public class JsonBodyLoggingTests
             GetMaskerFunc = (type, _) =>
             {
                 passedTypes.Add(type);
-                return JsonObserver.Obj(rules => rules.Match("id").MaskStr("***"));
+                return JsonObserver.Obj(rules => rules.Match("id").Mask("***", MaskNulls.Mask));
             }
         };
 

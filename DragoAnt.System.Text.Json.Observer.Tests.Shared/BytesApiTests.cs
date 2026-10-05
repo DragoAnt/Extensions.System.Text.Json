@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -11,7 +12,7 @@ public abstract class BytesApiTests
     internal static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b.Match("password").MaskAny("***").Match("pin").MaskAny("***"), BlockList));
+        AnyDepth(b => b.Match("password").Mask("***").Match("pin").Mask("***"), BlockList));
 
     internal static readonly string[] Payloads =
     [
@@ -65,7 +66,7 @@ public abstract class BytesApiTests
         var observer = JsonObserver.Any(
             _ => { },
             _ => { },
-            Relative(b => b.Match("DriverLicense").MaskAny("***"), BlockList));
+            AnyDepth(b => b.Match("DriverLicense").Mask("***"), BlockList));
 
         var uncompletedJson = """
             {
@@ -89,7 +90,7 @@ public abstract class BytesApiTests
         var observer = JsonObserver.Any(
             _ => { },
             _ => { },
-            Relative(b => b.Match("DriverLicense").MaskAny("***"), BlockList));
+            AnyDepth(b => b.Match("DriverLicense").Mask("***"), BlockList));
 
         // Cut off mid-field name: "dr
         var uncompletedJson = """
@@ -114,7 +115,7 @@ public abstract class BytesApiTests
         var observer = JsonObserver.Any(
             _ => { },
             _ => { },
-            Relative(b => b.Match("DriverLicense").MaskAny("***"), BlockList));
+            AnyDepth(b => b.Match("DriverLicense").Mask("***"), BlockList));
 
         // Cut off mid-field value: "vvv without closing quote
         var uncompletedJson = """
@@ -154,14 +155,14 @@ public abstract class BytesApiTests
     {
         var (result, output) = Mask(Observer, json);
 
-        result.Status.Should().Be(MaskStatus.NotJson);
+        result.Status.Should().Be(MaskStatus.Unrecognized);
         output.Should().BeEmpty();
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public void Empty_NotJson(string json) => Mask(Observer, json).Result.Status.Should().Be(MaskStatus.NotJson);
+    public void Empty_NotJson(string json) => Mask(Observer, json).Result.Status.Should().Be(MaskStatus.Unrecognized);
 
     [Fact]
     public void CommentWithoutReaderOption_AutoAllowed()
@@ -184,7 +185,7 @@ public abstract class BytesApiTests
     [InlineData(21, "{\"a\":{\"b\":[1,2,3,4]}}")]
     public void MaxOutputBytes_ClosesContainers(int max, string expected)
     {
-        var (result, output) = Mask(Observer, """{"a":{"b":[1,2,3,4,5,6,7,8,9]},"c":1}""", new JsonObserverOptions(MaxOutputBytes: max));
+        var (result, output) = Mask(Observer, """{"a":{"b":[1,2,3,4,5,6,7,8,9]},"c":1}""", new JsonObserverOptions { MaxOutputBytes = max });
 
         result.Status.Should().Be(MaskStatus.Truncated);
         output.Should().Be(expected);
@@ -194,7 +195,7 @@ public abstract class BytesApiTests
     [Fact]
     public void MaxValueBytes_TruncatesLongString()
     {
-        var (result, output) = Mask(Observer, """{"note":"abcdefghij","ru":"ИванИван"}""", new JsonObserverOptions(MaxValueBytes: 5));
+        var (result, output) = Mask(Observer, """{"note":"abcdefghij","ru":"ИванИван"}""", new JsonObserverOptions { MaxValueBytes = 5 });
 
         result.Status.Should().Be(MaskStatus.Truncated);
         var root = JsonDocument.Parse(output).RootElement;
@@ -206,7 +207,7 @@ public abstract class BytesApiTests
     public void RelaxedEscaping_KeepsTextReadable()
     {
         Mask(Observer, """{"name":"Иван <b>&"}""").Output.Should().Be("""{"name":"Иван <b>&"}""");
-        Mask(Observer, """{"name":"Иван"}""", new JsonObserverOptions(RelaxedEscaping: false)).Output.Should().NotContain("Иван");
+        Mask(Observer, """{"name":"Иван"}""", new JsonObserverOptions { RelaxedEscaping = false }).Output.Should().NotContain("Иван");
     }
 
     [Fact]
@@ -219,7 +220,7 @@ public abstract class BytesApiTests
             var payload = payloads[i % payloads.Length];
             var cut = payload.AsSpan(0, random.Next(payload.Length + 1));
 
-            var (result, output) = Mask(Observer, cut, new JsonObserverOptions(MaxOutputBytes: random.Next(2) == 0 ? int.MaxValue : random.Next(256)));
+            var (result, output) = Mask(Observer, cut, new JsonObserverOptions { MaxOutputBytes = random.Next(2) == 0 ? int.MaxValue : random.Next(256) });
 
             output.Should().NotContain(Secret);
             if (result.BytesWritten > 0)

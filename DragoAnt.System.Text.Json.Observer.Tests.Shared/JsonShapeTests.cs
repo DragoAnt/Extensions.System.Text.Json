@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using DragoAnt.System.Text.Json.Observer.Strategies;
+using DragoAnt.Observer;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -15,7 +15,7 @@ public abstract class JsonShapeTests
 
     private static MaskTag? Classify(JsonPropertyInfo property) =>
         property.AttributeProvider?.GetCustomAttributes(typeof(SensitiveAttribute), true).OfType<SensitiveAttribute>().FirstOrDefault() is { } sensitive
-            ? new MaskTag(sensitive.Kind)
+            ? MaskTag.Create(sensitive.Kind)
             : null;
 
     [Fact]
@@ -76,18 +76,18 @@ public abstract class JsonShapeTests
     public void AllowList_Nulls_KeptOrMasked()
     {
         Observer().Mask("""{"unknown":null,"password":null}""").Should().Be("""{"unknown":null,"password":null}""");
-        Observer(shapeOptions: new JsonShapeOptions(KeepNulls: false)).Mask("""{"unknown":null,"password":null,"name":null}""")
+        Observer(shapeOptions: new JsonShapeOptions { KeepNulls = false }).Mask("""{"unknown":null,"password":null,"name":null}""")
             .Should().Be("""{"unknown":"***","password":"***","name":null}""");
     }
 
     [Fact]
     public void Unknown_Descend_ShowsNamesMasksValues() =>
-        Observer(shapeOptions: new JsonShapeOptions(UnknownMemberPolicy.Descend)).Mask("""{"unknown":{"a":"x","b":[1,{"c":true}]}}""")
+        Observer(shapeOptions: new JsonShapeOptions { Unknown = UnknownMemberPolicy.Descend }).Mask("""{"unknown":{"a":"x","b":[1,{"c":true}]}}""")
             .Should().Be("""{"unknown":{"a":"***","b":["***",{"c":"***"}]}}""");
 
     [Fact]
     public void Unknown_PassThrough_KeepsValuesMasksSensitive() =>
-        Observer(shapeOptions: new JsonShapeOptions(UnknownMemberPolicy.PassThrough)).Mask("""{"unknown":{"a":"x","b":[1]},"password":"p"}""")
+        Observer(shapeOptions: new JsonShapeOptions { Unknown = UnknownMemberPolicy.PassThrough }).Mask("""{"unknown":{"a":"x","b":[1]},"password":"p"}""")
             .Should().Be("""{"unknown":{"a":"x","b":[1]},"password":"***"}""");
 
     [Fact]
@@ -112,16 +112,12 @@ public abstract class JsonShapeTests
     }
 
     [Fact]
-    public void Legacy_AllowList_Behaviour_Documented()
+    public void AllowList_Behaviour_Documented()
     {
         const string json = """{"s":"x","n":1,"b":true,"z":null}""";
-#pragma warning disable CS0618
-        var legacy = JsonObserver.Obj(_ => { }, JsonObserverValuePolicies.LegacyAllowList);
-#pragma warning restore CS0618
-        var allowList = JsonObserver.Obj(_ => { }, JsonObserverValuePolicies.AllowList);
+        var allowList = JsonObserver.Obj(_ => { }, ValuePolicy.AllowList);
         var byDefault = JsonObserver.Obj(_ => { });
 
-        legacy.Mask(json).Should().Be("""{"s":"#str#*****","n":"#number#*****","b":true,"z":null}""");
         allowList.Mask(json).Should().Be("""{"s":"***","n":"***","b":"***","z":null}""");
         byDefault.Mask(json).Should().Be(allowList.Mask(json));
     }
@@ -144,7 +140,7 @@ public abstract class JsonShapeTests
         [Sensitive(MaskKind.Last4)]
         public string? Card { get; set; }
 
-        [Sensitive(MaskKind.Omit)]
+        [Sensitive(MaskKind.Null)]
         public int? Pin { get; set; }
 
         [Sensitive]

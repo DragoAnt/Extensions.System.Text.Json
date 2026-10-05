@@ -8,8 +8,8 @@ A body headed for a log is usually size-capped, so it may be cut mid-document. M
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var logged = BodyLog.Describe("""{"user":"alice","password":"s3cret","card":{"number":"4111111111111111","cvv":123}}""");
 Console.WriteLine(logged);
@@ -18,13 +18,13 @@ Console.WriteLine(logged);
 
 static class BodyLog
 {
-    private static readonly JsonObserver Masker = JsonObserver.Obj(Relative(rules => rules
-            .Match(PropMatches.OneOf("password", "secret", "cvv")).MaskAny(MaskTag.Full)
-            .Match("card", "number").MaskAny(MaskTag.Last4)
-            .Match(PropMatches.EndsWith("token")).MaskAny(MaskTag.Full),
+    private static readonly JsonObserver Masker = JsonObserver.Obj(AnyDepth(rules => rules
+            .Match(Names.OneOf("password", "secret", "cvv")).Mask(MaskTag.Full)
+            .Path("card", "number").Mask(MaskTag.Last4)
+            .Match(Names.EndsWith("token")).Mask(MaskTag.Full),
         BlockList));
 
-    private static readonly JsonObserverOptions Options = new(MaxOutputBytes: 4096, MaxValueBytes: 512);
+    private static readonly JsonObserverOptions Options = new() { MaxOutputBytes = 4096, MaxValueBytes = 512 };
 
     public static string Describe(string body)
     {
@@ -42,7 +42,8 @@ static class BodyLog
 using System.Buffers;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var first = Utf8Masking.Mask("""{"user":"alice","password":"p1"}"""u8);
 var second = Utf8Masking.Mask("""{"user":"bob","password":"p2"}"""u8);
@@ -54,7 +55,7 @@ Console.WriteLine(second);
 
 static class Utf8Masking
 {
-    private static readonly JsonObserver Masker = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+    private static readonly JsonObserver Masker = JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("***"), BlockList));
 
     [ThreadStatic]
     private static ArrayBufferWriter<byte>? _output;
@@ -80,13 +81,14 @@ Both APIs never throw. Branch on `MaskResult.Status`:
 | `Masked` | the whole payload was read and masked | the masked JSON |
 | `Truncated` | the payload ended inside the document, or the output reached `MaxOutputBytes` (`FailedAtByte` = where reading stopped), or a string was cut to `MaxValueBytes` (`FailedAtByte` = -1) | valid JSON: the masked part, open objects and arrays closed |
 | `Invalid` | not valid JSON (including plain text), deeper than `MaxDepth`, the root type the observer does not accept, or a rule threw | valid JSON: the masked part read before the failure (may be empty) |
-| `NotJson` | empty input, or valid JSON whose root is not an object or array (`"text"`, `42`) | empty string, `BytesWritten` 0 |
+| `Unrecognized` | empty input, or valid JSON whose root is not an object or array (`"text"`, `42`) | empty string, `BytesWritten` 0 |
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
-var masker = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+var masker = JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("***"), BlockList));
 
 foreach (var body in new[]
          {
@@ -104,7 +106,7 @@ foreach (var body in new[]
 // Masked    at= -1 {"user":"alice","password":"***"}
 // Truncated at= 61 {"user":{"login":"alice","password":"***","roles":["admin"]}}
 // Invalid   at= 16 {"user":"alice"}
-// NotJson   at=  0
+// Unrecognized at=  0
 // Invalid   at=  0
 ```
 
@@ -121,19 +123,20 @@ A value that is cut never leaks: a string being written when the input ends is d
 | `MaxDepth` | 64 | deeper nesting → `Invalid` |
 | `RelaxedEscaping` | `true` | non-ASCII and HTML characters written unescaped |
 | `HashKey` | random per process | key of `MaskTag.Hash` |
-| `MaskStrategy` | built-in | writes `MaskTag` rules |
+| `Strategy` | built-in | writes `MaskTag` rules |
 | `IgnoreNulls` | `false` | drops `null` properties and items, and objects and arrays left empty by that |
 | `Indented` | `false` | indented output |
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var masker = JsonObserver.Obj(BlockList);
 const string json = """{"note":"a very long free-text note","empty":null,"tags":[null],"city":"Zürich"}""";
 
-Console.WriteLine(masker.Mask(json, new JsonObserverOptions(MaxValueBytes: 10, IgnoreNulls: true)));
-Console.WriteLine(masker.Mask(json, new JsonObserverOptions(RelaxedEscaping: false)));
+Console.WriteLine(masker.Mask(json, new JsonObserverOptions { MaxValueBytes = 10, IgnoreNulls = true }));
+Console.WriteLine(masker.Mask(json, new JsonObserverOptions { RelaxedEscaping = false }));
 // Output:
 // {"note":"a very lon…","city":"Zürich"}
 // {"note":"a very long free-text note","empty":null,"tags":[null],"city":"Z\u00FCrich"}
@@ -141,19 +144,19 @@ Console.WriteLine(masker.Mask(json, new JsonObserverOptions(RelaxedEscaping: fal
 
 ## Correlate masked values across services
 
-`MaskTag.Hash` writes `hash:` and 16 hex characters of an HMAC-SHA256. Give every instance the same `HashKey` (from configuration or a secret store, never from source) and the same value hashes the same everywhere, so you can follow one customer through logs without seeing their email. Without a key, hashes only correlate inside one process.
+`MaskTag.Hash` writes an HMAC-SHA256 the way Microsoft's `HmacRedactor` does: 16 bytes in base64 (24 characters), after `"<HashKeyId>:"` when `HashKeyId` is set, so a hash correlates with logs redacted by `Microsoft.Extensions.Compliance.Redaction` under the same key (`WithBase64HashKey(key)` takes its `HmacRedactorOptions.Key`). Give every instance the same `HashKey` (from configuration or a secret store, never from source) and the same value hashes the same everywhere, so you can follow one customer through logs without seeing their email. Without a key, hashes only correlate inside one process.
 
 ```csharp
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
-var masker = JsonObserver.Obj(Relative(rules => rules.Match("email").MaskAny(MaskTag.Hash), BlockList));
+var masker = JsonObserver.Obj(AnyDepth(rules => rules.Match("email").Mask(MaskTag.Hash), BlockList));
 var keyFromConfiguration = Encoding.UTF8.GetBytes("load-me-from-configuration");
 
-var serviceA = new JsonObserverOptions(HashKey: keyFromConfiguration);
-var serviceB = new JsonObserverOptions(HashKey: keyFromConfiguration.ToArray());
+var serviceA = new JsonObserverOptions { HashKey = keyFromConfiguration };
+var serviceB = new JsonObserverOptions { HashKey = keyFromConfiguration.ToArray() };
 
 var a = masker.Mask("""{"email":"alice@example.com"}""", serviceA);
 var b = masker.Mask("""{"email":"alice@example.com"}""", serviceB);
@@ -166,35 +169,34 @@ Console.WriteLine(a!.Contains("alice", StringComparison.Ordinal));
 
 ## Custom mask strategy
 
-`MaskTag` rules are written by a `Utf8MaskStrategy`. Replace it per call with `JsonObserverOptions.MaskStrategy` — one strategy serves every tag; delegate the kinds you do not change to `Utf8MaskStrategy.Default`. `value` is the unescaped string, the literal of a number or boolean, or empty for an object or array; write exactly one value.
+`MaskTag` rules are written by a `ValueMaskStrategy`. Replace it per call with `JsonObserverOptions.Strategy` — one strategy serves every tag; delegate the kinds you do not change to `ValueMaskStrategy.Default`. `context.Value` is the unescaped string, the literal of a number or boolean, or empty for an object or array; write exactly one value to the `MaskValueWriter`. The strategy is format-neutral: the same class serves the CSV and YAML observers.
 
 ```csharp
-using System.Text.Json;
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
-var masker = JsonObserver.Obj(Relative(rules => rules
-        .Match("password").MaskAny(MaskTag.Full)
-        .Match("card").MaskAny(MaskTag.Last4),
+var masker = JsonObserver.Obj(AnyDepth(rules => rules
+        .Match("password").Mask(MaskTag.Full)
+        .Match("card").Mask(MaskTag.Last4),
     BlockList));
 
-var options = new JsonObserverOptions(MaskStrategy: new RedactedStrategy());
+var options = new JsonObserverOptions { Strategy = new RedactedStrategy() };
 Console.WriteLine(masker.Mask("""{"password":"p","card":"4111111111111111"}""", options));
 // Output:
 // {"password":"[redacted]","card":"***1111"}
 
-sealed class RedactedStrategy : Utf8MaskStrategy
+sealed class RedactedStrategy : ValueMaskStrategy
 {
-    public override void Mask(ReadOnlySpan<byte> value, JsonTokenType tokenType, MaskTag tag, JsonWriter writer, JsonObserverOptions options)
+    public override void Mask(in MaskContext context, MaskValueWriter output)
     {
-        if (tag.Kind == MaskKind.Full)
+        if (context.Tag.Kind == MaskKind.Full)
         {
-            writer.WriteStringValue("[redacted]"u8);
+            output.String("[redacted]"u8);
             return;
         }
 
-        Default.Mask(value, tokenType, tag, writer, options);
+        Default.Mask(context, output);
     }
 }
 ```

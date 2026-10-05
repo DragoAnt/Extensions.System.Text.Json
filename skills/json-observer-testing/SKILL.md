@@ -29,7 +29,7 @@ Packages: `DragoAnt.System.Text.Json.Observer` (and `.Http` for handler tests), 
 3. **Cover the shapes that defeat rules:** the field nested deeper, inside an array, as a number or boolean, as an object, with different casing, cut off mid-value. Each is a separate case.
 4. **Prove the test can fail.** Remove the rule (or build the observer without it) and the test must go red; a check that passes either way protects nothing. Run this once by hand when writing the test, or keep it as a test ([examples.md#the-rule-is-load-bearing](./examples.md#the-rule-is-load-bearing)).
 5. **Fuzz with an allow-list observer.** Random corruption can rename a property (`password` → `pas#word`); under `BlockList` that value is then legitimately unmasked, so a block-list fuzz fails for the wrong reason. Under an allow-list, unknown names are masked, so "no secret" must always hold. Truncation fuzz (cutting, not changing bytes) is safe with any observer.
-6. **When output is non-empty it must parse.** For every status, `BytesWritten > 0` means the output is valid JSON; `NotJson` means empty output.
+6. **When output is non-empty it must parse.** For every status, `BytesWritten > 0` means the output is valid JSON; `Unrecognized` means empty output.
 7. **Set allocation budgets from measurements**, with warm-up calls first and a reused output buffer, on the UTF-8 API. Never assert zero.
 8. **HTTP response entries are written asynchronously.** Wait on the sink with a timeout; never read it straight after `SendAsync`.
 

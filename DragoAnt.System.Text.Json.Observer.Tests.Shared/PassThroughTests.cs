@@ -1,4 +1,5 @@
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -7,7 +8,7 @@ public abstract class PassThroughTests
     private static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b.Match("password").MaskStr((_, _) => "***"), BlockList));
+        AnyDepth(b => b.Match("password").Mask((_, _) => "***", MaskNulls.Mask), BlockList));
 
     [Theory]
     [InlineData("""{"a":1e2}""")]

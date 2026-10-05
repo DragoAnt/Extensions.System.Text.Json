@@ -16,29 +16,29 @@ public static partial class Baselines
     {
         names ??= Payloads.SensitiveNames;
         var count = Math.Min(ruleCount, names.Length);
-        var policy = JsonObserverValuePolicies.Relative(b =>
+        var policy = JsonValuePolicy.AnyDepth(b =>
             {
                 for (var i = 0; i < count; i++)
                 {
-                    b.Match(names[i]).MaskStr((_, _) => Mask);
+                    b.Match(names[i]).Mask((_, _) => Mask, MaskNulls.Mask);
                 }
             },
-            JsonObserverValuePolicies.BlockList);
+            ValuePolicy.BlockList);
         return JsonObserver.Any(o => { }, a => { }, policy);
     }
 
-    public static JsonObserver<TContext> BuildObserver<TContext>(Action<Builders.JsonValuePolicyBuilder<TContext>> extra)
+    public static JsonObserver<TContext> BuildObserver<TContext>(Action<Builders.JsonAnyDepthBuilder<TContext>> extra)
     {
-        var policy = JsonObserverValuePolicies<TContext>.Relative(b =>
+        var policy = JsonValuePolicy.AnyDepth<TContext>(b =>
             {
                 foreach (var name in Payloads.SensitiveNames)
                 {
-                    b.Match(name).MaskStr((_, _) => Mask);
+                    b.Match(name).Mask((_, _) => Mask, MaskNulls.Mask);
                 }
 
                 extra(b);
             },
-            JsonObserverValuePolicies<TContext>.BlockList);
+            ValuePolicy.BlockList);
         return JsonObserver.Any<TContext>(o => { }, a => { }, policy);
     }
 

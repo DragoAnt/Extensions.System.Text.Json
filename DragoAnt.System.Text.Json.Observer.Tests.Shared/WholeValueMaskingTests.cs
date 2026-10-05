@@ -1,4 +1,5 @@
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -7,10 +8,10 @@ public abstract class WholeValueMaskingTests
     private static readonly JsonObserver Relatively = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b.Match("secret").MaskAny("***"), BlockList));
+        AnyDepth(b => b.Match("secret").Mask("***"), BlockList));
 
     private static readonly JsonObserver Absolutely = JsonObserver.Obj(
-        b => b.Match("secret").MaskAny("***").Match("list").Array(a => a.MaskAny("***")),
+        b => b.Match("secret").Mask("***").Match("list").Array(a => a.Mask("***")),
         BlockList);
 
     [Fact]
@@ -41,7 +42,7 @@ public abstract class WholeValueMaskingTests
     [Fact]
     public void Strategy_ReceivesScalarTextAndNullForContainer()
     {
-        var observer = JsonObserver.Obj(_ => { }, Relative(b => b.Match("v").MaskAny((v, _) => $"[{v ?? "container"}]"), BlockList));
+        var observer = JsonObserver.Obj(_ => { }, AnyDepth(b => b.Match("v").Mask((v, _) => $"[{v ?? "container"}]"), BlockList));
 
         observer.Mask("""{"a":{"v":42},"b":{"v":"text"},"c":{"v":false},"d":{"v":[1]}}""")
             .Should().Be("""{"a":{"v":"[42]"},"b":{"v":"[text]"},"c":{"v":"[false]"},"d":{"v":"[container]"}}""");
@@ -50,7 +51,7 @@ public abstract class WholeValueMaskingTests
     [Fact]
     public void MaskRawValue_SensitiveBool_Masked()
     {
-        var observer = JsonObserver.Obj(_ => { }, Relative(b => b.Match("pin").MaskRawValue((_, _) => "***"), BlockList));
+        var observer = JsonObserver.Obj(_ => { }, AnyDepth(b => b.Match("pin").Mask((_, _) => "***", MaskNulls.Mask), BlockList));
 
         observer.Mask("""{"pin":true}""").Should().Be("""{"pin":"***"}""");
     }

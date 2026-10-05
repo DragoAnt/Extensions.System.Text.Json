@@ -1,6 +1,7 @@
 using System.Text;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -9,11 +10,11 @@ public abstract class MaskTagTests
     private static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b
-                .Match("full").MaskAny(MaskTag.Full)
-                .Match("last4").MaskAny(MaskTag.Last4)
-                .Match("hash").MaskAny(MaskTag.Hash)
-                .Match("omit").MaskAny(MaskKind.Omit),
+        AnyDepth(b => b
+                .Match("full").Mask(MaskTag.Full)
+                .Match("last4").Mask(MaskTag.Last4)
+                .Match("hash").Mask(MaskTag.Hash)
+                .Match("omit").Mask(MaskKind.Null),
             BlockList));
 
     private static JsonElement Mask(string json, JsonObserverOptions? options = null)
@@ -45,14 +46,14 @@ public abstract class MaskTagTests
         var other = Mask("""{"hash":"S3cr3u"}""").GetProperty("hash").GetString();
         var escaped = Mask("{\"hash\":\"S" + (char)92 + "u0033cr3t\"}").GetProperty("hash").GetString();
 
-        first.Should().StartWith("hash:").And.HaveLength(21).And.Be(second).And.Be(escaped).And.NotBe(other);
+        first.Should().HaveLength(24).And.EndWith("==").And.Be(second).And.Be(escaped).And.NotBe(other);
     }
 
     [Fact]
     public void Hash_KeyedDiffers()
     {
-        var keyA = new JsonObserverOptions(HashKey: Encoding.UTF8.GetBytes("key-a"));
-        var keyB = new JsonObserverOptions(HashKey: Encoding.UTF8.GetBytes("key-b"));
+        var keyA = new JsonObserverOptions { HashKey = Encoding.UTF8.GetBytes("key-a") };
+        var keyB = new JsonObserverOptions { HashKey = Encoding.UTF8.GetBytes("key-b") };
 
         var a = Mask("""{"hash":"S3cr3t"}""", keyA).GetProperty("hash").GetString();
         var again = Mask("""{"hash":"S3cr3t"}""", keyA with { }).GetProperty("hash").GetString();
@@ -73,24 +74,24 @@ public abstract class MaskTagTests
         var (_, output) = BytesApiTests.Mask(
             Observer,
             """{"full":"a","hash":7,"last4":{"x":1},"omit":true}""",
-            new JsonObserverOptions(MaskStrategy: strategy));
+            new JsonObserverOptions { Strategy = strategy });
 
         output.Should().Be("""{"full":"?","hash":"?","last4":"?","omit":"?"}""");
         strategy.Calls.Should().Equal(
             "Full String a",
             "Hash Number 7",
-            "Last4 StartObject ",
-            "Omit True true");
+            "Last4 Object ",
+            "Null Boolean true");
     }
 
     private sealed record Classification(string Taxonomy, string Name);
 
     private static readonly Classification Pii = new("Demo", "Pii");
 
-    private static readonly JsonObserver KeyedObserver = JsonObserver.Obj(Relative(b => b
-            .Match("email").MaskAny(MaskTag.Custom(Pii))
-            .Match("token").MaskAny(new MaskTag(MaskKind.Hash, "secret"))
-            .Match("plain").MaskAny(MaskTag.Last4),
+    private static readonly JsonObserver KeyedObserver = JsonObserver.Obj(AnyDepth(b => b
+            .Match("email").Mask(MaskTag.Custom(Pii))
+            .Match("token").Mask(MaskTag.Create(MaskKind.Hash, "secret"))
+            .Match("plain").Mask(MaskTag.Last4),
         BlockList));
 
     [Fact]
@@ -101,7 +102,7 @@ public abstract class MaskTagTests
         var (_, output) = BytesApiTests.Mask(
             KeyedObserver,
             """{"email":"a@b.c","token":"t0k3n","plain":"12345678"}""",
-            new JsonObserverOptions(MaskStrategy: strategy));
+            new JsonObserverOptions { Strategy = strategy });
 
         output.Should().Be("""{"email":"Pii","token":"secret","plain":"none"}""");
     }
@@ -114,7 +115,7 @@ public abstract class MaskTagTests
 
         var masked = KeyedObserver.Mask("""{"email":"a@b.c","token":"t0k3n","plain":"12345678"}""");
 
-        masked.Should().StartWith("{\"email\":\"***\",\"token\":\"hash:").And.EndWith("\",\"plain\":\"***5678\"}");
+        masked.Should().MatchRegex("""^\{"email":"\*\*\*","token":"[A-Za-z0-9+/]{22}==","plain":"\*\*\*5678"\}$""");
     }
 
     [Fact]
@@ -128,7 +129,7 @@ public abstract class MaskTagTests
         custom.TryGetKey<Classification>(out var key).Should().BeTrue();
         key.Should().Be(Pii);
         custom.TryGetKey<string>(out _).Should().BeFalse();
-        ((MaskTag)MaskKind.Last4).Should().Be(MaskTag.Last4).And.Be(new MaskTag(MaskKind.Last4, null));
+        ((MaskTag)MaskKind.Last4).Should().Be(MaskTag.Last4).And.Be(MaskTag.Create(MaskKind.Last4, null));
         MaskTag.Last4.Key.Should().BeNull();
         var build = () => MaskTag.Custom(null!);
         build.Should().Throw<ArgumentNullException>();
@@ -140,12 +141,12 @@ public abstract class MaskTagTests
         var strategy = new DiscriminatingStrategy();
         var rules = JsonObserver.Obj(
             root => root
-                .Match("user").Obj(u => u.Match("email").MaskAny(MaskTag.Custom(Pii)))
-                .Match("tags").Array(t => t.MaskAny(MaskTag.Hash)),
-            Relative(b => b.Match("phone").MaskAny(MaskTag.Last4), BlockList));
+                .Match("user").Obj(u => u.Match("email").Mask(MaskTag.Custom(Pii)))
+                .Match("tags").Array(t => t.Mask(MaskTag.Hash)),
+            AnyDepth(b => b.Match("phone").Mask(MaskTag.Last4), BlockList));
         var shape = JsonObserver.FromShape(JsonShape.Object(
             ("cards", JsonShape.Array(JsonShape.Object(("number", JsonShape.Masked(MaskTag.Last4)))))));
-        var options = new JsonObserverOptions(MaskStrategy: strategy);
+        var options = new JsonObserverOptions { Strategy = strategy };
 
         rules.Mask("""{"user":{"email":"a@b.c"},"tags":["x"],"o":{"phone":"12"}}""", options)
             .Should().Be("""{"user":{"email":"a@b.c:email"},"tags":["x:"],"o":{"phone":"12:phone"}}""");
@@ -165,63 +166,66 @@ public abstract class MaskTagTests
     {
         var strategy = new RecordingStrategy();
 
-        Observer.Mask("""{"full":"a"}""", new JsonObserverOptions(MaskStrategy: strategy)).Should().Be("""{"full":"?"}""");
+        Observer.Mask("""{"full":"a"}""", new JsonObserverOptions { Strategy = strategy }).Should().Be("""{"full":"?"}""");
         strategy.Calls.Should().Equal("Full String a");
     }
 
     [Fact]
-    public void NoOverride_BehavesLikeDefault() =>
-        Observer.Mask("""{"last4":"4111111111111111","omit":1}""", new JsonObserverOptions(MaskStrategy: new NoOverrideStrategy()))
+    public void Delegating_BehavesLikeDefault() =>
+        Observer.Mask("""{"last4":"4111111111111111","omit":1}""", new JsonObserverOptions { Strategy = new NoOverrideStrategy() })
             .Should().Be("""{"last4":"***1111","omit":null}""");
 
-    private sealed class NoOverrideStrategy : Utf8MaskStrategy;
+    private sealed class NoOverrideStrategy : ValueMaskStrategy
+    {
+        public override void Mask(in MaskContext context, MaskValueWriter output) => Default.Mask(context, output);
+    }
 
-    private sealed class DiscriminatingStrategy : Utf8MaskStrategy
+    private sealed class DiscriminatingStrategy : ValueMaskStrategy
     {
         public List<string> Calls { get; } = [];
 
-        public override void Mask(in Utf8MaskContext context, JsonWriter writer)
+        public override void Mask(in MaskContext context, MaskValueWriter output)
         {
-            var name = Encoding.UTF8.GetString(context.PropertyName);
+            var name = Encoding.UTF8.GetString(context.Name);
             Calls.Add($"{context.Tag.Kind} {context.Path.ToString()} {(context.IsArrayItem ? "[]" : name)}");
-            if (context.TokenType is JsonTokenType.String)
+            if (context.Kind is ValueKind.String)
             {
-                writer.WriteStringValue($"{Encoding.UTF8.GetString(context.Value)}:{name}");
+                output.String($"{Encoding.UTF8.GetString(context.Value)}:{name}");
             }
             else
             {
-                Utf8MaskStrategy.Default.Mask(context, writer);
+                Default.Mask(context, output);
             }
         }
     }
 
-    private sealed class KeyedStrategy : Utf8MaskStrategy
+    private sealed class KeyedStrategy : ValueMaskStrategy
     {
-        public override void Mask(ReadOnlySpan<byte> value, JsonTokenType tokenType, MaskTag tag, JsonWriter writer, JsonObserverOptions options)
+        public override void Mask(in MaskContext context, MaskValueWriter output)
         {
-            switch (tag.Key)
+            switch (context.Tag.Key)
             {
                 case Classification classification:
-                    writer.WriteStringValue(classification.Name);
+                    output.String(classification.Name);
                     break;
                 case string name:
-                    writer.WriteStringValue(name);
+                    output.String(name);
                     break;
                 default:
-                    writer.WriteStringValue("none");
+                    output.String("none");
                     break;
             }
         }
     }
 
-    private sealed class RecordingStrategy : Utf8MaskStrategy
+    private sealed class RecordingStrategy : ValueMaskStrategy
     {
         public List<string> Calls { get; } = [];
 
-        public override void Mask(ReadOnlySpan<byte> value, JsonTokenType tokenType, MaskTag tag, JsonWriter writer, JsonObserverOptions options)
+        public override void Mask(in MaskContext context, MaskValueWriter output)
         {
-            Calls.Add($"{tag.Kind} {tokenType} {Encoding.UTF8.GetString(value)}");
-            writer.WriteStringValue("?");
+            Calls.Add($"{context.Tag.Kind} {context.Kind} {Encoding.UTF8.GetString(context.Value)}");
+            output.String("?");
         }
     }
 }

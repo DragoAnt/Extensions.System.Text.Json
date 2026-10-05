@@ -47,9 +47,14 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
     public bool Exhausted { get; private set; }
 
     /// <summary>
-    /// At least one string value was cut to <see cref="JsonObserverOptions.MaxValueBytes"/>.
+    /// At least one string value was cut to <see cref="ObserverOptions.MaxValueBytes"/>.
     /// </summary>
     public bool ValuesTruncated { get; private set; }
+
+    /// <summary>
+    /// At least one string or name written held invalid UTF-8, which the writer replaced with U+FFFD.
+    /// </summary>
+    public bool InvalidUtf8Replaced { get; private set; }
 
     internal override JsonObserverOptions Options => _options;
 
@@ -88,6 +93,7 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         _safeDepth = 0;
         Exhausted = false;
         ValuesTruncated = false;
+        InvalidUtf8Replaced = false;
         MaskOutput = false;
     }
 
@@ -182,6 +188,8 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         {
             return;
         }
+
+        CheckUtf8(utf8Value);
 
         if (utf8Value.Length <= MaxValueBytes)
         {
@@ -296,6 +304,43 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         }
     }
 
+    internal override void WriteComment(ReadOnlySpan<byte> utf8Text)
+    {
+        if (Exhausted)
+        {
+            return;
+        }
+
+        if (utf8Text.IndexOf("*/"u8) < 0)
+        {
+            _writer.WriteCommentValue(utf8Text);
+        }
+        else
+        {
+            var safe = ArrayPool<byte>.Shared.Rent(utf8Text.Length * 2);
+            try
+            {
+                var length = 0;
+                for (var i = 0; i < utf8Text.Length; i++)
+                {
+                    safe[length++] = utf8Text[i];
+                    if (utf8Text[i] == (byte)'*' && i + 1 < utf8Text.Length && utf8Text[i + 1] == (byte)'/')
+                    {
+                        safe[length++] = (byte)' ';
+                    }
+                }
+
+                _writer.WriteCommentValue(safe.AsSpan(0, length));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(safe, clearArray: true);
+            }
+        }
+
+        Completed();
+    }
+
     public override void WritePropertyName(string propertyName)
     {
         if (!Exhausted)
@@ -316,7 +361,16 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
     {
         if (!Exhausted)
         {
+            CheckUtf8(utf8PropertyName);
             _writer.WritePropertyName(utf8PropertyName);
+        }
+    }
+
+    private void CheckUtf8(ReadOnlySpan<byte> utf8)
+    {
+        if (!InvalidUtf8Replaced && !global::System.Text.Unicode.Utf8.IsValid(utf8))
+        {
+            InvalidUtf8Replaced = true;
         }
     }
 

@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using DragoAnt.System.Text.Json.Observer.Strategies;
+using DragoAnt.Observer;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -15,7 +15,7 @@ public abstract class ShapeCoverageTests
     private static MaskTag? Classify(JsonPropertyInfo property) =>
         property.AttributeProvider?.GetCustomAttributes(typeof(JsonShapeTests.SensitiveAttribute), true)
             .OfType<JsonShapeTests.SensitiveAttribute>().FirstOrDefault() is { } sensitive
-            ? new MaskTag(sensitive.Kind)
+            ? MaskTag.Create(sensitive.Kind)
             : null;
 
     [Fact]

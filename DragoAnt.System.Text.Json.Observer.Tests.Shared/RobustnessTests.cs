@@ -1,8 +1,9 @@
 using System.Buffers;
 using System.Text;
 using System.Text.Json.Serialization.Metadata;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -13,7 +14,7 @@ public abstract class RobustnessTests
     private static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b.Match("password").MaskAny("***").Match("pin").MaskStr("***"), BlockList));
+        AnyDepth(b => b.Match("password").Mask("***").Match("pin").Mask("***", MaskNulls.Mask), BlockList));
 
     private static readonly JsonObserver AllowListObserver = JsonObserver.Any(
         o => o.Match("user").Unmasked().Match("ok").Unmasked(),
@@ -81,7 +82,12 @@ public abstract class RobustnessTests
     {
         var (result, output) = BytesApiTests.Mask(Observer, utf8);
 
-        result.Status.Should().BeOneOf(MaskStatus.Masked, MaskStatus.Invalid);
+        result.Status.Should().BeOneOf(MaskStatus.Masked, MaskStatus.Truncated, MaskStatus.Invalid);
+        if (result.Status == MaskStatus.Truncated)
+        {
+            result.Flags.Should().Be(MaskFlags.InvalidUtf8Replaced);
+        }
+
         if (output.Length > 0)
         {
             var parse = () => JsonDocument.Parse(output).Dispose();
@@ -96,7 +102,7 @@ public abstract class RobustnessTests
     {
         var json = new string('[', 20) + new string(']', 20);
 
-        BytesApiTests.Mask(Observer, json, new JsonObserverOptions(MaxDepth: maxDepth)).Result.Status.Should().Be(expected);
+        BytesApiTests.Mask(Observer, json, new JsonObserverOptions { MaxDepth = maxDepth }).Result.Status.Should().Be(expected);
     }
 
     [Fact]
@@ -113,7 +119,7 @@ public abstract class RobustnessTests
         const string json = """{"password":"x","n":1}""";
         var full = BytesApiTests.Mask(Observer, json).Output;
 
-        var (result, output) = BytesApiTests.Mask(Observer, json, new JsonObserverOptions(MaxOutputBytes: Encoding.UTF8.GetByteCount(full)));
+        var (result, output) = BytesApiTests.Mask(Observer, json, new JsonObserverOptions { MaxOutputBytes = Encoding.UTF8.GetByteCount(full) });
 
         result.Status.Should().Be(MaskStatus.Masked);
         output.Should().Be(full);
@@ -146,7 +152,7 @@ public abstract class RobustnessTests
     public void Concurrency_SharedShapeObserver_SameOutput()
     {
         var observer = JsonObserver.FromShape(JsonShape.Object(("id", JsonShape.Scalar), ("password", JsonShape.Masked(MaskTag.Hash))));
-        var options = new JsonObserverOptions(HashKey: "key"u8.ToArray());
+        var options = new JsonObserverOptions { HashKey = "key"u8.ToArray() };
         var expected = observer.Mask("""{"id":1,"password":"p","x":2}""", options);
         var results = new string?[8 * 500];
 

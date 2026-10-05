@@ -1,4 +1,5 @@
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -9,7 +10,7 @@ public abstract class StringApiTests
     private static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b.Match("password").MaskAny("***"), BlockList));
+        AnyDepth(b => b.Match("password").Mask("***"), BlockList));
 
     public static TheoryData<string> Inputs =>
     [
@@ -79,7 +80,7 @@ public abstract class StringApiTests
     [InlineData("""{"password":"x"}""", MaskStatus.Masked, -1)]
     [InlineData("""{"password":"x","a":[1""", MaskStatus.Truncated, 21)]
     [InlineData("""{"a": }""", MaskStatus.Invalid, 6)]
-    [InlineData("42", MaskStatus.NotJson, 0)]
+    [InlineData("42", MaskStatus.Unrecognized, 0)]
     public void Mask_OutResult_ReportsStatus(string json, MaskStatus status, long failedAt)
     {
         var output = Observer.Mask(json, out var result);
@@ -93,14 +94,14 @@ public abstract class StringApiTests
     public void Mask_Null_ReturnsNullAndNotJson()
     {
         Observer.Mask(null, out var result).Should().BeNull();
-        result.Status.Should().Be(MaskStatus.NotJson);
+        result.Status.Should().Be(MaskStatus.Unrecognized);
     }
 
     [Fact]
     public void Mask_UsesOptions_LikeBytesApi()
     {
-        var observer = JsonObserver.Obj(Relative(b => b.Match("h").MaskAny(Strategies.MaskTag.Hash), BlockList));
-        var options = new JsonObserverOptions(HashKey: "k"u8.ToArray(), MaxValueBytes: 3);
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("h").Mask(MaskTag.Hash), BlockList));
+        var options = new JsonObserverOptions { HashKey = "k"u8.ToArray(), MaxValueBytes = 3 };
         const string json = """{"h":"secret","note":"abcdef"}""";
 
         var text = observer.Mask(json, out var result, options);
@@ -114,22 +115,22 @@ public abstract class StringApiTests
     public void IgnoreNulls_DropsNullPropertiesItemsAndEmptiedContainers()
         => JsonObserver.Obj(BlockList).Mask(
                 """{"a":null,"b":{"c":null},"d":[null,1,null],"e":[null],"f":{"g":{"h":null}},"i":"x"}""",
-                new JsonObserverOptions(IgnoreNulls: true))
+                new JsonObserverOptions { IgnoreNulls = true })
             .Should().Be("""{"d":[1],"i":"x"}""");
 
     [Fact]
     public void IgnoreNulls_AllNull_KeepsEmptyRoot()
-        => JsonObserver.Obj(BlockList).Mask("""{"a":null}""", new JsonObserverOptions(IgnoreNulls: true)).Should().Be("{}");
+        => JsonObserver.Obj(BlockList).Mask("""{"a":null}""", new JsonObserverOptions { IgnoreNulls = true }).Should().Be("{}");
 
     [Fact]
     public void IgnoreNulls_OmitTag_DropsProperty()
-        => JsonObserver.Obj(Relative(b => b.Match("p").MaskAny(Strategies.MaskTag.Omit), BlockList))
-            .Mask("""{"p":"x","q":1}""", new JsonObserverOptions(IgnoreNulls: true)).Should().Be("""{"q":1}""");
+        => JsonObserver.Obj(AnyDepth(b => b.Match("p").Mask(MaskTag.Null), BlockList))
+            .Mask("""{"p":"x","q":1}""", new JsonObserverOptions { IgnoreNulls = true }).Should().Be("""{"q":1}""");
 
     [Fact]
     public void Indented_TruncatedOutput_StillValidJson()
     {
-        var output = Observer.Mask($$"""{"user":"bob","password":"{{Secret}}","a":{"b":[1,2""", new JsonObserverOptions(Indented: true));
+        var output = Observer.Mask($$"""{"user":"bob","password":"{{Secret}}","a":{"b":[1,2""", new JsonObserverOptions { Indented = true });
 
         output.Should().Contain(Environment.NewLine).And.NotContain(Secret);
         JsonDocument.Parse(output!).RootElement.GetProperty("a").GetProperty("b").GetArrayLength().Should().Be(1);
@@ -140,7 +141,7 @@ public abstract class StringApiTests
     [InlineData("""{"user":"bob","x":""", MaskStatus.Truncated, 1)]
     [InlineData("""{"x": ],"user":"bob"}""", MaskStatus.Invalid, 0)]
     [InlineData("[]", MaskStatus.Invalid, 0)]
-    [InlineData("1", MaskStatus.NotJson, 0)]
+    [InlineData("1", MaskStatus.Unrecognized, 0)]
     public void Read_ReportsStatus(string json, MaskStatus status, int count)
     {
         var observer = JsonObserver.Obj<Counter>(b => b.Match("user").ReadStr((_, c) => c.Count++));

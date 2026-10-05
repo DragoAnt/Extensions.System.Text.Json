@@ -19,7 +19,7 @@ public static class Probes
             ("MaskRawValue", Wrap(BuildObserver(raw: true))),
             ("MaskAny", Wrap(BuildMaskAnyObserver())),
             ("Bytes API + MaskAny", MaskBytes(BuildMaskAnyObserver())),
-            ("Bytes API + MaskAny, 4 KB output / 256 B value caps", MaskBytes(BuildMaskAnyObserver(), new JsonObserverOptions(MaxOutputBytes: 4096, MaxValueBytes: 256))),
+            ("Bytes API + MaskAny, 4 KB output / 256 B value caps", MaskBytes(BuildMaskAnyObserver(), new JsonObserverOptions { MaxOutputBytes = 4096, MaxValueBytes = 256 })),
             ("Read-mode mask+extract", MaskAndExtract),
         };
 
@@ -56,17 +56,17 @@ public static class Probes
 
     private static Func<string, JsonReaderOptions, string?> Wrap(JsonObserver observer) => (json, options) => observer.Mask(json, ToOptions(options));
 
-    private static JsonObserverOptions ToOptions(JsonReaderOptions options) => new(MaxDepth: options.MaxDepth == 0 ? 64 : options.MaxDepth);
+    private static JsonObserverOptions ToOptions(JsonReaderOptions options) => new() { MaxDepth = options.MaxDepth == 0 ? 64 : options.MaxDepth };
 
     private static string? MaskAndExtract(string json, JsonReaderOptions options)
     {
         var observer = JsonObserver.Obj<ProbeContext>(b => b
                 .Match("id").ReadInt((v, c) => c.Id = v)
                 .Match("active").ReadBool((v, c) => c.Active = v),
-            JsonObserverValuePolicies<ProbeContext>.Relative(b => b
-                    .Match("password").MaskStr((_, _) => "***")
-                    .Match("pin").MaskStr((_, _) => "***"),
-                JsonObserverValuePolicies<ProbeContext>.BlockList));
+            JsonValuePolicy.AnyDepth<ProbeContext>(b => b
+                    .Match("password").Mask((_, _) => "***", MaskNulls.Mask)
+                    .Match("pin").Mask((_, _) => "***", MaskNulls.Mask),
+                ValuePolicy.BlockList));
         return observer.Mask(json, new ProbeContext(), ToOptions(options));
     }
 
@@ -84,27 +84,27 @@ public static class Probes
     };
 
     private static JsonObserver BuildMaskAnyObserver() =>
-        JsonObserver.Any(_ => { }, _ => { }, JsonObserverValuePolicies.Relative(
-            b => b.Match(Strategies.PropMatches.OneOf("password", "pin")).MaskAny("***"),
-            JsonObserverValuePolicies.BlockList));
+        JsonObserver.Any(_ => { }, _ => { }, JsonValuePolicy.AnyDepth(
+            b => b.Match(Names.OneOf("password", "pin")).Mask("***"),
+            ValuePolicy.BlockList));
 
     private static JsonObserver BuildObserver(bool raw)
     {
-        var policy = JsonObserverValuePolicies.Relative(b =>
+        var policy = JsonValuePolicy.AnyDepth(b =>
             {
                 foreach (var name in new[] { "password", "pin" })
                 {
                     if (raw)
                     {
-                        b.Match(name).MaskRawValue((_, _) => "***");
+                        b.Match(name).Mask(MaskTag.Full);
                     }
                     else
                     {
-                        b.Match(name).MaskStr((_, _) => "***");
+                        b.Match(name).Mask((_, _) => "***", MaskNulls.Mask);
                     }
                 }
             },
-            JsonObserverValuePolicies.BlockList);
+            ValuePolicy.BlockList);
         return JsonObserver.Any(o => { }, a => { }, policy);
     }
 

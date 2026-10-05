@@ -13,7 +13,8 @@ using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
 using Microsoft.Extensions.DependencyInjection;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var sink = new CaptureSink();
 var services = new ServiceCollection();
@@ -50,9 +51,9 @@ public sealed class UsersClient(HttpClient http)
 
 public sealed class UserMaskers : IJsonBodyMaskerProvider
 {
-    private static readonly JsonObserver Users = JsonObserver.Obj(Relative(rules => rules
-            .Match("password").MaskAny("***")
-            .Match("apiToken").MaskAny("***"),
+    private static readonly JsonObserver Users = JsonObserver.Obj(AnyDepth(rules => rules
+            .Match("password").Mask("***")
+            .Match("apiToken").Mask("***"),
         BlockList));
 
     public JsonObserver? GetMasker(Type? modelType, string clientName) =>
@@ -87,7 +88,8 @@ using System.Net;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var sink = new ListSink();
 var options = new JsonBodyLoggingOptions
@@ -111,7 +113,7 @@ Console.WriteLine($"[{entry.ClientName}] {entry.Method} {entry.Path} {entry.Requ
 
 public sealed class OneMasker : IJsonBodyMaskerProvider
 {
-    private static readonly JsonObserver Masker = JsonObserver.Obj(Relative(rules => rules.Match("token").MaskAny("***"), BlockList));
+    private static readonly JsonObserver Masker = JsonObserver.Obj(AnyDepth(rules => rules.Match("token").Mask("***"), BlockList));
 
     public JsonObserver? GetMasker(Type? modelType, string clientName) => Masker;
 }
@@ -194,10 +196,11 @@ Under `OnFailure`, a call that throws is logged without a response, then the exc
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var sink = new PrintSink();
-var masker = new FixedMasker(JsonObserver.Obj(Relative(rules => rules.Match("pin").MaskAny("***"), BlockList)));
+var masker = new FixedMasker(JsonObserver.Obj(AnyDepth(rules => rules.Match("pin").Mask("***"), BlockList)));
 var handler = new JsonBodyLoggingHandler(new JsonBodyLoggingOptions(), masker, sink) { InnerHandler = new Unreachable() };
 using var client = new HttpClient(handler) { BaseAddress = new Uri("https://bank.example.com/") };
 

@@ -24,7 +24,7 @@ public static class JsonBodyLogging
         string? operation = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        request.Options.Set(Key, new JsonBodyLoggingContext(typeof(TRequest), typeof(TResponse), operation));
+        request.Options.Set(Key, new JsonBodyLoggingContext { RequestType = typeof(TRequest), ResponseType = typeof(TResponse), Operation = operation });
         return request;
     }
 
@@ -43,7 +43,7 @@ public static class JsonBodyLogging
         string? operation = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        request.Options.Set(Key, new JsonBodyLoggingContext(requestType, responseType, operation));
+        request.Options.Set(Key, new JsonBodyLoggingContext { RequestType = requestType, ResponseType = responseType, Operation = operation });
         return request;
     }
 

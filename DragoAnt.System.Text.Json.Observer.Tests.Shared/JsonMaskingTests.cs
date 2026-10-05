@@ -1,7 +1,8 @@
 using System.Globalization;
 using Bogus;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
@@ -23,43 +24,43 @@ public class JsonMaskingTests
     private readonly JsonObserver _requestMasking = GetRequestMasking(BlockList);
 
 
-    internal static JsonObserver GetRequestMasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
+    internal static JsonObserver GetRequestMasking(JsonValuePolicy<NoContext> defaultValuePolicy)
     {
-        return JsonObserver.Obj(Relative(policyBuilder => policyBuilder
-                .Match(PropMatches.EndsWith("card"), "saved", "id").MaskStr(MaskingRules.CustomerId)
-                .Match("card", "number").MaskStr(MaskingRules.CardNumber)
-                .Match("user", "entered").MaskStr((_, _) => string.Empty)
-                .Match("recurringTemplate", "id").MaskStr(MaskingRules.RecurringTemplateId)
-                .Match(PropMatches.Contains("cardHolder")).MaskStr(MaskingRules.FullName)
-                .Match(PropMatches.StartsWith("order"), "description").MaskStr(MaskingRules.OrderDescription)
-                .Match(PropMatches.StartsWith("customer"), "id").MaskStr(MaskingRules.CustomerId)
-                .Match(PropMatches.StartsWith("customer"), "birthDate").MaskStr(MaskingRules.BirthDate)
-                .Match(PropMatches.Contains("ipAddress")).MaskStr(MaskingRules.Ip)
-                .Match(PropMatches.Contains("email")).MaskStr(MaskingRules.Email)
-                .Match(PropMatches.Contains("phone")).MaskStr(MaskingRules.Phone)
-                .Match(PropMatches.Contains("documentNumber")).MaskStr(MaskingRules.DocumentNumber)
-                .Match(PropMatches.Contains("firstName")).MaskStr(MaskingRules.Name)
-                .Match(PropMatches.Contains("lastName")).MaskStr(MaskingRules.Name)
-                .Match(PropMatches.Contains("address")).MaskStr(MaskingRules.Full)
-                .Match(PropMatches.Contains("accountNumber")).MaskStr(MaskingRules.AccountNumber)
+        return JsonObserver.Obj(AnyDepth(policyBuilder => policyBuilder
+                .Path(Names.EndsWith("card"), "saved", "id").Mask(MaskingRules.CustomerId, MaskNulls.Mask)
+                .Path("card", "number").Mask(MaskingRules.CardNumber, MaskNulls.Mask)
+                .Path("user", "entered").Mask((_, _) => string.Empty, MaskNulls.Mask)
+                .Path("recurringTemplate", "id").Mask(MaskingRules.RecurringTemplateId, MaskNulls.Mask)
+                .Match(Names.Contains("cardHolder")).Mask(MaskingRules.FullName, MaskNulls.Mask)
+                .Path(Names.StartsWith("order"), "description").Mask(MaskingRules.OrderDescription, MaskNulls.Mask)
+                .Path(Names.StartsWith("customer"), "id").Mask(MaskingRules.CustomerId, MaskNulls.Mask)
+                .Path(Names.StartsWith("customer"), "birthDate").Mask(MaskingRules.BirthDate, MaskNulls.Mask)
+                .Match(Names.Contains("ipAddress")).Mask(MaskingRules.Ip, MaskNulls.Mask)
+                .Match(Names.Contains("email")).Mask(MaskingRules.Email, MaskNulls.Mask)
+                .Match(Names.Contains("phone")).Mask(MaskingRules.Phone, MaskNulls.Mask)
+                .Match(Names.Contains("documentNumber")).Mask(MaskingRules.DocumentNumber, MaskNulls.Mask)
+                .Match(Names.Contains("firstName")).Mask(MaskingRules.Name, MaskNulls.Mask)
+                .Match(Names.Contains("lastName")).Mask(MaskingRules.Name, MaskNulls.Mask)
+                .Match(Names.Contains("address")).Mask(MaskingRules.Full, MaskNulls.Mask)
+                .Match(Names.Contains("accountNumber")).Mask(MaskingRules.AccountNumber, MaskNulls.Mask)
             ,
             defaultValuePolicy));
     }
 
     private readonly JsonObserver _ignoreNullsRequestMasking = GetRequestUnmasking(NullList);
 
-    internal static JsonObserver GetRequestUnmasking(JsonObserverValueDelegate<JsonObserveringEmptyContext> defaultValuePolicy)
+    internal static JsonObserver GetRequestUnmasking(JsonValuePolicy<NoContext> defaultValuePolicy)
     {
         return JsonObserver.Obj(b => b
                 .Match("routing").Obj(sb => sb.Match("method").Unmasked()),
-            Relative(policyBuilder => policyBuilder
-                    .Match(PropMatches.EndsWith("card"), "saved", "id").Unmasked()
-                    .Match("card", "number").Unmasked()
-                    .Match(PropMatches.Contains("cardHolder")).Unmasked()
-                    .Match(PropMatches.StartsWith("customer"), "id").Unmasked()
-                    .Match(PropMatches.StartsWith("customer"), "birthDate").Unmasked()
-                    .Match(PropMatches.Contains("ipAddress")).Unmasked()
-                    .Match(PropMatches.Contains("email")).Unmasked(),
+            AnyDepth(policyBuilder => policyBuilder
+                    .Path(Names.EndsWith("card"), "saved", "id").Unmasked()
+                    .Path("card", "number").Unmasked()
+                    .Match(Names.Contains("cardHolder")).Unmasked()
+                    .Path(Names.StartsWith("customer"), "id").Unmasked()
+                    .Path(Names.StartsWith("customer"), "birthDate").Unmasked()
+                    .Match(Names.Contains("ipAddress")).Unmasked()
+                    .Match(Names.Contains("email")).Unmasked(),
                 defaultValuePolicy));
     }
 
@@ -144,7 +145,7 @@ public class JsonMaskingTests
     private string? Mask(string testValue, JsonObserver mask, bool ignoreNulls = false)
     {
         _outputHelper.WriteLine($"Before: {Environment.NewLine}{testValue}{Environment.NewLine}");
-        var maskedJson = mask.Mask(testValue, new JsonObserverOptions(IgnoreNulls: ignoreNulls, Indented: true));
+        var maskedJson = mask.Mask(testValue, new JsonObserverOptions { IgnoreNulls = ignoreNulls, Indented = true });
         _outputHelper.WriteLine($"After: {Environment.NewLine}{maskedJson}");
         return maskedJson;
     }

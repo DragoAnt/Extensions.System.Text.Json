@@ -50,7 +50,7 @@ public sealed class ReadmeSampleTests
     // README sample: masker provider
     public sealed class PaymentMaskers : IJsonBodyMaskerProvider
     {
-        private static readonly JsonObserver Charge = JsonObserver.Obj(rules => rules.Match("cardNumber").MaskStr("****"));
+        private static readonly JsonObserver Charge = JsonObserver.Obj(rules => rules.Match("cardNumber").Mask("****", MaskNulls.Mask));
 
         public JsonObserver? GetMasker(Type? modelType, string clientName) =>
             modelType == typeof(ChargeRequest) ? Charge : null;

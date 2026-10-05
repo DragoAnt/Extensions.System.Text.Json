@@ -54,7 +54,7 @@ public sealed partial class DocSnippetTests
         }
     }
 
-    private static readonly string[] Documents = ["README.md", "package.readme.md"];
+    private static readonly string[] Documents = ["README.md", "package.readme.md", "migrating-to-2.0.md"];
 
     private sealed record Snippet(int Line, string Code, string? ExpectedOutput);
 
@@ -139,7 +139,7 @@ public sealed partial class DocSnippetTests
         return NewLines().Replace(printed.ToString(), "\n");
     }
 
-    private const string GlobalUsings = "global using System;\nglobal using System.Collections.Generic;\nglobal using System.Linq;\nglobal using System.Threading.Tasks;\n";
+    private const string GlobalUsings = "global using System;\nglobal using System.Collections.Generic;\nglobal using System.Linq;\nglobal using System.Threading.Tasks;\nglobal using DragoAnt.Observer;\n";
 
     private static MetadataReference[] LoadReferences()
     {

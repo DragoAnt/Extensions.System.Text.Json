@@ -1,9 +1,7 @@
-using DragoAnt.System.Text.Json.Observer.Strategies;
-
 namespace DragoAnt.System.Text.Json.Observer.Builders;
 
 /// <summary>
-/// How rule actions read in a <see cref="JsonPathExplanation"/>.
+/// How rule actions read in a <see cref="PathExplanation"/>.
 /// </summary>
 internal static class RuleText
 {
@@ -15,9 +13,14 @@ internal static class RuleText
 
     public static string ReadNumber(string method) => $"{method} (a number or null is read)";
 
-    public static string Strategy(string method, string? constant) =>
-        constant is null ? $"{method}(function)" : $"{method}(\"{constant}\")";
+    public static string Function(string? constant, MaskNulls nulls)
+    {
+        var what = constant is null ? "function" : $"\"{constant}\"";
+        return nulls == MaskNulls.Mask ? $"Mask({what}, MaskNulls.Mask)" : $"Mask({what})";
+    }
 
     public static string Tag(MaskTag tag) =>
-        tag.Key is null ? $"MaskAny(MaskTag.{tag.Kind})" : $"MaskAny(MaskTag.{tag.Kind}, key {tag.Key})";
+        tag.Key is null ? $"Mask(MaskTag.{tag.Kind})" : $"Mask(MaskTag.{tag.Kind}, key {tag.Key})";
+
+    public static string Strategy(MaskTag tag) => $"Mask(strategy, MaskTag.{tag.Kind})";
 }

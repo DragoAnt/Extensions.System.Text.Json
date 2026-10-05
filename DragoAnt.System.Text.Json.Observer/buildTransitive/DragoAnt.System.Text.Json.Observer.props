@@ -1,0 +1,7 @@
+<Project>
+  <!-- Imports the DragoAnt.Observer namespace (MaskTag, MaskResult, ValuePolicy, ...) in every C# file;
+       set DragoAntObserverImplicitUsing to false to opt out. -->
+  <ItemGroup Condition="'$(DragoAntObserverImplicitUsing)' != 'false' And '$(Language)' == 'C#'">
+    <Using Include="DragoAnt.Observer" />
+  </ItemGroup>
+</Project>

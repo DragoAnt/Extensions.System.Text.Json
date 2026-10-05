@@ -14,10 +14,120 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Until DragoAnt.Observer.Core 1.0.0 is on nuget.org this job builds it from source: it checks out
+# DragoAnt/Observer next to this repository (a PR body line `Observer-Ref: <branch>`, else the branch of
+# the same name, else main)
+# and builds with DragoAntObserverLocal=true. Switch back to the shared dotnet-build.yml caller once
+# the package is published.
 jobs:
   build:
-    name: Build and test
-    uses: DragoAnt/.github/.github/workflows/dotnet-build.yml@c9f20c11ebd297193a910d965d33bdf37c0d6c42 # main
-    with:
-      version: 0.0.0-ci.${{ github.run_number }}
-      coverage-threshold: 70
+    name: Build and test (Observer from source)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+      NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+      CONFIGURATION: Release
+      SOLUTION: DragoAnt.System.Text.Json.slnx
+      RESULTS_DIR: ${{ github.workspace }}/TestResults
+      COVERAGE_DIR: ${{ github.workspace }}/coverage
+      COVERAGE_THRESHOLD: 70
+      BUILD_PROPS: -p:ContinuousIntegrationBuild=true -p:DragoAntObserverLocal=true
+    defaults:
+      run:
+        working-directory: Extensions.System.Text.Json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: Extensions.System.Text.Json
+          persist-credentials: false
+
+      - name: Pick the DragoAnt/Observer ref
+        id: observer
+        working-directory: ${{ github.workspace }}
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          pinned=$(printf '%s\n' "$PR_BODY" | tr -d '\r' | sed -n 's/^Observer-Ref: *\([A-Za-z0-9._/-]*\) *$/\1/p' | head -n 1)
+          ref=main
+          for candidate in "$pinned" "$BRANCH"; do
+            if [ -n "$candidate" ] && git ls-remote --exit-code --heads https://github.com/DragoAnt/Observer.git "$candidate" > /dev/null; then
+              ref="$candidate"
+              break
+            fi
+          done
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Building DragoAnt.Observer.Core from DragoAnt/Observer@$ref" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout DragoAnt/Observer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: DragoAnt/Observer
+          ref: ${{ steps.observer.outputs.ref }}
+          path: Observer
+          persist-credentials: false
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+          global-json-file: Extensions.System.Text.Json/global.json
+
+      - name: NuGet cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/global.json', '**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: |
+          # shellcheck disable=SC2086
+          dotnet restore "$SOLUTION" $BUILD_PROPS
+
+      - name: Build
+        run: |
+          # shellcheck disable=SC2086
+          dotnet build "$SOLUTION" -c "$CONFIGURATION" --no-restore $BUILD_PROPS
+
+      - name: Test
+        run: |
+          dotnet test --solution "$SOLUTION" -c "$CONFIGURATION" --no-build --no-progress \
+            --results-directory "$RESULTS_DIR" --report-xunit-trx --report-xunit-junit --coverage --coverage-output-format cobertura
+
+      - name: Pack (package validation against 1.0.2)
+        run: |
+          # shellcheck disable=SC2086
+          dotnet pack "$SOLUTION" -c "$CONFIGURATION" --no-build -o "$GITHUB_WORKSPACE/packages" $BUILD_PROPS
+
+      - name: Coverage
+        if: ${{ !cancelled() && hashFiles('TestResults/**/*.cobertura.xml') != '' }}
+        run: |
+          dotnet tool install dotnet-reportgenerator-globaltool --version 5.5.11 --tool-path "$RUNNER_TEMP/reportgenerator"
+          "$RUNNER_TEMP/reportgenerator/reportgenerator" \
+            "-reports:$RESULTS_DIR/**/*.cobertura.xml" \
+            "-targetdir:$COVERAGE_DIR" \
+            "-reporttypes:MarkdownSummaryGithub;Cobertura" \
+            "-assemblyfilters:-*.Tests;-*.Tests.*;-*.Benchmarks;-DragoAnt.Observer.*"
+          cat "$COVERAGE_DIR/SummaryGithub.md" >> "$GITHUB_STEP_SUMMARY"
+          rate=$(grep -oE '<coverage [^>]*line-rate="[0-9.]+"' "$COVERAGE_DIR/Cobertura.xml" | grep -oE 'line-rate="[0-9.]+"' | grep -oE '[0-9.]+')
+          awk -v rate="$rate" -v min="$COVERAGE_THRESHOLD" 'BEGIN {
+            pct = rate * 100
+            printf "Line coverage %.1f%% (minimum %s%%)\n", pct, min
+            if (pct + 1e-9 < min) { printf "::error::line coverage %.1f%% is below the %s%% threshold\n", pct, min; exit 1 }
+          }'
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results
+          path: ${{ env.RESULTS_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14

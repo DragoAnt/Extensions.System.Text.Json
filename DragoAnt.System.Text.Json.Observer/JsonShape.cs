@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
-using DragoAnt.System.Text.Json.Observer.Strategies;
 
 namespace DragoAnt.System.Text.Json.Observer;
 
@@ -111,6 +110,8 @@ public sealed class JsonShape
     /// </summary>
     public static JsonShape Opaque { get; } = new(JsonShapeKind.Opaque);
 
+    internal static JsonShape UnknownMaskWhole { get; } = new(JsonShapeKind.Opaque);
+
     internal static JsonShape UnknownDescend { get; } = new(JsonShapeKind.Opaque);
 
     internal static JsonShape UnknownPassThrough { get; } = new(JsonShapeKind.Opaque);
@@ -198,7 +199,7 @@ public sealed class JsonShape
     /// <param name="utf8Name">Unescaped UTF-8 name.</param>
     /// <param name="propertyNameCaseInsensitive">Compare names ignoring case, as by default.</param>
     /// <returns>The property, or <c>null</c> when the shape does not know it or is not an object.</returns>
-    public JsonShapeProperty? FindMember(ReadOnlySpan<byte> utf8Name, bool propertyNameCaseInsensitive = true)
+    internal JsonShapeProperty? FindMember(ReadOnlySpan<byte> utf8Name, bool propertyNameCaseInsensitive = true)
     {
         if (!_sealed)
         {

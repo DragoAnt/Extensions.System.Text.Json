@@ -34,7 +34,7 @@ using var response = await httpClient.SendAsync(request, cancellationToken);
 
 public sealed class PaymentMaskers : IJsonBodyMaskerProvider
 {
-    private static readonly JsonObserver Charge = JsonObserver.Obj(rules => rules.Match("cardNumber").MaskStr("****"));
+    private static readonly JsonObserver Charge = JsonObserver.Obj(rules => rules.Match("cardNumber").Mask("****", MaskNulls.Mask));
 
     // null logs the body as "[body withheld]".
     public JsonObserver? GetMasker(Type? modelType, string clientName) =>
@@ -47,7 +47,7 @@ Without an `IJsonBodyMaskerProvider` every value of an object or array body is m
 ## Behaviour
 
 - **Which calls** — `When` is `Never`, `OnFailure` (the default: a non-success status code, an exception or a cancellation) or `Always`. A canceled caller token and `HttpClient.Timeout` reach the handler as one token, so both are logged with the outcome `Canceled`.
-- **Bodies** — at most `MaxBodyBytes` bytes of each body are read and masked (default 4096; 0 turns body logging off). `RequestBodyStatus` and `ResponseBodyStatus` say what was logged: `Masked`, `Truncated`, `Invalid`, `NotJson`, `Incomplete`, `Withheld`, `Skipped`, `NotBuffered`, `Raw` or `Failed`. When no JSON could be written, the body is a marker such as `[body not JSON]` or `[body not logged: text/plain]`.
+- **Bodies** — at most `MaxBodyBytes` bytes of each body are read and masked (default 4096; 0 turns body logging off). `RequestBodyStatus` and `ResponseBodyStatus` say what was logged: `Masked`, `Truncated`, `Invalid`, `Unrecognized`, `Incomplete`, `Withheld`, `Skipped`, `NotBuffered`, `Raw` or `Failed`. When no JSON could be written, the body is a marker such as `[body not JSON]` or `[body not logged: text/plain]`.
 - **Skipped bodies** — a non-JSON media type, a charset other than UTF-8, or a `Content-Encoding` such as gzip. A request `StreamContent` whose stream cannot be read twice is logged as `[body not buffered]`.
 - **The caller is unaffected** — the response is returned as soon as its headers arrive, so `HttpCompletionOption.ResponseHeadersRead` keeps streaming; the body stays readable in full; the original exception of a failed call is rethrown with its stack trace; and a failure inside logging (a throwing sink, masker provider or logger) is reported through the handler's logger and never reaches the caller.
 - **When the entry is written** — the response body is captured in the background, so the entry is written once `MaxBodyBytes` bytes were captured, the body ended, the read failed or the caller disposed the response.

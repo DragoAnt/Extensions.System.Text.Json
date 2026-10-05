@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Text;
 using System.Text.RegularExpressions;
-using DragoAnt.System.Text.Json.Observer.Strategies;
+using DragoAnt.Observer;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -9,9 +9,9 @@ public abstract class LeakTests
 {
     private const string Ssn = """{"ssn":"123-45-6789","x":"y"}""";
 
-    private static JsonObserverValueDelegate<Holder> AllowList => JsonObserverValuePolicies<Holder>.AllowList;
-    private static JsonObserverValueDelegate<Holder> BlockList => JsonObserverValuePolicies<Holder>.BlockList;
-    private static JsonObserverValueDelegate<Holder> NullList => JsonObserverValuePolicies<Holder>.NullList;
+    private static JsonValuePolicy<Holder> AllowList => ValuePolicy.AllowList;
+    private static JsonValuePolicy<Holder> BlockList => ValuePolicy.BlockList;
+    private static JsonValuePolicy<Holder> NullList => ValuePolicy.NullList;
 
     [Fact]
     public void Read_UnderAllowList_WritesTheValueMasked()
@@ -47,7 +47,7 @@ public abstract class LeakTests
     public void Read_InRelativePolicy_UnderAllowList_WritesTheValueMasked()
     {
         var holder = new Holder();
-        var observer = JsonObserver.Obj<Holder>(JsonObserverValuePolicies<Holder>.Relative(b => b.Match("ssn").ReadStr(Keep)));
+        var observer = JsonObserver.Obj<Holder>(JsonValuePolicy.AnyDepth<Holder>(b => b.Match("ssn").ReadStr(Keep)));
 
         observer.Mask("""{"person":{"ssn":"123-45-6789"}}""", holder).Should().Be("""{"person":{"ssn":"***"}}""");
         holder.Value.Should().Be("123-45-6789");
@@ -78,7 +78,7 @@ public abstract class LeakTests
     {
         var holder = new Holder();
 
-        JsonObserver.Obj<Holder>(r => r.Match("ssn").ReadStr(Keep).MaskAny(MaskTag.Last4), BlockList).Mask(Ssn, holder)
+        JsonObserver.Obj<Holder>(r => r.Match("ssn").ReadStr(Keep).Mask(MaskTag.Last4), BlockList).Mask(Ssn, holder)
             .Should().Be("""{"ssn":"***6789","x":"y"}""");
         holder.Value.Should().Be("123-45-6789");
     }
@@ -88,7 +88,7 @@ public abstract class LeakTests
     {
         var holder = new Holder();
 
-        JsonObserver.Obj<Holder>(r => r.Match("ssn").MaskAny(MaskTag.Full).Match("ssn").ReadStr(Keep), BlockList).Mask(Ssn, holder)
+        JsonObserver.Obj<Holder>(r => r.Match("ssn").Mask(MaskTag.Full).Match("ssn").ReadStr(Keep), BlockList).Mask(Ssn, holder)
             .Should().Be("""{"ssn":"***","x":"y"}""");
         holder.Value.Should().Be("123-45-6789");
     }
@@ -97,8 +97,8 @@ public abstract class LeakTests
     public void Read_ThenMask_InRelativePolicy_ReadsAndMasks()
     {
         var holder = new Holder();
-        var observer = JsonObserver.Obj<Holder>(JsonObserverValuePolicies<Holder>.Relative(
-            b => b.Match("ssn").ReadStr(Keep).MaskAny(MaskTag.Full), BlockList));
+        var observer = JsonObserver.Obj<Holder>(JsonValuePolicy.AnyDepth<Holder>(
+            b => b.Match("ssn").ReadStr(Keep).Mask(MaskTag.Full), BlockList));
 
         observer.Mask("""{"person":{"ssn":"123-45-6789","x":"y"}}""", holder).Should().Be("""{"person":{"ssn":"***","x":"y"}}""");
         holder.Value.Should().Be("123-45-6789");
@@ -120,7 +120,7 @@ public abstract class LeakTests
         var masked = new Holder();
 
         JsonObserver.Array<Holder>(a => a.ReadStr(Keep).Unmasked()).Mask("""["123-45-6789"]""", unmasked).Should().Be("""["123-45-6789"]""");
-        JsonObserver.Array<Holder>(a => a.MaskAny(MaskTag.Last4).ReadStr(Keep), BlockList).Mask("""["123-45-6789"]""", masked)
+        JsonObserver.Array<Holder>(a => a.Mask(MaskTag.Last4).ReadStr(Keep), BlockList).Mask("""["123-45-6789"]""", masked)
             .Should().Be("""["***6789"]""");
         unmasked.Value.Should().Be("123-45-6789");
         masked.Value.Should().Be("123-45-6789");
@@ -131,7 +131,7 @@ public abstract class LeakTests
     {
         var holder = new Holder();
 
-        JsonObserver.Obj<Holder>(r => r.Match("ssn").MaskAny(MaskTag.Full).Match("ssn").ReadStr(Keep)).Read(Ssn, holder)
+        JsonObserver.Obj<Holder>(r => r.Match("ssn").Mask(MaskTag.Full).Match("ssn").ReadStr(Keep)).Read(Ssn, holder)
             .Status.Should().Be(MaskStatus.Masked);
         holder.Value.Should().Be("123-45-6789");
     }
@@ -140,11 +140,11 @@ public abstract class LeakTests
     public void Explain_Read_ReportsWhatIsWritten()
     {
         JsonObserver.Obj<Holder>(r => r.Match("ssn").ReadStr(Keep), AllowList).Explain("ssn").Outcome
-            .Should().Be(JsonPathOutcome.Masked);
+            .Should().Be(PathOutcome.Masked);
         JsonObserver.Obj<Holder>(r => r.Match("ssn").ReadStr(Keep).Unmasked(), AllowList).Explain("ssn").Outcome
-            .Should().Be(JsonPathOutcome.Read);
-        JsonObserver.Obj<Holder>(r => r.Match("ssn").ReadStr(Keep).MaskAny(MaskTag.Full), BlockList).Explain("ssn").Outcome
-            .Should().Be(JsonPathOutcome.Masked);
+            .Should().Be(PathOutcome.Read);
+        JsonObserver.Obj<Holder>(r => r.Match("ssn").ReadStr(Keep).Mask(MaskTag.Full), BlockList).Explain("ssn").Outcome
+            .Should().Be(PathOutcome.Masked);
     }
 
     public static TheoryData<string> MaskFunctionKinds => ["MaskAny", "MaskStr", "MaskRawValue"];
@@ -155,12 +155,12 @@ public abstract class LeakTests
     {
         var observer = JsonObserver.Obj(r => _ = kind switch
         {
-            "MaskAny" => r.Match("card").MaskAny((s, _) => "***" + s![^4..]),
-            "MaskStr" => r.Match("card").MaskStr((s, _) => "***" + s![^4..]),
-            _ => r.Match("card").MaskRawValue((s, _) => "***" + s![^4..]),
+            "MaskAny" => r.Match("card").Mask((s, _) => "***" + s![^4..]),
+            "MaskStr" => r.Match("card").Mask((s, _) => "***" + s![^4..], MaskNulls.Mask),
+            _ => r.Match("card").Mask((s, _) => "***" + s![^4..], MaskNulls.Mask),
         });
 
-        observer.Mask("""{"card":"1111222233334444"}""", out var result, new JsonObserverOptions(MaxValueBytes: 8))
+        observer.Mask("""{"card":"1111222233334444"}""", out var result, new JsonObserverOptions { MaxValueBytes = 8 })
             .Should().Be("""{"card":"***4444"}""");
         result.Status.Should().Be(MaskStatus.Masked);
     }
@@ -168,11 +168,11 @@ public abstract class LeakTests
     [Fact]
     public void MaskFunction_UnderValueCap_ReceivesTheWholeValue_FromSegments()
     {
-        var observer = JsonObserver.Obj(r => r.Match("card").MaskAny((s, _) => "***" + s![^4..]));
+        var observer = JsonObserver.Obj(r => r.Match("card").Mask((s, _) => "***" + s![^4..]));
         var output = new ArrayBufferWriter<byte>();
 
         var result = observer.Mask(SequenceInputTests.Split("""{"card":"1111222233334444"}"""u8.ToArray(), 3), output,
-            new JsonObserverOptions(MaxValueBytes: 8));
+            new JsonObserverOptions { MaxValueBytes = 8 });
 
         Encoding.UTF8.GetString(output.WrittenSpan).Should().Be("""{"card":"***4444"}""");
         result.Status.Should().Be(MaskStatus.Masked);
@@ -181,9 +181,9 @@ public abstract class LeakTests
     [Fact]
     public void MaskOutput_LongerThanValueCap_IsNotCut()
     {
-        var observer = JsonObserver.Obj(r => r.Match("card").MaskAny((_, _) => "replaced-by-a-long-mask"));
+        var observer = JsonObserver.Obj(r => r.Match("card").Mask((_, _) => "replaced-by-a-long-mask"));
 
-        observer.Mask("""{"card":"1"}""", out var result, new JsonObserverOptions(MaxValueBytes: 8))
+        observer.Mask("""{"card":"1"}""", out var result, new JsonObserverOptions { MaxValueBytes = 8 })
             .Should().Be("""{"card":"replaced-by-a-long-mask"}""");
         result.Status.Should().Be(MaskStatus.Masked);
     }
@@ -191,22 +191,22 @@ public abstract class LeakTests
     [Fact]
     public void Hash_UnderValueCap_IsNotCut()
     {
-        var observer = JsonObserver.Obj(r => r.Match("card").MaskAny(MaskTag.Hash));
-        var options = new JsonObserverOptions(MaxValueBytes: 8, HashKey: "0123456789abcdef0123456789abcdef"u8.ToArray());
+        var observer = JsonObserver.Obj(r => r.Match("card").Mask(MaskTag.Hash));
+        var options = new JsonObserverOptions { MaxValueBytes = 8, HashKey = "0123456789abcdef0123456789abcdef"u8.ToArray() };
 
         var masked = observer.Mask("""{"card":"1111222233334444"}""", out var result, options)!;
         var uncapped = observer.Mask("""{"card":"1111222233334444"}""", options with { MaxValueBytes = int.MaxValue });
 
         masked.Should().Be(uncapped);
-        JsonDocument.Parse(masked).RootElement.GetProperty("card").GetString().Should().StartWith("hash:").And.NotContain("…");
+        JsonDocument.Parse(masked).RootElement.GetProperty("card").GetString().Should().HaveLength(24).And.EndWith("==").And.NotContain("…");
         result.Status.Should().Be(MaskStatus.Masked);
     }
 
     [Fact]
     public void UnmaskedValue_UnderValueCap_IsStillCut()
     {
-        JsonObserver.Obj(JsonObserverValuePolicies.BlockList)
-            .Mask("""{"note":"1111222233334444"}""", out var result, new JsonObserverOptions(MaxValueBytes: 8))
+        JsonObserver.Obj(ValuePolicy.BlockList)
+            .Mask("""{"note":"1111222233334444"}""", out var result, new JsonObserverOptions { MaxValueBytes = 8 })
             .Should().Be("""{"note":"11112222…"}""");
         result.Status.Should().Be(MaskStatus.Truncated);
     }
@@ -230,17 +230,17 @@ public abstract class LeakTests
     [MemberData(nameof(CaseTruthTable))]
     public void CaseOption_ReachesEveryMatcher(string matcher, bool caseInsensitive, string expectedMasked)
     {
-        PropMatchingStrategy match = matcher switch
+        NameMatch match = matcher switch
         {
             "Match" => "driverLicense",
-            "Function" => new PropMatchingStrategy((name, comparison) => string.Equals(name, "driverLicense", comparison)),
-            _ => PropMatches.Regex(new Regex("^driverLicense$")),
+            "Function" => new NameMatch((name, comparison) => string.Equals(name, "driverLicense", comparison)),
+            _ => Names.Regex(new Regex("^driverLicense$")),
         };
         var observer = matcher == "RelativeRegex"
-            ? JsonObserver.Obj(JsonObserverValuePolicies.Relative(b => b.Match(match).MaskAny(MaskTag.Full), JsonObserverValuePolicies.BlockList))
-            : JsonObserver.Obj(r => r.Match(match).MaskAny(MaskTag.Full), JsonObserverValuePolicies.BlockList);
+            ? JsonObserver.Obj(JsonValuePolicy.AnyDepth(b => b.Match(match).Mask(MaskTag.Full), ValuePolicy.BlockList))
+            : JsonObserver.Obj(r => r.Match(match).Mask(MaskTag.Full), ValuePolicy.BlockList);
 
-        var output = observer.Mask(CaseCorpus, new JsonObserverOptions(PropertyNameCaseInsensitive: caseInsensitive))!;
+        var output = observer.Mask(CaseCorpus, new JsonObserverOptions { NameCaseInsensitive = caseInsensitive })!;
 
         var masked = JsonDocument.Parse(output).RootElement.EnumerateObject()
             .Select((p, i) => (Key: $"A{i + 1}", Value: p.Value.GetString()))
@@ -253,10 +253,10 @@ public abstract class LeakTests
     public void Regex_WithExplicitIgnoreCase_StaysCaseInsensitive()
     {
         var observer = JsonObserver.Obj(
-            r => r.Match(PropMatches.Regex(new Regex("^token$", RegexOptions.IgnoreCase))).MaskAny(MaskTag.Full),
-            JsonObserverValuePolicies.BlockList);
+            r => r.Match(Names.Regex(new Regex("^token$", RegexOptions.IgnoreCase))).Mask(MaskTag.Full),
+            ValuePolicy.BlockList);
 
-        observer.Mask("""{"Token":"a"}""", new JsonObserverOptions(PropertyNameCaseInsensitive: false)).Should().Be("""{"Token":"***"}""");
+        observer.Mask("""{"Token":"a"}""", new JsonObserverOptions { NameCaseInsensitive = false }).Should().Be("""{"Token":"***"}""");
     }
 
     private static void Keep(string? value, Holder holder) => holder.Value = value;

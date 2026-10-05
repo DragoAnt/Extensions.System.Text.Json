@@ -26,7 +26,8 @@ Random corruption can change a property name; under `BlockList` the renamed prop
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public sealed class WhyNotBlockListCorruptionTests
 {
@@ -35,7 +36,7 @@ public sealed class WhyNotBlockListCorruptionTests
     {
         var corrupted = """{"pas#word":"S3cr3t-7f2a"}""";
 
-        var blockList = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+        var blockList = JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("***"), BlockList));
         var allowList = JsonObserver.Obj(root => root.Match("user").Unmasked());
 
         Assert.Contains("S3cr3t-7f2a", blockList.Mask(corrupted));
@@ -46,12 +47,13 @@ public sealed class WhyNotBlockListCorruptionTests
 
 ## False red: expecting `Masked` for a cut or non-JSON input
 
-A cut payload is `Truncated`; plain text is `Invalid`; a JSON scalar root (`42`, `"text"`) or empty input is `NotJson`; a root array given to `JsonObserver.Obj(...)` is `Invalid`.
+A cut payload is `Truncated`; plain text is `Invalid`; a JSON scalar root (`42`, `"text"`) or empty input is `Unrecognized`; a root array given to `JsonObserver.Obj(...)` is `Invalid`.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public sealed class StatusExpectationTests
 {
@@ -61,8 +63,8 @@ public sealed class StatusExpectationTests
     [InlineData("""{"a":1}""", MaskStatus.Masked)]
     [InlineData("""{"a":1""", MaskStatus.Truncated)]
     [InlineData("hello", MaskStatus.Invalid)]
-    [InlineData("42", MaskStatus.NotJson)]
-    [InlineData("", MaskStatus.NotJson)]
+    [InlineData("42", MaskStatus.Unrecognized)]
+    [InlineData("", MaskStatus.Unrecognized)]
     [InlineData("[1]", MaskStatus.Invalid)]
     public void Status_MatchesTheInput(string input, MaskStatus expected)
     {
@@ -74,30 +76,30 @@ public sealed class StatusExpectationTests
 
 ## False red: `MaskTag.Hash` output in a golden string
 
-Without `JsonObserverOptions.HashKey`, the key is random per process, so the hash changes every run. Pass a fixed key in the test, or assert the shape (`hash:` + 16 hex characters) and equality between two calls.
+Without `JsonObserverOptions.HashKey`, the key is random per process, so the hash changes every run. Pass a fixed key in the test, or assert the shape (24 base64 characters, `HmacRedactor`'s format) and equality between two calls.
 
 ```csharp
 using System.Text;
 using System.Text.RegularExpressions;
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public sealed class HashTests
 {
-    private static readonly JsonObserver Observer = JsonObserver.Obj(Relative(rules => rules.Match("email").MaskAny(MaskTag.Hash), BlockList));
+    private static readonly JsonObserver Observer = JsonObserver.Obj(AnyDepth(rules => rules.Match("email").Mask(MaskTag.Hash), BlockList));
 
     [Fact]
     public void Hash_HasAStableShape_AndCorrelates()
     {
-        var options = new JsonObserverOptions(HashKey: Encoding.UTF8.GetBytes("test-key"));
+        var options = new JsonObserverOptions { HashKey = Encoding.UTF8.GetBytes("test-key") };
 
         var first = Observer.Mask("""{"email":"a@b.c"}""", options);
         var second = Observer.Mask("""{"email":"a@b.c"}""", options);
         var other = Observer.Mask("""{"email":"z@b.c"}""", options);
 
-        Assert.Matches("""^\{"email":"hash:[0-9a-f]{16}"\}$""", first);
+        Assert.Matches("""^\{"email":"[A-Za-z0-9+/]{22}=="\}$""", first);
         Assert.Equal(first, second);
         Assert.NotEqual(first, other);
     }

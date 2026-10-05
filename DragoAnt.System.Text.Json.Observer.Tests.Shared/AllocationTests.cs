@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -9,21 +10,29 @@ public abstract class AllocationTests
     private static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b.Match("password").MaskAny("***").Match("card", "number").MaskStr("***"), BlockList));
+        AnyDepth(b => b.Match("password").Mask("***").Path("card", "number").Mask("***", MaskNulls.Mask), BlockList));
 
-    private static readonly JsonObserver<JsonObserveringEmptyContext> Reader = JsonObserver.Any<JsonObserveringEmptyContext>(
+    private static readonly JsonObserver<NoContext> Reader = JsonObserver.Any<NoContext>(
         _ => { },
         _ => { },
-        JsonObserverValuePolicies<JsonObserveringEmptyContext>.Relative(
-            b => b.Match("password").MaskAny("***"),
-            JsonObserverValuePolicies<JsonObserveringEmptyContext>.BlockList));
+        JsonValuePolicy.AnyDepth<NoContext>(
+            b => b.Match("password").Mask("***"),
+            ValuePolicy.BlockList));
 
-    private static readonly JsonObserverOptions IgnoreNulls = new(IgnoreNulls: true);
+    private static readonly JsonObserver Tags = JsonObserver.Any(
+        _ => { },
+        _ => { },
+        AnyDepth(b => b.Match("password").Mask(MaskTag.Hash).Path("card", "number").Mask(MaskTag.Last4), BlockList));
+
+    private static readonly JsonObserverOptions IgnoreNulls = new() { IgnoreNulls = true };
+
+    private static readonly JsonObserverOptions Keyed = new JsonObserverOptions { HashKeyId = 3 }
+        .WithBase64HashKey("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw==");
 
     public static TheoryData<string, int, string> Budgets()
     {
         var data = new TheoryData<string, int, string>();
-        foreach (var api in new[] { "span", "sequence", "ignore-nulls", "read" })
+        foreach (var api in new[] { "span", "sequence", "ignore-nulls", "read", "tag-hash" })
         {
             data.Add("flat", 1024, api);
             data.Add("flat", 64 * 1024, api);
@@ -53,7 +62,8 @@ public abstract class AllocationTests
                 "span" => Observer.Mask(utf8, output),
                 "sequence" => Observer.Mask(sequence, output),
                 "ignore-nulls" => Observer.Mask(utf8, output, IgnoreNulls),
-                _ => Reader.Read(utf8, JsonObserveringEmptyContext.Instance),
+                "tag-hash" => Tags.Mask(utf8, output, Keyed),
+                _ => Reader.Read(utf8, NoContext.Instance),
             };
         }
 
@@ -82,8 +92,8 @@ public abstract class AllocationTests
     [Fact]
     public void NestedCallOnSameThread_GetsItsOwnWriter()
     {
-        var inner = JsonObserver.Obj(Relative(b => b.Match("pin").MaskAny("#"), BlockList));
-        var outer = JsonObserver.Obj(b => b.Match("payload").MaskStr((v, _) => inner.Mask(v)), BlockList);
+        var inner = JsonObserver.Obj(AnyDepth(b => b.Match("pin").Mask("#"), BlockList));
+        var outer = JsonObserver.Obj(b => b.Match("payload").Mask((v, _) => inner.Mask(v), MaskNulls.Mask), BlockList);
 
         outer.Mask("""{"payload":"{\"pin\":1,\"x\":2}","y":3}""")
             .Should().Be("""{"payload":"{\"pin\":\"#\",\"x\":2}","y":3}""");
@@ -95,8 +105,8 @@ public abstract class AllocationTests
         const string json = """{"a":"é<","password":"x"}""";
 
         Observer.Mask(json).Should().Be("""{"a":"é<","password":"***"}""");
-        Observer.Mask(json, new JsonObserverOptions(RelaxedEscaping: false)).Should().NotContain("é").And.Contain((char)92 + "u003C").And.EndWith(",\"password\":\"***\"}");
-        Observer.Mask(json, new JsonObserverOptions(Indented: true)).Should().Contain(Environment.NewLine);
+        Observer.Mask(json, new JsonObserverOptions { RelaxedEscaping = false }).Should().NotContain("é").And.Contain((char)92 + "u003C").And.EndWith(",\"password\":\"***\"}");
+        Observer.Mask(json, new JsonObserverOptions { Indented = true }).Should().Contain(Environment.NewLine);
         Observer.Mask(json).Should().Be("""{"a":"é<","password":"***"}""");
     }
 

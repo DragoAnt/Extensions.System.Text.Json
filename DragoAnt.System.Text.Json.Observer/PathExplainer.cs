@@ -16,28 +16,33 @@ internal readonly record struct PathSegment(string? Name, int Index)
 /// </summary>
 internal abstract class PathExplainer
 {
-    public JsonPathExplanation Explain(string path, JsonTokenType valueKind, bool propertyNameCaseInsensitive)
+    public PathExplanation Explain(string path, ValueKind valueKind, bool propertyNameCaseInsensitive)
     {
         ArgumentNullException.ThrowIfNull(path);
-        if (valueKind is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False
-            or JsonTokenType.Null or JsonTokenType.StartObject or JsonTokenType.StartArray))
+        var token = valueKind switch
         {
-            throw new ArgumentOutOfRangeException(nameof(valueKind), valueKind, "Expected a value type, StartObject or StartArray.");
-        }
+            ValueKind.String => JsonTokenType.String,
+            ValueKind.Number => JsonTokenType.Number,
+            ValueKind.Boolean => JsonTokenType.True,
+            ValueKind.Null => JsonTokenType.Null,
+            ValueKind.Object => JsonTokenType.StartObject,
+            ValueKind.Array => JsonTokenType.StartArray,
+            _ => throw new ArgumentOutOfRangeException(nameof(valueKind), valueKind, "Expected a defined value kind."),
+        };
 
         var segments = Parse(path);
         var normalized = Format(segments);
         if (segments.Count == 0)
         {
-            return new JsonPathExplanation("$", JsonPathOutcome.Unchanged, "root", "the root's rules apply to its members", []);
+            return new PathExplanation { Path = "$", Outcome = PathOutcome.Unchanged, Rule = "root", Action = "the root's rules apply to its members" };
         }
 
         var steps = new List<string>();
-        var (outcome, rule, action) = Explain(segments, valueKind, propertyNameCaseInsensitive, steps);
-        return new JsonPathExplanation(normalized, outcome, rule, action, steps);
+        var (outcome, rule, action) = Explain(segments, token, propertyNameCaseInsensitive, steps);
+        return new PathExplanation { Path = normalized, Outcome = outcome, Rule = rule, Action = action, Steps = steps };
     }
 
-    protected abstract (JsonPathOutcome Outcome, string Rule, string Action) Explain(
+    protected abstract (PathOutcome Outcome, string Rule, string Action) Explain(
         IReadOnlyList<PathSegment> segments,
         JsonTokenType valueKind,
         bool propertyNameCaseInsensitive,
@@ -48,10 +53,10 @@ internal abstract class PathExplainer
         : segments[index + 1].IsIndex ? JsonTokenType.StartArray
         : JsonTokenType.StartObject;
 
-    protected static PropertyPath PathOf(IReadOnlyList<PathSegment> segments, bool propertyNameCaseInsensitive) =>
-        new(segments.Count, default) { PropertyNameCaseInsensitive = propertyNameCaseInsensitive };
+    protected static JsonWalk PathOf(IReadOnlyList<PathSegment> segments, bool propertyNameCaseInsensitive) =>
+        new(segments.Count, default, JsonObserverOptions.Default with { NameCaseInsensitive = propertyNameCaseInsensitive });
 
-    protected static void Push(ref PropertyPath path, PathSegment segment)
+    protected static void Push(ref JsonWalk path, PathSegment segment)
     {
         if (segment.IsIndex)
         {
@@ -76,11 +81,27 @@ internal abstract class PathExplainer
             }
             else
             {
-                PropertyPath.AppendName(text, segments[i].Name!, first: i == 0);
+                AppendName(text, segments[i].Name!, first: i == 0);
             }
         }
 
         return text.ToString();
+    }
+
+    private static void AppendName(StringBuilder text, string name, bool first)
+    {
+        if (name.Length == 0 || name.AsSpan().IndexOfAny(".[]'") >= 0)
+        {
+            text.Append("['").Append(name.Replace("'", "\\'", StringComparison.Ordinal)).Append("']");
+            return;
+        }
+
+        if (!first)
+        {
+            text.Append('.');
+        }
+
+        text.Append(name);
     }
 
     /// <summary>
@@ -126,6 +147,11 @@ internal abstract class PathExplainer
             var start = i;
             while (i < path.Length && path[i] is not ('.' or '['))
             {
+                if (path[i] is '*' or ':')
+                {
+                    throw Invalid(path, i);
+                }
+
                 i++;
             }
 

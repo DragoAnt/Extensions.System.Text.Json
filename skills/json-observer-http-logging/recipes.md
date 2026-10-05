@@ -15,7 +15,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
-using DragoAnt.System.Text.Json.Observer.Strategies;
+using DragoAnt.Observer;
 
 var sink = new CaptureSink();
 var handler = new JsonBodyLoggingHandler(new JsonBodyLoggingOptions { When = JsonBodyLogWhen.Always }, new ModelMaskers(), sink)
@@ -236,7 +236,8 @@ using System.Net;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var sink = new CaptureSink();
 var options = new JsonBodyLoggingOptions { When = JsonBodyLogWhen.Always, MaxBodyBytes = 40 };

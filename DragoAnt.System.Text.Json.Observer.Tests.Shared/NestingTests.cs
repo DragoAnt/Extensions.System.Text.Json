@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -11,7 +12,7 @@ public abstract class NestingTests
     private static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b.Match("password").MaskStr((_, _) => "***"), BlockList));
+        AnyDepth(b => b.Match("password").Mask((_, _) => "***", MaskNulls.Mask), BlockList));
 
     internal static string Nested(int levels)
     {
@@ -48,23 +49,9 @@ public abstract class NestingTests
         var utf8 = Encoding.UTF8.GetBytes(Nested(10_000));
 
         var result = Observer.Mask(utf8, new ArrayBufferWriter<byte>());
-        var deep = Observer.Mask(utf8, new ArrayBufferWriter<byte>(), new JsonObserverOptions(MaxDepth: 20_000));
+        var deep = Observer.Mask(utf8, new ArrayBufferWriter<byte>(), new JsonObserverOptions { MaxDepth = 20_000 });
 
         result.Status.Should().Be(MaskStatus.Invalid);
         deep.Status.Should().BeOneOf(MaskStatus.Invalid, MaskStatus.Masked);
-    }
-
-    [Fact]
-    public void PropertyPath_ReturnsRentedArray()
-    {
-        var pool = ArrayPool<PropertyPath.Segment>.Shared;
-        var probe = pool.Rent(16);
-        pool.Return(probe);
-
-        Observer.Mask("{\"password\":\"x\"}");
-
-        var again = pool.Rent(16);
-        pool.Return(again);
-        again.Should().BeSameAs(probe);
     }
 }

@@ -2,18 +2,18 @@
 
 Mask or extract JSON values by property-path rules in a single streaming pass from `Utf8JsonReader` to `Utf8JsonWriter` — no deserialization, no DOM. Built for logging: it never throws, even on cut-off or invalid JSON, and never writes a masked value in clear.
 
-Targets `net8.0`, `net9.0` and `net10.0`, with no dependencies beyond the .NET base class library.
+Targets `net8.0` and `net10.0`; depends only on [DragoAnt.Observer.Core](https://www.nuget.org/packages/DragoAnt.Observer.Core), whose `DragoAnt.Observer` namespace (`MaskTag`, `MaskResult`, `ValuePolicy`, …) the package imports into every C# file (`<DragoAntObserverImplicitUsing>false</DragoAntObserverImplicitUsing>` opts out).
 
 ## Quick start
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
-var masker = JsonObserver.Obj(Relative(rules => rules
-        .Match("password").MaskAny("***")
-        .Match("card", "number").MaskAny(MaskTag.Last4),
+var masker = JsonObserver.Obj(AnyDepth(rules => rules
+        .Match("password").Mask("***")
+        .Path("card", "number").Mask(MaskTag.Last4),
     BlockList));
 
 Console.WriteLine(masker.Mask("""{"user":"alice","password":"s3cret","card":{"number":"4111111111111111"}}"""));
@@ -21,7 +21,7 @@ Console.WriteLine(masker.Mask("""{"user":"alice","password":"s3cret","card":{"nu
 // {"user":"alice","password":"***","card":{"number":"***1111"}}
 ```
 
-Build an observer once and share it: it is thread-safe. `Relative` rules match the end of a property's path at any depth; rules passed straight to `JsonObserver.Obj(root => …)` follow the path from the root. Values no rule names get the default policy: `AllowList` (the default) writes every string, number and boolean as `"***"`, `BlockList` writes them unchanged, `NullList` as `null`.
+Build an observer once and share it: it is thread-safe. `AnyDepth` rules match the end of a property's path at any depth; rules passed straight to `JsonObserver.Obj(root => …)` follow the path from the root. Values no rule names get the default policy: `AllowList` (the default) writes every string, number and boolean as `"***"`, `BlockList` writes them unchanged, `NullList` as `null`.
 
 Every `Mask*` rule masks the whole value whatever its JSON type; an object or array under a mask rule is skipped unread.
 
@@ -33,8 +33,8 @@ using DragoAnt.System.Text.Json.Observer;
 var observer = JsonObserver.Obj<Order>(
     rules => rules
         .Match("id").ReadInt((id, order) => order.Id = id)
-        .Match("card").MaskAny("***"),
-    JsonObserverValuePolicies<Order>.BlockList);
+        .Match("card").Mask("***"),
+    ValuePolicy.BlockList);
 
 var order = new Order();
 Console.WriteLine(observer.Mask("""{"id":42,"card":"4111111111111111"}""", order));
@@ -51,15 +51,16 @@ sealed class Order
 
 ## Cut-off JSON and the UTF-8 API
 
-`MaskResult.Status` is `Masked`, `Truncated` (the payload ended early, hit `MaxOutputBytes`, or a string was cut to `MaxValueBytes`), `Invalid` or `NotJson`. Whatever the status, the output is valid JSON holding only masked values. The string and the UTF-8 API produce the same output.
+`MaskResult.Status` is `Masked`, `Truncated` (the payload ended early, hit `MaxOutputBytes`, or a string was cut to `MaxValueBytes`), `Invalid` or `Unrecognized`. Whatever the status, the output is valid JSON holding only masked values. The string and the UTF-8 API produce the same output.
 
 ```csharp
 using System.Buffers;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
-var masker = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+var masker = JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("***"), BlockList));
 var output = new ArrayBufferWriter<byte>(1024);
 
 MaskResult result = masker.Mask("""{"user":"alice","password":"secret","roles":["admin","de"""u8, output);

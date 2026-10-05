@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace DragoAnt.System.Text.Json.Observer.Strategies;
+namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
 /// Replacement of a masked value: a constant string, a regular expression whose matches become <c>*</c>, or a function.
@@ -23,6 +23,12 @@ public readonly ref struct StringMaskingStrategy<TContext>
     }
 
     private Func<string?, TContext, string?> Strategy { get; }
+
+    internal static StringMaskingStrategy<TContext> From(Func<string?, string?> strategy)
+    {
+        ArgumentNullException.ThrowIfNull(strategy);
+        return new StringMaskingStrategy<TContext>((value, _) => strategy(value));
+    }
 
     internal string? Constant { get; }
 

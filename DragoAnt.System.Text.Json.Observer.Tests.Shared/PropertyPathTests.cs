@@ -1,18 +1,19 @@
 using System.Text;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 public abstract class PropertyPathTests
 {
-    private static List<string> Collect(string json, Func<JsonObserverValueDelegate<JsonObserveringEmptyContext>, JsonObserver> build)
+    private static List<string> Collect(string json, Func<JsonValueRule<NoContext>, JsonObserver> build)
     {
         var seen = new List<string>();
-        var observer = build((ref Utf8JsonReader reader, JsonWriter writer, JsonObserveringEmptyContext _, ref PropertyPath path) =>
+        var observer = build((ref JsonValueContext<NoContext> c) =>
         {
-            seen.Add(path.ToString());
-            writer.WriteStringValue("x");
+            seen.Add(c.Path.ToString());
+            c.Writer.WriteStringValue("x");
         });
         observer.Mask(json);
         return seen;
@@ -23,7 +24,7 @@ public abstract class PropertyPathTests
     {
         var seen = Collect(
             """{"items":[{"sku":"a"},{"sku":"b"},{"sku":"c","tags":["x","y"]}],"m":[[1,2],[3]]}""",
-            rule => JsonObserver.Obj(Relative(b => b.Match(new PropMatchingStrategy(_ => true)).MaskValue(rule), BlockList)));
+            rule => JsonObserver.Obj(AnyDepth(b => b.Match(new NameMatch(_ => true)).MaskValue(rule), BlockList)));
 
         seen.Should().Equal(
             "items[0].sku", "items[1].sku", "items[2].sku", "items[2].tags[0]", "items[2].tags[1]",
@@ -35,7 +36,7 @@ public abstract class PropertyPathTests
     {
         var seen = Collect(
             """[{"a.b":1,"it's":2,"":3,"x[1]":4,"é":5}]""",
-            rule => JsonObserver.Array(root => root.Obj(o => o.Match(new PropMatchingStrategy(_ => true)).MaskValue(rule)), BlockList));
+            rule => JsonObserver.Array(root => root.Obj(o => o.Match(new NameMatch(_ => true)).MaskValue(rule)), BlockList));
 
         seen.Should().Equal("[0]['a.b']", "[0]['it\\'s']", "[0]['']", "[0]['x[1]']", "[0].é");
     }
@@ -44,17 +45,19 @@ public abstract class PropertyPathTests
     public void Accessors_IndexAndUtf8Name()
     {
         var seen = new List<string>();
-        var observer = JsonObserver.Obj(Relative(b => b.Match("sku").MaskValue((ref Utf8JsonReader _, JsonWriter writer, JsonObserveringEmptyContext _, ref PropertyPath path) =>
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("sku").MaskValue((ref JsonValueContext<NoContext> c) =>
         {
-            path.TryGetArrayIndex(1, out var index).Should().BeTrue();
-            path.TryGetArrayIndex(0, out _).Should().BeFalse();
-            path.TryGetArrayIndex(7, out _).Should().BeFalse();
-            path.IsArrayItem(1).Should().BeTrue();
-            path.IsArrayItem(2).Should().BeFalse();
-            path.TryGetPropertyNameUtf8(2, out var name).Should().BeTrue();
-            path.TryGetPropertyNameUtf8(1, out _).Should().BeFalse();
-            path.TryGetPropertyNameUtf8(-1, out _).Should().BeFalse();
-            path.GetPropertyName(1).Should().BeNull();
+            var path = c.Path;
+            var writer = c.Writer;
+            path.TryGetItemIndex(1, out var index).Should().BeTrue();
+            path.TryGetItemIndex(0, out _).Should().BeFalse();
+            path.TryGetItemIndex(7, out _).Should().BeFalse();
+            path.IsItem(1).Should().BeTrue();
+            path.IsItem(2).Should().BeFalse();
+            path.TryGetName(2, out var name).Should().BeTrue();
+            path.TryGetName(1, out _).Should().BeFalse();
+            path.TryGetName(-1, out _).Should().BeFalse();
+            path.GetName(1).Should().BeNull();
             seen.Add($"{index}:{Encoding.UTF8.GetString(name)}");
             writer.WriteStringValue("x");
         }), BlockList));
@@ -66,9 +69,9 @@ public abstract class PropertyPathTests
     [Fact]
     public void Matching_ArrayItemSegment_StillOneLevel()
     {
-        var anyItem = new PropMatchingStrategy(n => n is null);
+        var anyItem = new NameMatch(n => n is null);
 
-        JsonObserver.Obj(root => root.Match("lines", anyItem, "qty").MaskAny("***"), BlockList)
+        JsonObserver.Obj(root => root.Path("lines", anyItem, "qty").Mask("***"), BlockList)
             .Mask("""{"lines":[{"qty":1},{"qty":2}],"qty":3}""")
             .Should().Be("""{"lines":[{"qty":"***"},{"qty":"***"}],"qty":3}""");
     }
