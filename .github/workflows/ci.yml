@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Until DragoAnt.Observer.Core 1.0.0 is on nuget.org this job builds it from source: it checks out
-# DragoAnt/Observer next to this repository (the branch of the same name when it exists, else main)
+# DragoAnt/Observer next to this repository (a PR body line `Observer-Ref: <branch>`, else the branch of
+# the same name, else main)
 # and builds with DragoAntObserverLocal=true. Switch back to the shared dotnet-build.yml caller once
 # the package is published.
 jobs:
@@ -49,12 +50,16 @@ jobs:
         working-directory: ${{ github.workspace }}
         env:
           BRANCH: ${{ github.head_ref || github.ref_name }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          if git ls-remote --exit-code --heads https://github.com/DragoAnt/Observer.git "$BRANCH" > /dev/null; then
-            ref="$BRANCH"
-          else
-            ref=main
-          fi
+          pinned=$(printf '%s\n' "$PR_BODY" | tr -d '\r' | sed -n 's/^Observer-Ref: *\([A-Za-z0-9._/-]*\) *$/\1/p' | head -n 1)
+          ref=main
+          for candidate in "$pinned" "$BRANCH"; do
+            if [ -n "$candidate" ] && git ls-remote --exit-code --heads https://github.com/DragoAnt/Observer.git "$candidate" > /dev/null; then
+              ref="$candidate"
+              break
+            fi
+          done
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "Building DragoAnt.Observer.Core from DragoAnt/Observer@$ref" >> "$GITHUB_STEP_SUMMARY"
 
