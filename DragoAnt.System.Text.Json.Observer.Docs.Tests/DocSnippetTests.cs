@@ -54,7 +54,7 @@ public sealed partial class DocSnippetTests
         }
     }
 
-    private static readonly string[] Documents = ["README.md", "package.readme.md"];
+    private static readonly string[] Documents = ["README.md", "package.readme.md", "migrating-to-2.0.md"];
 
     private sealed record Snippet(int Line, string Code, string? ExpectedOutput);
 

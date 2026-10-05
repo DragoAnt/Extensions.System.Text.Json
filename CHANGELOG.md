@@ -4,30 +4,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-10-03
+## [2.0.0] - Unreleased
+
+**Build requirement (coming in DragoAnt.Observer 1.1 as a warning, 1.2 as an error):** the .NET 10 SDK. 2.0 builds with any .NET 8+ SDK; apps may keep targeting `net8.0`. See [Migrating to 2.0](./docs/migrating-to-2.0.md).
 
 ### Added
 
+- **[DragoAnt.Observer.Core](https://www.nuget.org/packages/DragoAnt.Observer.Core) and [DragoAnt.Observer.Abstractions](https://www.nuget.org/packages/DragoAnt.Observer.Abstractions)** carry the format-neutral types (see *Changed — breaking*). The package imports the `DragoAnt.Observer` namespace into every C# file; set `<DragoAntObserverImplicitUsing>false</DragoAntObserverImplicitUsing>` to opt out.
+- **`MaskResult.Flags`** (`MaskFlags`): `InputTruncated`, `OutputCapped`, `ValueCut`, `TrailingData`, `InvalidUtf8Replaced`, `Depth` say why a result is not a clean `Masked`.
+- **Comment policy:** `JsonObserverOptions.Comments` (`CommentPolicy.AllowList` by default, `BlockList`, `MaskAll`, `Mask(tag)`, `DropAll`) and `.Comment(CommentKind, CommentRule)` after any rule decide what happens to comments in the input; a kept comment of a masked value is written masked unless `CommentRules.Raw`. Comments are still dropped by default.
+- **`Mask(ReadOnlySpan<char>, IBufferWriter<byte>)`, `Mask(ReadOnlySpan<char>, IBufferWriter<char>)`, `Read(ReadOnlySpan<char>, …)`**, a non-generic `JsonObserver.Read(...)` that reports status and flags, and `JsonObserver.FromShape<TContext>(...)`.
+- **`ValuePolicy.Tagged(tag)`**: masks every unmatched value with the call's strategy, for example hashed.
+- **`HashKeyId`** and `WithBase64HashKey(key)` (takes a Microsoft `HmacRedactorOptions.Key`); `Mask(strategy, tag)` gives one rule its own strategy; `JsonShapeOptions.UnknownTag`; `MaskTag.Create` and `WithKey`.
 - **UTF-8 API:** `JsonObserver.Mask(ReadOnlySpan<byte>, IBufferWriter<byte>, JsonObserverOptions?)` masks bytes into a reusable writer. With constant or tag rules it allocates a small constant amount per call, whatever the body size.
-- **Never-throw contract with `MaskResult`:** every `Mask` and `Read` overload reports `MaskStatus` (`Masked`, `Truncated`, `Invalid`, `NotJson`), the bytes written and the input offset where reading stopped. On cut-off or invalid input the output is the masked part read so far, with every open object and array closed, so it is always valid JSON and never holds a masked value in clear.
-- **`JsonObserverOptions`** for both APIs: `MaxOutputBytes`, `MaxValueBytes`, `MaxDepth`, `RelaxedEscaping`, `HashKey`, `MaskStrategy`, `IgnoreNulls`, `Indented`.
-- **Tag rules:** `MaskAny(MaskTag)` with `Full`, `Last4`, `Hash` (keyed HMAC-SHA256) and `Omit`, served by a replaceable `Utf8MaskStrategy`.
+- **Never-throw contract with `MaskResult`:** every `Mask` and `Read` overload reports `MaskStatus` (`Masked`, `Truncated`, `Invalid`, `Unrecognized`), the bytes written and the input offset where reading stopped. On cut-off or invalid input the output is the masked part read so far, with every open object and array closed, so it is always valid JSON and never holds a masked value in clear.
+- **`JsonObserverOptions`** for both APIs: `MaxOutputBytes`, `MaxValueBytes`, `MaxDepth`, `RelaxedEscaping`, `HashKey`, `HashKeyId`, `Strategy`, `IgnoreNulls`, `Comments`, `Indented`.
+- **Tag rules:** `Mask(MaskTag)` with `Full`, `Last4`, `Hash` (keyed HMAC-SHA256) and `Null`, served by a replaceable `ValueMaskStrategy`.
 - **Allow-lists from your types:** `JsonShape.FromTypeInfo(...)` and `JsonObserver.FromShape(...)`; anything the shape does not describe is masked (`UnknownMemberPolicy`).
 - **UTF-8 name matching:** property names are compared on their UTF-8 bytes, without creating strings.
 - **Verbatim pass-through:** unmasked numbers and strings are copied as written (`1.50`, `1e400`, `-0`, 20-digit integers).
-- `PropertyPath.Length`.
+- `DataPath.Length`.
 - **`ReadOnlySequence<byte>` input:** `Mask(in ReadOnlySequence<byte>, …)` and `Read(in ReadOnlySequence<byte>, …)` mask a payload held in several buffers, for example from a `PipeReader`, without copying it into one; the output is byte for byte what the span overload writes, however the bytes are split.
 - **No per-call allocation on the bytes API:** the writers are reused per thread, so a warm `Mask`/`Read` of bytes with constant or tag rules allocates nothing (pinned by a test for the span, sequence, ignore-nulls and read paths).
-- **`Explain(path)`:** `JsonObserver.Explain("lines[0].qty", JsonTokenType.Number)` returns a `JsonPathExplanation` naming the rule or policy that handles the value, its action, the outcome (`Unchanged`, `Masked`, `Read`, `Custom`, `Invalid`) and one step per level, for rule-based and shape observers.
+- **`Explain(path)`:** `JsonObserver.Explain("lines[0].qty", ValueKind.Number)` returns a `PathExplanation` naming the rule or policy that handles the value, its action, the outcome (`Unchanged`, `Masked`, `Read`, `Custom`, `Invalid`) and one step per level, for rule-based and shape observers.
 - **Classified tags:** `MaskTag` carries an optional `Key` (a data classification, a redactor name) and `MaskKind.Custom`, so a strategy maps its own taxonomy without casting enum values; `MaskTag.Custom(key)`, `TryGetKey<T>`.
-- **Strategies see where a value is:** `Utf8MaskStrategy.Mask(in Utf8MaskContext, JsonWriter)` receives the value, its JSON type, the tag, the options, the property name and the whole path without allocating. Both `Mask` overloads are virtual; a strategy overrides the one it needs.
+- **Strategies see where a value is:** `ValueMaskStrategy.Mask(in MaskContext, MaskValueWriter)` receives the value, its kind, the tag, the options, the property name and the whole path without allocating. Both `Mask` overloads are virtual; a strategy overrides the one it needs.
 - **`JsonWriter` span overloads:** `WriteStringValue(ReadOnlySpan<char>)`, `WritePropertyName(ReadOnlySpan<char>)`, `WriteBase64StringValue(ReadOnlySpan<byte>)` and `WriteNumberValue(double)`.
-- **Array indices in paths:** `PropertyPath.ToString()` renders `items[2].sku` (names that need it as `['a.b']`); `TryGetArrayIndex`, `IsArrayItem` and `TryGetPropertyNameUtf8` give zero-allocation access.
-- **Case sensitivity:** `JsonObserverOptions.PropertyNameCaseInsensitive` (default `true`) makes rules, `PropMatches` tests and shapes match names exactly when set to `false`, the way the serializer does; `JsonShapeOptions.PropertyNameCaseInsensitive` and `JsonShapeOptions.FromSerializerOptions(...)` set it for one shape observer; `PropertyPath.PropertyNameCaseInsensitive` tells a custom rule.
-- **Metadata on shapes:** `JsonShape.Members` lists `JsonShapeProperty` items with the `JsonPropertyInfo`, CLR member, property and declaring type, `IsRequired`, `IsNullable` and custom attributes; nodes carry their `JsonTypeInfo`/`ClrType`; nodes and properties have `Annotations` for integrations; `FromTypeInfo` takes an `annotate` callback, and `FindMember` looks a property up by its UTF-8 name. On .NET 8, source-generated metadata has no attributes or reference-type nullability.
+- **Array indices in paths:** `DataPath.ToString()` renders `items[2].sku` (names that need it as `['a.b']`); `TryGetItemIndex`, `IsItem` and `TryGetName` give zero-allocation access.
+- **Case sensitivity:** `JsonObserverOptions.NameCaseInsensitive` (default `true`) makes rules, `Names` tests and shapes match names exactly when set to `false`, the way the serializer does; `JsonShapeOptions.NameCaseInsensitive` and `JsonShapeOptions.FromSerializerOptions(...)` set it for one shape observer; `JsonValueContext.Options` tells a custom rule.
+- **Metadata on shapes:** `JsonShape.Members` lists `JsonShapeProperty` items with the `JsonPropertyInfo`, CLR member, property and declaring type, `IsRequired`, `IsNullable` and custom attributes; nodes carry their `JsonTypeInfo`/`ClrType`; nodes and properties have `Annotations` for integrations; `FromTypeInfo` takes an `annotate` callback. On .NET 8, source-generated metadata has no attributes or reference-type nullability.
 - **New package `DragoAnt.System.Text.Json.Observer.Http`:** `JsonBodyLoggingHandler` logs masked `HttpClient` request and response bodies; register it with `AddJsonBodyLogging`, pick maskers per body model type with `IJsonBodyMaskerProvider`, and attach model types per request with `WithBodyLogging<TRequest, TResponse>()`.
 
 ### Changed — breaking
+
+Items 13 and later are new since the 2.0.0 previews; [Migrating to 2.0](./docs/migrating-to-2.0.md) has the rename table.
 
 1. **The default policy masks everything a rule does not name.** `AllowList` (still the default) writes every string, number **and boolean** as `"***"`; in 1.x it wrote `"#str#*****"` / `"#number#*****"` and kept booleans. The 1.x output is available as the obsolete `LegacyAllowList`.
 2. **`Mask(string)` never throws.** It runs the same UTF-8 path as the bytes API and produces the same output for the same text: comments are skipped (never written), trailing commas are accepted, non-ASCII and HTML characters are written unescaped (`RelaxedEscaping`), invalid or cut-off text yields its masked prefix. `Mask(string, out MaskResult, options)` reports the status. The `JsonReaderOptions`, `JsonWriterOptions`, `ignoreNulls` and `ignoreComments` parameters are gone: use `JsonObserverOptions` (`IgnoreNulls`, `Indented`, `MaxDepth`).
@@ -39,8 +49,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 8. **`JsonWriter` can no longer be derived from outside the library**, `JsonWriter.FromUtf8JsonWriter` and `JsonWriter.Empty` are removed, and `WriteCommentValue` is gone (comments are never written).
 9. **Internal now:** `JsonObserverException`, `PropertyPathMatch`, `JsonPropertyMatchDelegate`, `JsonPropertyPathMatchDelegate`, and the constructors of `JsonObjBuilder`, `JsonArrayBuilder`, `JsonValuePolicyBuilder` and their rule builders (start rules with `Match`).
 10. **A UTF-8 byte order mark at the start of the input is skipped.**
-11. **Read rules no longer decide what is written.** `ReadStr`, `ReadInt`, `ReadLong`, `ReadDecimal`, `ReadBool` and `ReadRaw` hand the value to the context; the next rule on the same match or the default policy writes it, so under `AllowList` a read value is `"***"`, not clear text. Chain `.Unmasked()` to keep it clear, or a mask method to read and mask one match: `Match("ssn").ReadStr(f).MaskAny(MaskTag.Last4)`. A read rule runs wherever it stands among the rules, so `Match("ssn").MaskAny(…).Match("ssn").ReadStr(f)` reads too. `Explain` reports `Read` only for a value read and written unchanged.
+11. **Read rules no longer decide what is written.** `ReadStr`, `ReadInt`, `ReadLong`, `ReadDecimal`, `ReadBool` and `ReadRaw` hand the value to the context; the next rule on the same match or the default policy writes it, so under `AllowList` a read value is `"***"`, not clear text. Chain `.Unmasked()` to keep it clear, or a mask method to read and mask one match: `Match("ssn").ReadStr(f).Mask(MaskTag.Last4)`. A read rule runs wherever it stands among the rules, so `Match("ssn").Mask(…).Match("ssn").ReadStr(f)` reads too. `Explain` reports `Read` only for a value read and written unchanged.
 12. **A masking function receives the whole value, and mask output is never cut by `MaxValueBytes`.** A `Last4`-style function sees the real last characters (`***4444`, not the ones at the cap), and `MaskTag.Hash`, a function's result and the `AllowList` stars are written whole, with status `Masked`. A function therefore decodes a long value in full.
+
+13. **Format-neutral types live in `DragoAnt.Observer` (DragoAnt.Observer.Core and .Abstractions)** under their final names: `MaskKind`, `MaskTag` (Abstractions); `MaskResult`, `MaskStatus`, `PathExplanation` (was `JsonPathExplanation`), `PathOutcome` (was `JsonPathOutcome`), `UnknownMemberPolicy`, `NoContext` (was `JsonObserveringEmptyContext`), `DataPath` (was `PropertyPath`), `NameMatch` and `Names` (were `PropMatchingStrategy` and `PropMatches`), `ValueMaskStrategy` (was `Utf8MaskStrategy`) and `MaskContext` (was `Utf8MaskContext`). The `.Strategies` namespace is gone; `StringMaskingStrategy<TContext>` moved to the root namespace.
+14. **`MaskStatus.NotJson` is `Unrecognized`**, and `Masked` now means no `Flags`: data after the root (`{"a":1}{"b":2}`, formerly `Masked`) and invalid UTF-8 replaced by U+FFFD report `Truncated` with the whole document written.
+15. **The hash is Microsoft's `HmacRedactor` format:** HMAC-SHA256 over the value's UTF-16 text, the first 16 bytes in base64 (24 characters), after `"<HashKeyId>:"` when a key id is set; `""` hashes to `""`; numbers and booleans hash their literal, so `1` and `"1"` hash alike. The 1.x/preview `hash:` + 16 hex characters over UTF-8 is gone, so stored hashes change.
+16. **`MaskKind.Omit` is `MaskKind.Null`** (it writes `null` and keeps the property).
+17. **Options and results have init-only properties, no positional constructors:** `new JsonObserverOptions { MaxValueBytes = 8 }`. `JsonObserverOptions` derives from `ObserverOptions`; `MaskStrategy` is `Strategy`, `PropertyNameCaseInsensitive` is `NameCaseInsensitive`. Likewise `JsonShapeOptions` (`NameCaseInsensitive`; `FromSerializerOptions(options)` takes the serializer options only), `MaskResult`, `PathExplanation`, `MaskTag` (factories: `Full`, `Last4`, `Hash`, `Null`, `Custom(key)`, `Create(kind, key)`) and Http's `JsonBodyLoggingContext`.
+18. **Strategies are format-neutral:** override `ValueMaskStrategy.Mask(in MaskContext, MaskValueWriter)`; the five-argument overload is gone. The context has `Kind` (`ValueKind`, was `TokenType`), `Name` (was `PropertyName`) and `ValueIndex`; `MaskValueWriter` validates numbers (an invalid literal writes `"***"` and makes the call `Invalid`).
+19. **One custom-rule delegate:** `JsonValueRule<TContext>(ref JsonValueContext<TContext> c)` replaces `JsonObserverDelegate<TContext>` and `JsonObserverValueDelegate<TContext>` in `MaskValue`, `Obj(rule)` and `Array(rule)`; `c.WriteDefault()` applies the enclosing default policy. A custom default policy is `JsonValuePolicy.Custom(rule)`.
+20. **Default policies are `ValuePolicy` values that work for any context type:** `JsonObserverValuePolicies` and `JsonObserverValuePolicies<TContext>` are gone — use `ValuePolicy.BlockList` / `AllowList` / `NullList` (`using static DragoAnt.Observer.ValuePolicy;`). `Relative(...)` is `JsonValuePolicy.AnyDepth(...)`, its builder `JsonAnyDepthBuilder<TContext>`.
+21. **One masking verb:** `MaskAny`, `MaskStr` and `MaskRawValue` are `Mask(...)` — `Mask(MaskTag)`, `Mask(strategy, tag)`, `Mask("***")`, `Mask(regex)`, `Mask(value => …)`, `Mask((value, context) => …)`. `null` stays `null` by default; `Mask(…, MaskNulls.Mask)` passes it to the function (the former `MaskStr`). A function receives a string decoded (the raw-text variant is gone).
+22. **`Match(a, b)` with several names is `Path(a, b)`**; `Match(name)` tests one level.
+23. **`LegacyAllowList` is removed.**
+24. **`Explain(path, ValueKind)`** takes a `ValueKind` (was a `JsonTokenType`), returns `PathExplanation`, and rejects wildcards and tags (`*`, `:`); explanations name rules `Mask(...)`, `Path(...)` and `AnyDepth`.
+25. **Engine details are internal:** `JsonShape.FindMember` and the case flag of the path (read `JsonValueContext.Options.NameCaseInsensitive`).
+26. **`net9.0` is dropped;** the package targets `net8.0` and `net10.0` (a `net9.0` app uses the `net8.0` assets).
+27. **`JsonWriter.IgnoreNullsJsonTokenType`**, a public nested enum in 1.0.2, is removed.
 
 ### Fixed
 
@@ -52,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Observer.Http 2.0.0 — breaking (since the preview builds)
 
 - `JsonBodyOutcome.Timeout` is replaced by `Canceled`: every cancellation, an `HttpClient.Timeout` included, is logged as `Canceled`.
+- `JsonBodyLoggingContext` uses `init` properties (`RequestType`, `ResponseType`, `Operation`).
+- The HTTP handler never writes a comment of a body (`CommentPolicy.DropAll`).
 - `JsonBodyLogEntry` uses `init` properties and adds `Operation`, `RequestBodyStatus` and `ResponseBodyStatus`.
 - New `JsonBodyStatus` type; a body that could not be logged as JSON is a marker such as `[body not JSON]` or `[invalid JSON]`, and a truncated body is flagged.
 - `JsonBodyLoggingHandler` is sealed.

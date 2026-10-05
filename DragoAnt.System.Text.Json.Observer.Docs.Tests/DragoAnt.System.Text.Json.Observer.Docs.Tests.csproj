@@ -9,5 +9,6 @@
   <ItemGroup>
     <None Include="..\README.md" Link="docs\README.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\DragoAnt.System.Text.Json.Observer\package.readme.md" Link="docs\package.readme.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\docs\migrating-to-2.0.md" Link="docs\migrating-to-2.0.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
