@@ -90,7 +90,7 @@ public readonly struct JsonObjBuilder<TContext>
             MaskWhole(JsonObserverItem<TContext>.ApplyStringPolicy(strategy, strategy.Constant), RuleText.Strategy("MaskStr", strategy.Constant));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadStr"/>
-        public JsonObjBuilder<TContext> ReadStr(Action<string?, TContext> strategy)
+        public ReadRuleBuilder ReadStr(Action<string?, TContext> strategy)
             => Read(JsonObserverItem<TContext>.ReadStr(strategy, _builderDefaultValuePolicy), RuleText.ReadStr);
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskInt"/>
@@ -98,7 +98,7 @@ public readonly struct JsonObjBuilder<TContext>
             => MaskWhole(JsonObserverItem<TContext>.ApplyIntPolicy(strategy), "MaskInt(function)");
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadInt"/>
-        public JsonObjBuilder<TContext> ReadInt(Action<int?, TContext> strategy)
+        public ReadRuleBuilder ReadInt(Action<int?, TContext> strategy)
             => Read(JsonObserverItem<TContext>.ReadInt(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadInt"));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskLong"/>
@@ -106,7 +106,7 @@ public readonly struct JsonObjBuilder<TContext>
             => MaskWhole(JsonObserverItem<TContext>.ApplyLongPolicy(strategy), "MaskLong(function)");
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadLong"/>
-        public JsonObjBuilder<TContext> ReadLong(Action<long?, TContext> strategy)
+        public ReadRuleBuilder ReadLong(Action<long?, TContext> strategy)
             => Read(JsonObserverItem<TContext>.ReadLong(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadLong"));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskDecimal"/>
@@ -114,7 +114,7 @@ public readonly struct JsonObjBuilder<TContext>
             => MaskWhole(JsonObserverItem<TContext>.ApplyDecimalPolicy(strategy), "MaskDecimal(function)");
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadDecimal"/>
-        public JsonObjBuilder<TContext> ReadDecimal(Action<decimal?, TContext> strategy)
+        public ReadRuleBuilder ReadDecimal(Action<decimal?, TContext> strategy)
             => Read(JsonObserverItem<TContext>.ReadDecimal(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadDecimal"));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskBool"/>
@@ -122,7 +122,7 @@ public readonly struct JsonObjBuilder<TContext>
             => MaskWhole(JsonObserverItem<TContext>.ApplyBoolPolicy(strategy), "MaskBool(function)");
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadBool"/>
-        public JsonObjBuilder<TContext> ReadBool(Action<bool?, TContext> strategy)
+        public ReadRuleBuilder ReadBool(Action<bool?, TContext> strategy)
             => Read(JsonObserverItem<TContext>.ReadBool(strategy, _builderDefaultValuePolicy), RuleText.ReadBool);
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(Func{string, TContext, string})"/>
@@ -142,7 +142,7 @@ public readonly struct JsonObjBuilder<TContext>
             => MaskWhole(JsonObserverItem<TContext>.ApplyRawPolicy(strategy), "MaskRawValue(function)");
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadRaw"/>
-        public JsonObjBuilder<TContext> ReadRaw(Action<string?, TContext> strategy)
+        public ReadRuleBuilder ReadRaw(Action<string?, TContext> strategy)
             => Read(JsonObserverItem<TContext>.ReadRaw(strategy, _builderDefaultValuePolicy), RuleText.ReadRaw);
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskValue(JsonObserverValueDelegate{TContext})"/>
@@ -208,8 +208,8 @@ public readonly struct JsonObjBuilder<TContext>
         internal JsonObjBuilder<TContext> MaskWhole(JsonObserverDelegate<TContext> policy, string action)
             => _builder.AddAny(_propNameMatch.AbsoluteMatch, policy, Info(action, JsonPathOutcome.Masked));
 
-        private JsonObjBuilder<TContext> Read(JsonObserverDelegate<TContext> policy, string action)
-            => _builder.AddValue(_propNameMatch.AbsoluteMatch, policy, Info(action, JsonPathOutcome.Read));
+        private ReadRuleBuilder Read(JsonObserverDelegate<TContext> policy, string action)
+            => new(this, _builder.AddValue(_propNameMatch.AbsoluteMatch, policy, Info(action, JsonPathOutcome.Read)));
 
         private JsonObjBuilder<TContext> Container(JsonTokenType container, JsonObserverDelegate<TContext> policy, RuleInfo<TContext> info)
         {
@@ -229,5 +229,75 @@ public readonly struct JsonObjBuilder<TContext>
 
         private RuleInfo<TContext> Info(string action, JsonPathOutcome outcome, RuleSet<TContext>? child = null) =>
             new(_propNameMatch.Describe(), action, outcome, child);
+    }
+
+    /// <summary>
+    /// A read rule just added. A read rule does not decide what is written: the default policy writes the value unless
+    /// <see cref="Unmasked"/> or a mask method is chained here, which applies to the same match. <see cref="Match(PropMatchingStrategy)"/>
+    /// starts the next rule.
+    /// </summary>
+    public readonly ref struct ReadRuleBuilder
+    {
+        private readonly PropertyMaskingStrategyBuilder _rule;
+        private readonly JsonObjBuilder<TContext> _builder;
+
+        internal ReadRuleBuilder(PropertyMaskingStrategyBuilder rule, JsonObjBuilder<TContext> builder)
+        {
+            _rule = rule;
+            _builder = builder;
+        }
+
+        /// <inheritdoc cref="JsonObjBuilder{TContext}.Match(PropMatchingStrategy)"/>
+        public PropertyMaskingStrategyBuilder Match(PropMatchingStrategy match) => _builder.Match(match);
+
+        /// <inheritdoc cref="JsonObjBuilder{TContext}.Match(PropMatchingStrategy[])"/>
+        public PropertyMaskingStrategyBuilder Match(params PropMatchingStrategy[] match) => _builder.Match(match);
+
+        /// <summary>
+        /// Writes the read value unchanged instead of through the default policy.
+        /// </summary>
+        public JsonObjBuilder<TContext> Unmasked() => _rule.Unmasked();
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskStr(Func{string, TContext, string})"/>
+        public JsonObjBuilder<TContext> MaskStr(Func<string?, TContext, string?> strategy) => _rule.MaskStr(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskStr(StringMaskingStrategy{TContext})"/>
+        public JsonObjBuilder<TContext> MaskStr(StringMaskingStrategy<TContext> strategy) => _rule.MaskStr(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskInt"/>
+        public JsonObjBuilder<TContext> MaskInt(Func<int?, TContext, string?> strategy) => _rule.MaskInt(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskLong"/>
+        public JsonObjBuilder<TContext> MaskLong(Func<long?, TContext, string?> strategy) => _rule.MaskLong(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskDecimal"/>
+        public JsonObjBuilder<TContext> MaskDecimal(Func<decimal?, TContext, string?> strategy) => _rule.MaskDecimal(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskBool"/>
+        public JsonObjBuilder<TContext> MaskBool(Func<bool?, TContext, string?> strategy) => _rule.MaskBool(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(Func{string, TContext, string})"/>
+        public JsonObjBuilder<TContext> MaskAny(Func<string?, TContext, string?> strategy) => _rule.MaskAny(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(StringMaskingStrategy{TContext})"/>
+        public JsonObjBuilder<TContext> MaskAny(StringMaskingStrategy<TContext> strategy) => _rule.MaskAny(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(MaskTag)"/>
+        public JsonObjBuilder<TContext> MaskAny(MaskTag tag) => _rule.MaskAny(tag);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskRawValue"/>
+        public JsonObjBuilder<TContext> MaskRawValue(Func<string?, TContext, string?> strategy) => _rule.MaskRawValue(strategy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskValue(JsonObserverValueDelegate{TContext})"/>
+        public JsonObjBuilder<TContext> MaskValue(JsonObserverValueDelegate<TContext> policy) => _rule.MaskValue(policy);
+
+        /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskValue(JsonObserverDelegate{TContext})"/>
+        public JsonObjBuilder<TContext> MaskValue(JsonObserverDelegate<TContext> policy) => _rule.MaskValue(policy);
+
+        /// <summary>
+        /// The rules added so far, to keep adding to them.
+        /// </summary>
+        /// <param name="rule">The read rule just added.</param>
+        public static implicit operator JsonObjBuilder<TContext>(ReadRuleBuilder rule) => rule._builder;
     }
 }

@@ -30,11 +30,16 @@ internal abstract class NameMatcher
 
     public static NameMatcher OneOf(string[] names) => new OneOfNameMatcher(names);
 
-    internal sealed class FuncNameMatcher(Func<string?, bool> match, string? description = null) : NameMatcher
+    internal sealed class FuncNameMatcher(Func<string?, StringComparison, bool> match, string? description = null) : NameMatcher
     {
+        public FuncNameMatcher(Func<string?, bool> match, string? description = null)
+            : this((name, _) => match(name), description)
+        {
+        }
+
         public override string Describe() => description ?? "custom name test";
 
-        public override bool MatchString(string? name, StringComparison comparison) => match(name);
+        public override bool MatchString(string? name, StringComparison comparison) => match(name, PropertyPathMatch.DefaultComparison);
     }
 
     /// <summary>
