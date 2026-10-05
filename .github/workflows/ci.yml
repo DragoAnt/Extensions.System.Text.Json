@@ -34,7 +34,7 @@ jobs:
       RESULTS_DIR: ${{ github.workspace }}/TestResults
       COVERAGE_DIR: ${{ github.workspace }}/coverage
       COVERAGE_THRESHOLD: 70
-      BUILD_PROPS: -p:ContinuousIntegrationBuild=true -p:Version=0.0.0-ci.${{ github.run_number }} -p:DragoAntObserverLocal=true
+      BUILD_PROPS: -p:ContinuousIntegrationBuild=true -p:DragoAntObserverLocal=true
     defaults:
       run:
         working-directory: Extensions.System.Text.Json
