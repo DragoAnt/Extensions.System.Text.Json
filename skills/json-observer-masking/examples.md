@@ -264,7 +264,7 @@ Console.WriteLine(JsonObserver.FromShape(shape).Mask("""
 
 ## Extract values while masking
 
-`JsonObserver.Obj<TContext>(...)` adds `Read*` rules that hand a value to a context object and write it unchanged. The context-aware policies live in `JsonObserverValuePolicies<TContext>`. `Mask(json, context)` masks and extracts in one pass; `Read(json, context)` only extracts and returns a `MaskResult`.
+`JsonObserver.Obj<TContext>(...)` adds `Read*` rules that hand a value to a context object. A read rule does not decide what is written: the default policy writes the value (here `BlockList`, so unchanged) unless `.Unmasked()` or a mask method is chained on the read, as in `Match("ssn").ReadStr(f).MaskAny(MaskTag.Last4)`. The context-aware policies live in `JsonObserverValuePolicies<TContext>`. `Mask(json, context)` masks and extracts in one pass; `Read(json, context)` only extracts and returns a `MaskResult`.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
@@ -297,4 +297,4 @@ sealed class OrderInfo
 }
 ```
 
-A number that does not fit the read type (a fraction for `ReadInt`, a 30-digit integer) reaches the callback as `null`; the token is still written unchanged.
+A number that does not fit the read type (a fraction for `ReadInt`, a 30-digit integer) reaches the callback as `null`; the default policy still writes the token.

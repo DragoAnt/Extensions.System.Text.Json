@@ -28,7 +28,7 @@ Check, in order:
 1. **The rule is absolute, the field is nested.** `JsonObserver.Obj(root => root.Match("password")…)` only matches a top-level `password`. Use `Relative(...)` to match at any depth.
 2. **The name differs.** Matching is exact (case-insensitive): `password` does not match `newPassword` or `passwd`. Use `PropMatches.Contains("password")` or `PropMatches.OneOf(...)`.
 3. **The path crosses an array.** An array item is a path level: `Match("users", "password")` does not reach `{"users":[{"password":…}]}`. Use a single name in `Relative(...)`, or `Match("users", AnyItem, "password")` with `AnyItem = new PropMatchingStrategy(_ => true)`.
-4. **The value is not a string and the rule only reads.** `Read*` rules write the value unchanged; use a `Mask*` rule.
+4. **The rule only reads.** A `Read*` rule leaves the writing to the default policy, which under `BlockList` writes the value unchanged; chain a mask method on the read (`ReadStr(f).MaskAny(MaskTag.Full)`) or use a `Mask*` rule.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
@@ -104,9 +104,9 @@ Console.WriteLine($"[{any.Mask("[1]", out var r3)}] {r3.Status}");
 
 **Cause:** values shorter than 8 characters are masked fully, so a short value is not narrowed down. Booleans, objects and arrays are always `"***"`.
 
-## A masking function sees a shortened value
+## A masking function is slow on huge values
 
-**Cause:** `MaxValueBytes` also cuts the value handed to a function. The result reports `Truncated`.
+**Cause:** a masking function receives the whole value, decoded to a `string`, whatever `MaxValueBytes` says; the cap limits values written unmasked only. Prefer `MaskAny(MaskTag…)` or a constant for fields that can be huge: they never decode the value to a `string`.
 
 ## Building an observer per call
 
