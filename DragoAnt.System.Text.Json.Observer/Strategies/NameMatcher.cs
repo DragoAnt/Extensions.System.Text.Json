@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace DragoAnt.System.Text.Json.Observer.Strategies;
 
@@ -39,7 +40,22 @@ internal abstract class NameMatcher
 
         public override string Describe() => description ?? "custom name test";
 
-        public override bool MatchString(string? name, StringComparison comparison) => match(name, PropertyPathMatch.DefaultComparison);
+        public override bool MatchString(string? name, StringComparison comparison) => match(name, comparison);
+    }
+
+    /// <summary>
+    /// A regular expression; a case-insensitive call also matches names that differ in case only.
+    /// </summary>
+    internal sealed class RegexNameMatcher(Regex regex) : NameMatcher
+    {
+        private readonly Regex _ignoreCase = (regex.Options & RegexOptions.IgnoreCase) != 0
+            ? regex
+            : new Regex(regex.ToString(), regex.Options | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, regex.MatchTimeout);
+
+        public override string Describe() => $"Regex(/{regex}/)";
+
+        public override bool MatchString(string? name, StringComparison comparison) =>
+            name is not null && (comparison == StringComparison.Ordinal ? regex : _ignoreCase).IsMatch(name);
     }
 
     /// <summary>
