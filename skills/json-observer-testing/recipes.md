@@ -12,11 +12,12 @@ using System.Text;
 using System.Text.Json;
 using DragoAnt.System.Text.Json.Observer;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public static class LogMaskers
 {
-    public static readonly JsonObserver BlockListed = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+    public static readonly JsonObserver BlockListed = JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("***"), BlockList));
 
     public static readonly JsonObserver AllowListed = JsonObserver.Obj(root => root.Match("user").Unmasked());
 }
@@ -118,21 +119,21 @@ Below, a leak through an array: `Match("credentials", "secret")` does not cross 
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public static class LogMaskers
 {
-    private static readonly PropMatchingStrategy AnyItem = new(_ => true);
+    private static readonly NameMatch AnyItem = new(_ => true);
 
-    public static readonly JsonObserver BeforeFix = JsonObserver.Obj(Relative(rules => rules
-            .Match("credentials", "secret").MaskAny("***"),
+    public static readonly JsonObserver BeforeFix = JsonObserver.Obj(AnyDepth(rules => rules
+            .Path("credentials", "secret").Mask("***"),
         BlockList));
 
-    public static readonly JsonObserver Body = JsonObserver.Obj(Relative(rules => rules
-            .Match("credentials", "secret").MaskAny("***")
-            .Match("credentials", AnyItem, "secret").MaskAny("***"),
+    public static readonly JsonObserver Body = JsonObserver.Obj(AnyDepth(rules => rules
+            .Path("credentials", "secret").Mask("***")
+            .Path("credentials", AnyItem, "secret").Mask("***"),
         BlockList));
 }
 
@@ -163,7 +164,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
-using DragoAnt.System.Text.Json.Observer.Strategies;
+using DragoAnt.Observer;
 using Xunit;
 
 public sealed record SignUp(string Email, string Password, string Country);

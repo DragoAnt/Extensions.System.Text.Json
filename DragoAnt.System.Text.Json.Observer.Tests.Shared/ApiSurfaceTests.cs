@@ -1,5 +1,6 @@
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -10,19 +11,19 @@ public abstract class ApiSurfaceTests
     {
         var context = new Values();
         string Mask(Action<Builders.JsonArrayBuilder<Values>> init, string json)
-            => JsonObserver.Array(init, JsonObserverValuePolicies<Values>.BlockList).Mask(json, context)!;
+            => JsonObserver.Array(init, ValuePolicy.BlockList).Mask(json, context)!;
 
-        Mask(a => a.MaskStr("s"), """[1,"x",{"a":1}]""").Should().Be("""["s","s","s"]""");
-        Mask(a => a.MaskStr((v, _) => v + "!"), """["x"]""").Should().Be("""["x!"]""");
+        Mask(a => a.Mask("s", MaskNulls.Mask), """[1,"x",{"a":1}]""").Should().Be("""["s","s","s"]""");
+        Mask(a => a.Mask((v, _) => v + "!", MaskNulls.Mask), """["x"]""").Should().Be("""["x!"]""");
         Mask(a => a.MaskInt((v, _) => $"{v}"), """[1,"x"]""").Should().Be("""["1",""]""");
         Mask(a => a.MaskLong((v, _) => $"{v}"), """[2]""").Should().Be("""["2"]""");
         Mask(a => a.MaskDecimal((v, _) => $"{v}"), """[3]""").Should().Be("""["3"]""");
         Mask(a => a.MaskBool((v, _) => $"{v}"), """[true]""").Should().Be("""["True"]""");
-        Mask(a => a.MaskAny((v, _) => v), """["a",null]""").Should().Be("""["a",null]""");
-        Mask(a => a.MaskAny("*"), """[1]""").Should().Be("""["*"]""");
-        Mask(a => a.MaskAny(MaskTag.Full), """[1]""").Should().Be("""["***"]""");
-        Mask(a => a.MaskRawValue((v, _) => v), """["a\"b"]""").Should().Be("""["a\\\"b"]""");
-        Mask(a => a.Array(i => i.MaskStr("n")), """[[1],2]""").Should().Be("""[["n"],2]""");
+        Mask(a => a.Mask((v, _) => v), """["a",null]""").Should().Be("""["a",null]""");
+        Mask(a => a.Mask("*"), """[1]""").Should().Be("""["*"]""");
+        Mask(a => a.Mask(MaskTag.Full), """[1]""").Should().Be("""["***"]""");
+        Mask(a => a.Mask((v, _) => v, MaskNulls.Mask), """["a\"b"]""").Should().Be("""["a\"b"]""");
+        Mask(a => a.Array(i => i.Mask("n", MaskNulls.Mask)), """[[1],2]""").Should().Be("""[["n"],2]""");
         Mask(a => a.Unmasked(), """[1,"x"]""").Should().Be("""[1,"x"]""");
 
         Mask(a => a.ReadStr((v, c) => c.Str = v), """["s"]""").Should().Be("""["s"]""");
@@ -39,7 +40,7 @@ public abstract class ApiSurfaceTests
     public void RelativeBuilder_EveryReadRule_KeepsValues()
     {
         var context = new Values();
-        var observer = JsonObserver.Obj(JsonObserverValuePolicies<Values>.Relative(b => b
+        var observer = JsonObserver.Obj(JsonValuePolicy.AnyDepth<Values>(b => b
                 .Match("s").ReadStr((v, c) => c.Str = v).Unmasked()
                 .Match("i").ReadInt((v, c) => c.Int = v).Unmasked()
                 .Match("l").ReadLong((v, c) => c.Long = v).Unmasked()
@@ -50,9 +51,9 @@ public abstract class ApiSurfaceTests
                 .Match("n").MaskLong((_, _) => "l")
                 .Match("o").MaskDecimal((_, _) => "d")
                 .Match("p").MaskBool((_, _) => "b")
-                .Match("q").MaskRawValue((_, _) => "r")
+                .Match("q").Mask((_, _) => "r", MaskNulls.Mask)
                 .Match("u").Unmasked(),
-            JsonObserverValuePolicies<Values>.NullList));
+            ValuePolicy.NullList));
 
         observer.Mask("""{"x":{"s":"a","i":1,"l":2,"d":3.5,"b":true,"r":"z","m":1,"n":2,"o":3,"p":true,"q":"q","u":7,"v":8}}""", context)
             .Should().Be("""{"x":{"s":"a","i":1,"l":2,"d":3.5,"b":true,"r":"z","m":"i","n":"l","o":"d","p":"b","q":"r","u":7,"v":null}}""");
@@ -61,7 +62,7 @@ public abstract class ApiSurfaceTests
 
     [Fact]
     public void ObjBuilder_RawAndAnyFunction()
-        => JsonObserver.Obj(b => b.Match("a").MaskRawValue((v, _) => "<" + v + ">").Match("b").MaskAny((v, _) => v + "?"), BlockList)
+        => JsonObserver.Obj(b => b.Match("a").Mask((v, _) => "<" + v + ">", MaskNulls.Mask).Match("b").Mask((v, _) => v + "?"), BlockList)
             .Mask("""{"a":1.0,"b":false}""").Should().Be("""{"a":"<1.0>","b":"false?"}""");
 
     [Fact]
@@ -69,15 +70,15 @@ public abstract class ApiSurfaceTests
     {
         var context = new Values();
         var observer = JsonObserver.Obj<Values>(b => b
-            .Match("p").MaskStr("***")
-            .Match("t").MaskAny(MaskTag.Last4)
+            .Match("p").Mask("***", MaskNulls.Mask)
+            .Match("t").Mask(MaskTag.Last4)
             .Match("n").MaskInt((_, _) => "*")
             .Match("s").ReadStr((v, c) => c.Str = v)
-            .Match("o").Obj(o => o.Match("i").ReadInt((v, c) => c.Int = v)), JsonObserverValuePolicies<Values>.BlockList);
+            .Match("o").Obj(o => o.Match("i").ReadInt((v, c) => c.Int = v)), ValuePolicy.BlockList);
 
         var result = observer.Read("""{"p":"secret","t":{"a":1},"n":5,"x":true,"y":null,"s":"v","o":{"i":3},"z":[1,"a",false,1.5]}""", context);
 
-        result.Should().Be(new MaskResult(MaskStatus.Masked, 0, -1));
+        result.Should().Be(new MaskResult { Status = MaskStatus.Masked, BytesWritten = 0, FailedAtByte = -1 });
         context.Str.Should().Be("v");
         context.Int.Should().Be(3);
     }
@@ -85,8 +86,7 @@ public abstract class ApiSurfaceTests
     [Fact]
     public void CustomRule_EveryWriterMethod()
     {
-        var observer = JsonObserver.Obj(b => b.Match("a").MaskValue((ref Utf8JsonReader _, JsonWriter writer, JsonObserveringEmptyContext _, ref PropertyPath _) =>
-        {
+        var observer = JsonObserver.Obj(b => b.Match("a").MaskValue((ref JsonValueContext<NoContext> __c) => { var writer = __c.Writer;
             writer.WriteStartArray();
             writer.WriteNumberValue(1L);
             writer.WriteNumberValue(2.5m);
@@ -104,13 +104,13 @@ public abstract class ApiSurfaceTests
         }), BlockList);
 
         observer.Mask("""{"a":0}""").Should().Be("""{"a":[1,2.5,true,null,null,3e1,{"k":"v","j":"w"}]}""");
-        observer.Mask("""{"a":0}""", new JsonObserverOptions(IgnoreNulls: true)).Should().Be("""{"a":[1,2.5,true,3e1,{"k":"v","j":"w"}]}""");
+        observer.Mask("""{"a":0}""", new JsonObserverOptions { IgnoreNulls = true }).Should().Be("""{"a":[1,2.5,true,3e1,{"k":"v","j":"w"}]}""");
     }
 
     [Fact]
     public void IgnoreNulls_EveryValueType()
-        => JsonObserver.Obj(Relative(b => b.Match("m").MaskStr((_, _) => null), BlockList))
-            .Mask("""{"s":"x","n":1.5,"b":false,"z":null,"m":"gone","o":{"a":[true,null,{"q":null}],"e":"é"}}""", new JsonObserverOptions(IgnoreNulls: true))
+        => JsonObserver.Obj(AnyDepth(b => b.Match("m").Mask((_, _) => null, MaskNulls.Mask), BlockList))
+            .Mask("""{"s":"x","n":1.5,"b":false,"z":null,"m":"gone","o":{"a":[true,null,{"q":null}],"e":"é"}}""", new JsonObserverOptions { IgnoreNulls = true })
             .Should().Be("""{"s":"x","n":1.5,"b":false,"o":{"a":[true],"e":"é"}}""");
 
     [Fact]
@@ -120,36 +120,30 @@ public abstract class ApiSurfaceTests
         var name = new string('n', 300);
         var json = string.Concat(Enumerable.Repeat($$"""{"{{name}}":""", depth)) + "1" + new string('}', depth);
 
-        JsonObserver.Obj(BlockList).Mask(json, new JsonObserverOptions(IgnoreNulls: true)).Should().Be(json);
+        JsonObserver.Obj(BlockList).Mask(json, new JsonObserverOptions { IgnoreNulls = true }).Should().Be(json);
     }
 
-#pragma warning disable CS0618
     [Fact]
-    public void LegacyAllowList_EveryValueType()
-        => JsonObserver.Obj(LegacyAllowList).Mask("""{"s":"x","n":1,"t":true,"f":false,"z":null}""")
-            .Should().Be("""{"s":"#str#*****","n":"#number#*****","t":true,"f":false,"z":null}""");
-#pragma warning restore CS0618
-
-    [Fact]
-    public void PropMatchingStrategy_ConvertsToFunction()
+    public void NameMatch_TestsDecodedNames()
     {
-        Func<string?, bool> exact = (PropMatchingStrategy)"Pin";
-        Func<string?, bool> custom = (PropMatchingStrategy)(Func<string?, bool>)(n => n == "x");
+        NameMatch exact = "Pin";
+        var custom = new NameMatch(n => n == "x");
 
-        exact("PIN").Should().BeTrue();
-        exact("pins").Should().BeFalse();
-        custom("x").Should().BeTrue();
-        ((Func<string?, bool>)default(PropMatchingStrategy))("a").Should().BeFalse();
+        exact.IsMatch("PIN", StringComparison.OrdinalIgnoreCase).Should().BeTrue();
+        exact.IsMatch("PIN", StringComparison.Ordinal).Should().BeFalse();
+        exact.IsMatch("pins", StringComparison.OrdinalIgnoreCase).Should().BeFalse();
+        custom.IsMatch("x", StringComparison.Ordinal).Should().BeTrue();
+        default(NameMatch).IsMatch("a", StringComparison.Ordinal).Should().BeFalse();
     }
 
     [Fact]
     public void NonAsciiPatterns_FallBackToStringComparison()
     {
-        var observer = JsonObserver.Obj(Relative(b => b
-                .Match(PropMatches.StartsWith("пар")).MaskAny("1")
-                .Match(PropMatches.EndsWith("оль")).MaskAny("2")
-                .Match(PropMatches.Contains("ём")).MaskAny("3")
-                .Match("ключ").MaskAny("4"),
+        var observer = JsonObserver.Obj(AnyDepth(b => b
+                .Match(Names.StartsWith("пар")).Mask("1")
+                .Match(Names.EndsWith("оль")).Mask("2")
+                .Match(Names.Contains("ём")).Mask("3")
+                .Match("ключ").Mask("4"),
             BlockList));
 
         observer.Mask("""{"пароль":"a","кроль":"b","объём":"c","КЛЮЧ":"d","other":"e"}""")
@@ -159,7 +153,7 @@ public abstract class ApiSurfaceTests
     [Fact]
     public void Match_WithoutNames_Throws()
     {
-        var build = () => JsonObserver.Obj(b => b.Match().MaskAny("*"));
+        var build = () => JsonObserver.Obj(b => b.Path().Mask("*"));
 
         build.Should().Throw<ArgumentException>();
     }

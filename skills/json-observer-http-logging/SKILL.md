@@ -7,7 +7,7 @@ description: Log HttpClient request and response JSON bodies with secrets masked
 
 `JsonBodyLoggingHandler` sits in an `HttpClient` pipeline and turns a call into one `JsonBodyLogEntry` — method, path, status, outcome, elapsed time, and the request and response bodies **masked** by a `JsonObserver` you choose per body model type. The caller is never affected: the response streams as usual, its body stays readable in full, and a failure inside logging never reaches the caller.
 
-Package: `DragoAnt.System.Text.Json.Observer.Http` (net8.0, net9.0, net10.0), namespace `DragoAnt.System.Text.Json.Observer.Http`. Masking rules come from `DragoAnt.System.Text.Json.Observer` — see the `json-observer-masking` skill.
+Package: `DragoAnt.System.Text.Json.Observer.Http` (net8.0, net10.0), namespace `DragoAnt.System.Text.Json.Observer.Http`. Masking rules come from `DragoAnt.System.Text.Json.Observer` — see the `json-observer-masking` skill.
 
 ## Quick start
 
@@ -17,9 +17,10 @@ using System.Net.Http.Json;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
-using DragoAnt.System.Text.Json.Observer.Strategies;
+using DragoAnt.Observer;
 using Microsoft.Extensions.DependencyInjection;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var sink = new ConsoleSink();
 var services = new ServiceCollection();
@@ -50,8 +51,8 @@ public sealed record ChargeResponse(string Id, string? Error);
 
 public sealed class PaymentMaskers : IJsonBodyMaskerProvider
 {
-    private static readonly JsonObserver Charge = JsonObserver.Obj(Relative(rules => rules
-            .Match("cardNumber").MaskAny(MaskTag.Last4),
+    private static readonly JsonObserver Charge = JsonObserver.Obj(AnyDepth(rules => rules
+            .Match("cardNumber").Mask(MaskTag.Last4),
         BlockList));
 
     public JsonObserver? GetMasker(Type? modelType, string clientName) =>

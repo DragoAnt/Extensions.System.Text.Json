@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text;
 using Bogus;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies<DragoAnt.System.Text.Json.Observer.Tests.Shared.JsonReadTests.ReadContext>;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -34,10 +34,10 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
                 .Match("contractId").ReadInt((v, c) => c.ContractId = v)
                 .Match("contractId2").ReadRaw((v, c) => c.ContractId2 = v)
                 .Match("method").ReadStr((v, c) => c.Method = v))
-            .Match("session", "user", "entered").ReadStr((v, c) => c.User = v),
-        Relative(builder => builder
-            .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)
-            .Match(PropMatches.Contains("ipAddress")).ReadStr((v, c) => c.Ip = v)));
+            .Path("session", "user", "entered").ReadStr((v, c) => c.User = v),
+        JsonValuePolicy.AnyDepth<ReadContext>(builder => builder
+            .Path(Names.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)
+            .Match(Names.Contains("ipAddress")).ReadStr((v, c) => c.Ip = v)));
 
     private static readonly Dictionary<string, string> SensitiveValues = new()
     {
@@ -162,9 +162,9 @@ public abstract class JsonReadTests(ITestOutputHelper outputHelper)
         var requestMasking = JsonObserver.Obj(b => b
                 .Match("routing").Obj(routingB => routingB
                     .Match("contractId").ReadInt((v, c) => c.ContractId = v))
-                .Match("session", "user", "entered").ReadStr((v, c) => c.User = v),
-            Relative(b => b
-                .Match(PropMatches.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)));
+                .Path("session", "user", "entered").ReadStr((v, c) => c.User = v),
+            JsonValuePolicy.AnyDepth<ReadContext>(b => b
+                .Path(Names.EndsWith("card"), "saved", "id").ReadStr((v, c) => c.SavedCardValue = v)));
 
         // Act
         var readContext = Read(TestJson, requestMasking);

@@ -47,7 +47,7 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
     public bool Exhausted { get; private set; }
 
     /// <summary>
-    /// At least one string value was cut to <see cref="JsonObserverOptions.MaxValueBytes"/>.
+    /// At least one string value was cut to <see cref="ObserverOptions.MaxValueBytes"/>.
     /// </summary>
     public bool ValuesTruncated { get; private set; }
 

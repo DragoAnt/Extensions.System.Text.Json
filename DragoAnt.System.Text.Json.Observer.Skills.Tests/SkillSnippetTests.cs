@@ -229,7 +229,7 @@ public sealed partial class SkillSnippetTests
 
     private const string ImplicitUsings =
         "global using System;\nglobal using System.Collections.Generic;\nglobal using System.IO;\nglobal using System.Linq;\n" +
-        "global using System.Net.Http;\nglobal using System.Threading;\nglobal using System.Threading.Tasks;\n";
+        "global using System.Net.Http;\nglobal using System.Threading;\nglobal using System.Threading.Tasks;\nglobal using DragoAnt.Observer;\n";
 
     private static MetadataReference[] LoadReferences()
     {

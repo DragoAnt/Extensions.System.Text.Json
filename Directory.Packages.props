@@ -36,6 +36,7 @@
 
   <ItemGroup>
     <PackageVersion Include="DragoAnt.Shared" Version="$(DragoAntSharedVersion)" />
+    <PackageVersion Include="DragoAnt.Observer.Core" Version="1.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Bogus" Version="35.6.5" />
     <PackageVersion Include="Verify.DiffPlex" Version="3.3.1" />

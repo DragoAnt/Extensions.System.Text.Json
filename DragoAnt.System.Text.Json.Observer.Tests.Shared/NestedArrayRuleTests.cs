@@ -1,14 +1,15 @@
 using DragoAnt.System.Text.Json.Observer.Builders;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 public abstract class NestedArrayRuleTests
 {
-    private static readonly PropMatchingStrategy AnyItem = new(_ => true);
+    private static readonly NameMatch AnyItem = new(_ => true);
 
-    private static void Line(JsonObjBuilder<JsonObserveringEmptyContext> line, bool allowList)
+    private static void Line(JsonObjBuilder<NoContext> line, bool allowList)
     {
         if (allowList)
         {
@@ -16,11 +17,11 @@ public abstract class NestedArrayRuleTests
         }
         else
         {
-            line.Match("qty").MaskAny("***");
+            line.Match("qty").Mask("***");
         }
     }
 
-    private static JsonObserverValueDelegate<JsonObserveringEmptyContext> Policy(bool allowList) => allowList ? AllowList : BlockList;
+    private static JsonValuePolicy<NoContext> Policy(bool allowList) => allowList ? AllowList : BlockList;
 
     [Theory]
     [InlineData(false)]
@@ -73,8 +74,8 @@ public abstract class NestedArrayRuleTests
     [Fact]
     public void AnyItemWorkaround_StillMatches()
     {
-        var byPath = JsonObserver.Obj(root => root.Match("lines", AnyItem, "qty").MaskAny("***"), BlockList);
-        var byRelative = JsonObserver.Obj(Relative(rules => rules.Match("lines", AnyItem, "qty").MaskAny("***"), BlockList));
+        var byPath = JsonObserver.Obj(root => root.Path("lines", AnyItem, "qty").Mask("***"), BlockList);
+        var byRelative = JsonObserver.Obj(AnyDepth(rules => rules.Path("lines", AnyItem, "qty").Mask("***"), BlockList));
         const string json = """{"lines":[{"qty":5,"sku":"A"}]}""";
 
         byPath.Mask(json).Should().Be("""{"lines":[{"qty":"***","sku":"A"}]}""");

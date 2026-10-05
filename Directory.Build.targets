@@ -2,6 +2,10 @@
 
   <Import Project="$(MSBuildThisFileDirectory).toolkit/msbuild/init.targets" />
 
+  <!-- Every project but the library itself gets the package's implicit `using DragoAnt.Observer`, as a consumer does. -->
+  <Import Project="$(MSBuildThisFileDirectory)DragoAnt.System.Text.Json.Observer/buildTransitive/DragoAnt.System.Text.Json.Observer.props"
+          Condition="'$(MSBuildProjectName)' != 'DragoAnt.System.Text.Json.Observer'" />
+
   <!-- DynamicallyAccessedMemberTypes.None collides with the statically imported JsonTokenType.None. -->
   <ItemGroup>
     <Using Remove="System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes" />

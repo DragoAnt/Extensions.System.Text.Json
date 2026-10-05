@@ -8,15 +8,15 @@ Exact input â†’ output pairs. Raw string literals keep the JSON readable; one `[
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public static class LogMaskers
 {
-    public static readonly JsonObserver Body = JsonObserver.Obj(Relative(rules => rules
-            .Match(PropMatches.OneOf("password", "pin")).MaskAny(MaskTag.Full)
-            .Match("card", "number").MaskAny(MaskTag.Last4),
+    public static readonly JsonObserver Body = JsonObserver.Obj(AnyDepth(rules => rules
+            .Match(Names.OneOf("password", "pin")).Mask(MaskTag.Full)
+            .Path("card", "number").Mask(MaskTag.Last4),
         BlockList));
 }
 
@@ -39,15 +39,15 @@ One secret value, many shapes that could defeat a rule. Assert absence first, th
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public static class LogMaskers
 {
-    public static readonly JsonObserver Body = JsonObserver.Any(_ => { }, _ => { }, Relative(rules => rules
-            .Match(PropMatches.Contains("password")).MaskAny("***")
-            .Match(PropMatches.EndsWith("token")).MaskAny("***"),
+    public static readonly JsonObserver Body = JsonObserver.Any(_ => { }, _ => { }, AnyDepth(rules => rules
+            .Match(Names.Contains("password")).Mask("***")
+            .Match(Names.EndsWith("token")).Mask("***"),
         BlockList));
 }
 
@@ -88,18 +88,19 @@ A secret-absent test is only worth something if it fails without the rule. Keep 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public static class LogMaskers
 {
     public static readonly JsonObserver Body = Build(maskCvv: true);
 
-    internal static JsonObserver Build(bool maskCvv) => JsonObserver.Obj(Relative(rules =>
+    internal static JsonObserver Build(bool maskCvv) => JsonObserver.Obj(AnyDepth(rules =>
     {
-        rules.Match("password").MaskAny("***");
+        rules.Match("password").Mask("***");
         if (maskCvv)
         {
-            rules.Match("cvv").MaskAny("***");
+            rules.Match("cvv").Mask("***");
         }
     }, BlockList));
 }
@@ -127,13 +128,14 @@ using System.Text;
 using System.Text.Json;
 using DragoAnt.System.Text.Json.Observer;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public static class LogMaskers
 {
-    public static readonly JsonObserver Body = JsonObserver.Obj(Relative(rules => rules
-            .Match("password").MaskAny("***")
-            .Match("pin").MaskAny("***"),
+    public static readonly JsonObserver Body = JsonObserver.Obj(AnyDepth(rules => rules
+            .Match("password").Mask("***")
+            .Match("pin").Mask("***"),
         BlockList));
 }
 
@@ -161,7 +163,7 @@ public sealed class LogMaskersTruncationTests
                 using var parsed = JsonDocument.Parse(text);
             }
 
-            var expected = cut == payload.Length ? MaskStatus.Masked : cut == 0 ? MaskStatus.NotJson : MaskStatus.Truncated;
+            var expected = cut == payload.Length ? MaskStatus.Masked : cut == 0 ? MaskStatus.Unrecognized : MaskStatus.Truncated;
             Assert.Equal(expected, result.Status);
         }
     }
@@ -228,11 +230,12 @@ using System.Buffers;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public static class LogMaskers
 {
-    public static readonly JsonObserver Body = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+    public static readonly JsonObserver Body = JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("***"), BlockList));
 }
 
 public sealed class LogMaskersAllocationTests
@@ -282,14 +285,15 @@ An observer is meant to be shared. Run the same inputs on many threads at once â
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public sealed class SharedObserverTests
 {
     [Fact]
     public void ConcurrentCalls_GiveTheSameOutput()
     {
-        var observer = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+        var observer = JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("***"), BlockList));
         var deep = """{"a":{"b":{"c":{"d":{"e":{"f":{"g":{"password":"p","keep":1}}}}}}}}""";
         var flat = """{"password":"p","keep":1}""";
         var expectedDeep = """{"a":{"b":{"c":{"d":{"e":{"f":{"g":{"password":"***","keep":1}}}}}}}}""";
@@ -321,7 +325,8 @@ using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
 using Xunit;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 public sealed record Login(string User, string Password);
 
@@ -329,9 +334,9 @@ public sealed record Session(string Token, string User);
 
 public sealed class AuthMaskers : IJsonBodyMaskerProvider
 {
-    private static readonly JsonObserver Auth = JsonObserver.Obj(Relative(rules => rules
-            .Match("password").MaskAny("***")
-            .Match("token").MaskAny("***"),
+    private static readonly JsonObserver Auth = JsonObserver.Obj(AnyDepth(rules => rules
+            .Match("password").Mask("***")
+            .Match("token").Mask("***"),
         BlockList));
 
     public JsonObserver? GetMasker(Type? modelType, string clientName) =>

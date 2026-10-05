@@ -1,4 +1,5 @@
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -9,7 +10,7 @@ public abstract class DefaultPolicyTests
     [Fact]
     public void SharedNestedRule_TwoParentsDifferentDefaults_EachUsesOwn()
     {
-        var shared = JsonObserverItem<JsonObserveringEmptyContext>.Obj(b => b.Match("pin").MaskStr((_, _) => "***"), null).Delegate;
+        Action<Builders.JsonObjBuilder<NoContext>> shared = b => b.Match("pin").Mask((_, _) => "***", MaskNulls.Mask);
         var blockList = JsonObserver.Obj(b => b.Match("a").Obj(shared), BlockList);
         var nullList = JsonObserver.Obj(b => b.Match("a").Obj(shared), NullList);
 
@@ -27,7 +28,7 @@ public abstract class DefaultPolicyTests
         for (var round = 0; round < 20; round++)
         {
             var observer = JsonObserver.Obj(
-                b => b.Match("a").Obj(a => a.Match("pin").MaskStr((_, _) => "***")),
+                b => b.Match("a").Obj(a => a.Match("pin").Mask((_, _) => "***", MaskNulls.Mask)),
                 BlockList);
             using var start = new ManualResetEventSlim();
             var results = new string?[8];

@@ -19,7 +19,8 @@ using System.Net;
 using System.Text;
 using DragoAnt.System.Text.Json.Observer;
 using DragoAnt.System.Text.Json.Observer.Http;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 foreach (var attachTypes in new[] { false, true })
 {
@@ -50,7 +51,7 @@ public sealed record Login(string User, string Password);
 
 public sealed class LoginMaskers : IJsonBodyMaskerProvider
 {
-    private static readonly JsonObserver Login = JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("***"), BlockList));
+    private static readonly JsonObserver Login = JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("***"), BlockList));
 
     public JsonObserver? GetMasker(Type? modelType, string clientName) => modelType == typeof(Login) ? Login : null;
 }

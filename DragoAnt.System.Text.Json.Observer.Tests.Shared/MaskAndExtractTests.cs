@@ -13,7 +13,7 @@ public abstract class MaskAndExtractTests
             .Match("name").ReadStr((v, c) => c.Name = v)
             .Match("raw").ReadRaw((v, c) => c.Raw = v)
             .Match("none").ReadInt((v, c) => c.None = v ?? -1),
-        JsonObserverValuePolicies<Extracted>.Relative(r => r.Match("password").MaskAny("***"), JsonObserverValuePolicies<Extracted>.BlockList));
+        JsonValuePolicy.AnyDepth<Extracted>(r => r.Match("password").Mask("***"), ValuePolicy.BlockList));
 
     [Fact]
     public void MaskAndExtract_KeepsJsonTypes()

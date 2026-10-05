@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using DragoAnt.System.Text.Json.Observer.Strategies;
+using DragoAnt.Observer;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 

@@ -1,16 +1,17 @@
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 public abstract class SensitiveRuleTests
 {
-    private static readonly JsonObserver AbsoluteMaskStr = JsonObserver.Obj(b => b.Match("pin").MaskStr("***"), BlockList);
+    private static readonly JsonObserver AbsoluteMaskStr = JsonObserver.Obj(b => b.Match("pin").Mask("***", MaskNulls.Mask), BlockList);
 
-    private static readonly JsonObserver RelativeMaskStr = JsonObserver.Obj(Relative(b => b.Match("pin").MaskStr("***"), BlockList));
+    private static readonly JsonObserver RelativeMaskStr = JsonObserver.Obj(AnyDepth(b => b.Match("pin").Mask("***", MaskNulls.Mask), BlockList));
 
-    private static readonly JsonObserver AbsoluteMaskRaw = JsonObserver.Obj(b => b.Match("pin").MaskRawValue((_, _) => "***"), BlockList);
+    private static readonly JsonObserver AbsoluteMaskRaw = JsonObserver.Obj(b => b.Match("pin").Mask((_, _) => "***", MaskNulls.Mask), BlockList);
 
-    private static readonly JsonObserver RelativeMaskRaw = JsonObserver.Obj(Relative(b => b.Match("pin").MaskRawValue((_, _) => "***"), BlockList));
+    private static readonly JsonObserver RelativeMaskRaw = JsonObserver.Obj(AnyDepth(b => b.Match("pin").Mask((_, _) => "***", MaskNulls.Mask), BlockList));
 
     public static TheoryData<string, string> SensitiveValues => new()
     {
@@ -66,11 +67,11 @@ public abstract class SensitiveRuleTests
     public void MaskStr_StrategyInput_PerValueType()
     {
         var seen = new List<string?>();
-        var observer = JsonObserver.Obj(b => b.Match("pin").MaskStr((v, _) =>
+        var observer = JsonObserver.Obj(b => b.Match("pin").Mask((v, _) =>
         {
             seen.Add(v);
             return "***";
-        }), BlockList);
+        }, MaskNulls.Mask), BlockList);
 
         observer.Mask("""{"pin":"a\u0062c"}""");
         observer.Mask("""{"pin":12.50}""");
@@ -83,7 +84,7 @@ public abstract class SensitiveRuleTests
 
     [Fact]
     public void MaskStr_NullStrategyResult_WritesNull()
-        => JsonObserver.Obj(b => b.Match("pin").MaskStr((_, _) => null), BlockList)
+        => JsonObserver.Obj(b => b.Match("pin").Mask((_, _) => null, MaskNulls.Mask), BlockList)
             .Mask("""{"pin":[1,2]}""").Should().Be("""{"pin":null}""");
 
     [Fact]

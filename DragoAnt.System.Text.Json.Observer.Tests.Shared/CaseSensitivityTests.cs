@@ -1,22 +1,23 @@
 using System.Text;
 using System.Text.Json.Serialization.Metadata;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 public abstract class CaseSensitivityTests
 {
-    private static readonly JsonObserverOptions Exact = new(PropertyNameCaseInsensitive: false);
+    private static readonly JsonObserverOptions Exact = new() { NameCaseInsensitive = false };
 
-    private static readonly JsonObserver Rules = JsonObserver.Obj(Relative(b => b
-            .Match("password").MaskAny("1")
-            .Match(PropMatches.StartsWith("tok")).MaskAny("2")
-            .Match(PropMatches.EndsWith("Card")).MaskAny("3")
-            .Match(PropMatches.Contains("mail")).MaskAny("4")
-            .Match(PropMatches.OneOf("pin", "cvv")).MaskAny("5")
-            .Match("ключ").MaskAny("6")
-            .Match(PropMatches.StartsWith("пар")).MaskAny("7"),
+    private static readonly JsonObserver Rules = JsonObserver.Obj(AnyDepth(b => b
+            .Match("password").Mask("1")
+            .Match(Names.StartsWith("tok")).Mask("2")
+            .Match(Names.EndsWith("Card")).Mask("3")
+            .Match(Names.Contains("mail")).Mask("4")
+            .Match(Names.OneOf("pin", "cvv")).Mask("5")
+            .Match("ключ").Mask("6")
+            .Match(Names.StartsWith("пар")).Mask("7"),
         BlockList));
 
     private const string Payload = """{"password":"a","Password":"b","token":"c","Token":"d","myCard":"e","mycard":"f","email":"g","eMail":"h","pin":"i","PIN":"j","ключ":"k","КЛЮЧ":"l","пароль":"m","Пароль":"n"}""";
@@ -41,9 +42,8 @@ public abstract class CaseSensitivityTests
     public void CustomRule_SeesTheCallsMatchingMode()
     {
         var modes = new List<bool>();
-        var observer = JsonObserver.Obj(b => b.Match("a").MaskValue((ref Utf8JsonReader _, JsonWriter writer, JsonObserveringEmptyContext _, ref PropertyPath path) =>
-        {
-            modes.Add(path.PropertyNameCaseInsensitive);
+        var observer = JsonObserver.Obj(b => b.Match("a").MaskValue((ref JsonValueContext<NoContext> __c) => { var writer = __c.Writer; var path = __c.Path;
+            modes.Add(__c.Options.NameCaseInsensitive);
             writer.WriteNullValue();
         }), BlockList);
 
@@ -64,9 +64,9 @@ public abstract class CaseSensitivityTests
         JsonObserver.FromShape(shape, JsonShapeOptions.FromSerializerOptions(general)).Mask(json)
             .Should().Be("""{"Name":"a","name":"***","Secret":"***","secret":"***"}""");
         JsonObserver.FromShape(shape).Mask(json, Exact).Should().Be("""{"Name":"a","name":"***","Secret":"***","secret":"***"}""");
-        JsonObserver.FromShape(shape, new JsonShapeOptions(PropertyNameCaseInsensitive: true)).Mask(json, Exact)
+        JsonObserver.FromShape(shape, new JsonShapeOptions { NameCaseInsensitive = true }).Mask(json, Exact)
             .Should().Be("""{"Name":"a","name":"b","Secret":"***","secret":"***"}""");
-        JsonShapeOptions.FromSerializerOptions(new JsonSerializerOptions(JsonSerializerDefaults.Web)).PropertyNameCaseInsensitive.Should().BeTrue();
+        JsonShapeOptions.FromSerializerOptions(new JsonSerializerOptions(JsonSerializerDefaults.Web)).NameCaseInsensitive.Should().BeTrue();
     }
 
     [Fact]

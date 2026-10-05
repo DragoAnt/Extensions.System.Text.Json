@@ -139,7 +139,7 @@ public sealed partial class DocSnippetTests
         return NewLines().Replace(printed.ToString(), "\n");
     }
 
-    private const string GlobalUsings = "global using System;\nglobal using System.Collections.Generic;\nglobal using System.Linq;\nglobal using System.Threading.Tasks;\n";
+    private const string GlobalUsings = "global using System;\nglobal using System.Collections.Generic;\nglobal using System.Linq;\nglobal using System.Threading.Tasks;\nglobal using DragoAnt.Observer;\n";
 
     private static MetadataReference[] LoadReferences()
     {

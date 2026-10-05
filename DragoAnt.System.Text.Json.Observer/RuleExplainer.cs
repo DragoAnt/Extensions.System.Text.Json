@@ -1,3 +1,5 @@
+using DragoAnt.System.Text.Json.Observer.Builders;
+
 namespace DragoAnt.System.Text.Json.Observer;
 
 /// <summary>
@@ -6,7 +8,7 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// </summary>
 internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TContext>? array) : PathExplainer
 {
-    protected override (JsonPathOutcome Outcome, string Rule, string Action) Explain(
+    protected override (PathOutcome Outcome, string Rule, string Action) Explain(
         IReadOnlyList<PathSegment> segments,
         JsonTokenType valueKind,
         bool propertyNameCaseInsensitive,
@@ -17,13 +19,13 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
         {
             var root = segments[0].IsIndex ? "array" : "object";
             steps.Add($"$: the observer does not accept a root {root}");
-            return (JsonPathOutcome.Invalid, "root", $"a root {root} makes the payload Invalid");
+            return (PathOutcome.Invalid, "root", $"a root {root} makes the payload Invalid");
         }
 
         var path = PathOf(segments, propertyNameCaseInsensitive);
         try
         {
-            var effective = set.ValuePolicy ?? JsonObserverValuePolicies<TContext>.Default;
+            var effective = set.ValuePolicy ?? JsonValuePolicy<TContext>.Default;
             var items = set.Items;
             var depth = 0;
             var chain = new List<string>();
@@ -60,14 +62,14 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
 
                 if (!last)
                 {
-                    if (effective.Target is RelativeValuePolicy<TContext> relative)
+                    if (effective.Relative is { } relative)
                     {
                         var (relativeItem, _) = JsonObserverItem<TContext>.MatchPolicy(relative.Items, 0, ref path, token);
                         if (relativeItem is not null)
                         {
                             var info = relativeItem.Info;
-                            steps.Add($"{at}: relative {info.Match} → {info.Action} on the whole {Container(token)}");
-                            return (info.Outcome, $"relative {info.Match}", $"{info.Action} on the whole {Container(token)}");
+                            steps.Add($"{at}: AnyDepth {info.Match} → {info.Action} on the whole {Container(token)}");
+                            return (info.Outcome, $"AnyDepth {info.Match}", $"{info.Action} on the whole {Container(token)}");
                         }
                     }
 
@@ -86,56 +88,55 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
         }
     }
 
-    private static (JsonPathOutcome, string, string) DefaultPolicy(
-        JsonObserverValueDelegate<TContext> policy,
-        ref PropertyPath path,
+    private static (PathOutcome, string, string) DefaultPolicy(
+        JsonValuePolicy<TContext> policy,
+        ref JsonWalk path,
         JsonTokenType token,
         string at,
         List<string> steps)
     {
-        if (policy.Target is RelativeValuePolicy<TContext> relative)
+        if (policy.Relative is { } relative)
         {
             var reads = ReadsAt(relative.Items, 0, ref path, token);
             foreach (var read in reads)
             {
-                steps.Add($"{at}: relative {read.Match} → {read.Action}");
+                steps.Add($"{at}: AnyDepth {read.Match} → {read.Action}");
             }
 
             var (item, _) = JsonObserverItem<TContext>.MatchPolicy(relative.Items, 0, ref path, token);
             if (item is not null)
             {
                 var (relativeOutcome, relativeAction) = Resolve(item.Info, token);
-                steps.Add($"{at}: relative {item.Info.Match} → {relativeAction}");
-                return WithReads((relativeOutcome, $"relative {item.Info.Match}", relativeAction), ["relative"], reads);
+                steps.Add($"{at}: AnyDepth {item.Info.Match} → {relativeAction}");
+                return WithReads((relativeOutcome, $"AnyDepth {item.Info.Match}", relativeAction), ["AnyDepth"], reads);
             }
 
-            steps.Add($"{at}: no relative rule");
-            return WithReads(DefaultPolicy(relative.DefaultValuePolicy, ref path, token, at, steps), ["relative"], reads);
+            steps.Add($"{at}: no AnyDepth rule");
+            return WithReads(DefaultPolicy(relative.Fallback, ref path, token, at, steps), ["AnyDepth"], reads);
         }
 
-        var name = KnownPolicyName(policy);
-        var rule = name is null ? "custom default policy" : $"default policy {name}";
+        var builtIn = policy.BuiltIn;
+        var rule = builtIn is null ? policy.Name : $"default policy {builtIn}";
         var (outcome, action) = token is JsonTokenType.Null
-            ? (JsonPathOutcome.Unchanged, "keeps null")
-            : name switch
+            ? (PathOutcome.Unchanged, "keeps null")
+            : builtIn?.Kind switch
             {
-                nameof(JsonObserverValuePolicies<TContext>.AllowList) => (JsonPathOutcome.Masked, "writes \"***\""),
-                nameof(JsonObserverValuePolicies<TContext>.BlockList) => (JsonPathOutcome.Unchanged, "writes the value as is"),
-                nameof(JsonObserverValuePolicies<TContext>.NullList) => (JsonPathOutcome.Masked, "writes null"),
-                "LegacyAllowList" when token is JsonTokenType.True or JsonTokenType.False => (JsonPathOutcome.Unchanged, "writes the boolean as is"),
-                "LegacyAllowList" => (JsonPathOutcome.Masked, token is JsonTokenType.String ? "writes \"#str#*****\"" : "writes \"#number#*****\""),
-                _ => (JsonPathOutcome.Custom, "custom default policy decides"),
+                ValuePolicyKind.AllowList => (PathOutcome.Masked, "writes \"***\""),
+                ValuePolicyKind.BlockList => (PathOutcome.Unchanged, "writes the value as is"),
+                ValuePolicyKind.NullList => (PathOutcome.Masked, "writes null"),
+                ValuePolicyKind.Tagged => (PathOutcome.Masked, RuleText.Tag(builtIn.Tag)),
+                _ => (PathOutcome.Custom, "custom default policy decides"),
             };
         if (token is JsonTokenType.StartObject or JsonTokenType.StartArray)
         {
-            (outcome, action) = (JsonPathOutcome.Unchanged, $"the {Container(token)} is descended with the same rules");
+            (outcome, action) = (PathOutcome.Unchanged, $"the {Container(token)} is descended with the same rules");
         }
 
         steps.Add($"{at}: {rule} → {action}");
         return (outcome, rule, action);
     }
 
-    private static List<RuleInfo<TContext>> ReadsAt(JsonObserverItem<TContext>[] items, int depth, ref PropertyPath path, JsonTokenType token)
+    private static List<RuleInfo<TContext>> ReadsAt(JsonObserverItem<TContext>[] items, int depth, ref JsonWalk path, JsonTokenType token)
     {
         List<RuleInfo<TContext>> reads = [];
         foreach (var item in items)
@@ -152,8 +153,8 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
     /// <summary>
     /// A value that read rules hand to the context is still written by the rule or policy that decided the result.
     /// </summary>
-    private static (JsonPathOutcome, string, string) WithReads(
-        (JsonPathOutcome Outcome, string Rule, string Action) written,
+    private static (PathOutcome, string, string) WithReads(
+        (PathOutcome Outcome, string Rule, string Action) written,
         List<string> chain,
         List<RuleInfo<TContext>> reads)
     {
@@ -164,21 +165,13 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
 
         var readRules = string.Join(" + ", reads.Select(r => string.Join(" > ", chain.Append(r.Match))));
         var readActions = string.Join("; ", reads.Select(r => r.Action));
-        var outcome = written.Outcome is JsonPathOutcome.Unchanged ? JsonPathOutcome.Read : written.Outcome;
+        var outcome = written.Outcome is PathOutcome.Unchanged ? PathOutcome.Read : written.Outcome;
         return (outcome, $"{readRules} + {written.Rule}", $"{readActions}; {written.Action}");
     }
 
-    private static string? KnownPolicyName(JsonObserverValueDelegate<TContext> policy)
-    {
-        var declaring = policy.Method.DeclaringType;
-        return declaring is { IsGenericType: true } && declaring.GetGenericTypeDefinition() == typeof(JsonObserverValuePolicies<>)
-            ? policy.Method.Name
-            : null;
-    }
-
-    private static (JsonPathOutcome Outcome, string Action) Resolve(RuleInfo<TContext> info, JsonTokenType token) =>
-        token is JsonTokenType.Null && info.Action.StartsWith("MaskAny(", StringComparison.Ordinal)
-            ? (JsonPathOutcome.Unchanged, $"{info.Action} keeps null")
+    private static (PathOutcome Outcome, string Action) Resolve(RuleInfo<TContext> info, JsonTokenType token) =>
+        token is JsonTokenType.Null && info.KeepsNull
+            ? (PathOutcome.Unchanged, $"{info.Action} keeps null")
             : (info.Outcome, info.Action);
 
     private static string Container(JsonTokenType token) => token is JsonTokenType.StartArray ? "array" : "object";

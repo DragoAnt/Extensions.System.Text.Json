@@ -1,6 +1,7 @@
 using System.Text;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -9,13 +10,13 @@ public abstract class NameMatchingTests
     private static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
-        Relative(b => b
-                .Match("password").MaskStr((_, _) => "***")
-                .Match(PropMatches.OneOf("pin", "cvv")).MaskStr((_, _) => "***")
-                .Match(PropMatches.EndsWith("Token")).MaskStr((_, _) => "***")
-                .Match(PropMatches.StartsWith("secret")).MaskStr((_, _) => "***")
-                .Match(PropMatches.Contains("Email")).MaskStr((_, _) => "***")
-                .Match("card", "number").MaskStr((_, _) => "***"),
+        AnyDepth(b => b
+                .Match("password").Mask((_, _) => "***", MaskNulls.Mask)
+                .Match(Names.OneOf("pin", "cvv")).Mask((_, _) => "***", MaskNulls.Mask)
+                .Match(Names.EndsWith("Token")).Mask((_, _) => "***", MaskNulls.Mask)
+                .Match(Names.StartsWith("secret")).Mask((_, _) => "***", MaskNulls.Mask)
+                .Match(Names.Contains("Email")).Mask((_, _) => "***", MaskNulls.Mask)
+                .Path("card", "number").Mask((_, _) => "***", MaskNulls.Mask),
             BlockList));
 
     [Theory]
@@ -40,11 +41,11 @@ public abstract class NameMatchingTests
     public void CustomStrategy_GetsDecodedName()
     {
         var names = new List<string?>();
-        var observer = JsonObserver.Obj(_ => { }, Relative(b => b.Match(new PropMatchingStrategy(n =>
+        var observer = JsonObserver.Obj(_ => { }, AnyDepth(b => b.Match(new NameMatch(n =>
         {
             names.Add(n);
             return false;
-        })).MaskStr((_, _) => "***"), BlockList));
+        })).Mask((_, _) => "***", MaskNulls.Mask), BlockList));
 
         observer.Mask("""{"a\u0062":1,"c":[2]}""");
 
@@ -56,12 +57,12 @@ public abstract class NameMatchingTests
     {
         var observer = JsonObserver.Obj<Counter>(
             _ => { },
-            JsonObserverValuePolicies<Counter>.Relative(b => b
-                .Match(PropMatches.OneOf("pin", "cvv", "password")).ReadStr((_, c) => c.Hits++)
+            JsonValuePolicy.AnyDepth<Counter>(b => b
+                .Match(Names.OneOf("pin", "cvv", "password")).ReadStr((_, c) => c.Hits++)
                 .Match("accessToken").ReadStr((_, c) => c.Hits++)
-                .Match(PropMatches.EndsWith("Token")).ReadStr((_, c) => c.Hits++)
-                .Match(PropMatches.StartsWith("secret")).ReadStr((_, c) => c.Hits++)
-                .Match(PropMatches.Contains("email")).ReadStr((_, c) => c.Hits++)));
+                .Match(Names.EndsWith("Token")).ReadStr((_, c) => c.Hits++)
+                .Match(Names.StartsWith("secret")).ReadStr((_, c) => c.Hits++)
+                .Match(Names.Contains("email")).ReadStr((_, c) => c.Hits++)));
         var json = new StringBuilder("{");
         for (var i = 0; i < 200; i++)
         {

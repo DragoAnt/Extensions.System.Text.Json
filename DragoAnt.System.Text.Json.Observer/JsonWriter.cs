@@ -115,7 +115,7 @@ public abstract class JsonWriter
     public abstract void WriteNumberValue(double value);
 
     /// <summary>
-    /// Options of the current call; rules with a <see cref="Strategies.MaskTag"/> read their strategy and hash key here.
+    /// Options of the current call; rules with a <see cref="MaskTag"/> read their strategy and hash key here.
     /// </summary>
     internal virtual JsonObserverOptions Options => JsonObserverOptions.Default;
 
@@ -125,7 +125,7 @@ public abstract class JsonWriter
     internal virtual bool Stopped => false;
 
     /// <summary>
-    /// The strings written now replace a value, so <see cref="JsonObserverOptions.MaxValueBytes"/> does not cut them.
+    /// The strings written now replace a value, so <see cref="ObserverOptions.MaxValueBytes"/> does not cut them.
     /// </summary>
     internal virtual bool MaskOutput
     {

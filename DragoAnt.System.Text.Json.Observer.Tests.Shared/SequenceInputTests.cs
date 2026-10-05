@@ -1,7 +1,8 @@
 using System.Buffers;
 using System.Text;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -11,23 +12,23 @@ namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 /// </summary>
 public abstract class SequenceInputTests
 {
-    private static readonly PropMatchingStrategy AnyItem = new(_ => true);
+    private static readonly NameMatch AnyItem = new(_ => true);
 
-    private static readonly JsonObserver Tags = JsonObserver.Obj(Relative(b => b
-            .Match("full").MaskAny(MaskTag.Full)
-            .Match("last4").MaskAny(MaskTag.Last4)
-            .Match("hash").MaskAny(MaskTag.Hash)
-            .Match("omit").MaskAny(MaskKind.Omit),
+    private static readonly JsonObserver Tags = JsonObserver.Obj(AnyDepth(b => b
+            .Match("full").Mask(MaskTag.Full)
+            .Match("last4").Mask(MaskTag.Last4)
+            .Match("hash").Mask(MaskTag.Hash)
+            .Match("omit").Mask(MaskKind.Null),
         BlockList));
 
     private static readonly JsonObserver Nested = JsonObserver.Obj(
-        root => root.Match("lines").Array(l => l.Obj(x => x.Match("qty").MaskAny("***").Match("sku").MaskStr((v, _) => v + "!"))),
-        Relative(b => b.Match("lines", AnyItem, "note").MaskRawValue((v, _) => "<" + v + ">"), BlockList));
+        root => root.Match("lines").Array(l => l.Obj(x => x.Match("qty").Mask("***").Match("sku").Mask((v, _) => v + "!", MaskNulls.Mask))),
+        AnyDepth(b => b.Path("lines", AnyItem, "note").Mask((v, _) => "<" + v + ">", MaskNulls.Mask), BlockList));
 
-    private static readonly JsonObserver NonAscii = JsonObserver.Obj(Relative(b => b
-            .Match("пароль").MaskAny("1")
-            .Match(PropMatches.Contains("ключ")).MaskInt((v, _) => $"{v}")
-            .Match("password").MaskAny("2"),
+    private static readonly JsonObserver NonAscii = JsonObserver.Obj(AnyDepth(b => b
+            .Match("пароль").Mask("1")
+            .Match(Names.Contains("ключ")).MaskInt((v, _) => $"{v}")
+            .Match("password").Mask("2"),
         AllowList));
 
     private static readonly Dictionary<string, (JsonObserver Observer, string Json, JsonObserverOptions? Options)> Cases = BuildCases();
@@ -37,7 +38,7 @@ public abstract class SequenceInputTests
         var cases = new Dictionary<string, (JsonObserver, string, JsonObserverOptions?)>
         {
             ["golden-request"] = (JsonMaskingTests.GetRequestMasking(BlockList), JsonMaskingTests.TestJson, null),
-            ["golden-ignore-nulls"] = (JsonMaskingTests.GetRequestUnmasking(NullList), JsonMaskingTests.TestJson, new JsonObserverOptions(IgnoreNulls: true, Indented: true)),
+            ["golden-ignore-nulls"] = (JsonMaskingTests.GetRequestUnmasking(NullList), JsonMaskingTests.TestJson, new JsonObserverOptions { IgnoreNulls = true, Indented = true }),
             ["tags"] = (Tags, """{"full":{"a":[1,2]},"last4":"4111111111111111","hash":"S3cr3t","omit":12.5e3,"x":"y"}""", null),
             ["shape"] = (JsonShapeTests.Observer(), """{"id":1,"orders":[{"sku":"A1","secretCode":"x","extra":1}],"byCode":{"K1":{"sku":"B"}},"card":"4111111111111111","e_mail":"a@b.c","unknown":{"deep":true}}""", null),
             ["nested-array"] = (Nested, """{"lines":[{"qty":5,"sku":"A","note":"n\"1"},{"qty":-7.25,"sku":"Bé"}],"total":12}""", null),
@@ -47,9 +48,9 @@ public abstract class SequenceInputTests
             ["truncated"] = (BytesApiTests.Observer, """{"user":"bob","password":"S3cr3t","card":{"pin":"123""", null),
             ["invalid"] = (BytesApiTests.Observer, """{"user":"bob",,"password":"x"}""", null),
             ["not-json"] = (BytesApiTests.Observer, "   42", null),
-            ["max-output"] = (BytesApiTests.Observer, BytesApiTests.Payloads[0], new JsonObserverOptions(MaxOutputBytes: 60)),
-            ["max-value"] = (BytesApiTests.Observer, """{"text":"éééééééé","password":"x"}""", new JsonObserverOptions(MaxValueBytes: 5)),
-            ["case-sensitive"] = (NonAscii, """{"PASSWORD":"x","password":"y"}""", new JsonObserverOptions(PropertyNameCaseInsensitive: false)),
+            ["max-output"] = (BytesApiTests.Observer, BytesApiTests.Payloads[0], new JsonObserverOptions { MaxOutputBytes = 60 }),
+            ["max-value"] = (BytesApiTests.Observer, """{"text":"éééééééé","password":"x"}""", new JsonObserverOptions { MaxValueBytes = 5 }),
+            ["case-sensitive"] = (NonAscii, """{"PASSWORD":"x","password":"y"}""", new JsonObserverOptions { NameCaseInsensitive = false }),
             ["nested-17"] = (BytesApiTests.Observer, NestingTests.Nested(17).Replace("password", "pin", StringComparison.Ordinal), null),
         };
 
@@ -124,7 +125,7 @@ public abstract class SequenceInputTests
             .Should().Be(BytesApiTests.Observer.Mask(utf8, spanOutput));
         sequenceOutput.WrittenSpan.SequenceEqual(spanOutput.WrittenSpan).Should().BeTrue();
         BytesApiTests.Observer.Mask(ReadOnlySequence<byte>.Empty, new ArrayBufferWriter<byte>())
-            .Should().Be(new MaskResult(MaskStatus.NotJson, 0, 0));
+            .Should().Be(new MaskResult { Status = MaskStatus.Unrecognized, BytesWritten = 0, FailedAtByte = 0 });
         BytesApiTests.Observer.Mask(Split([0xEF, 0xBB], 1), new ArrayBufferWriter<byte>())
             .Should().Be(BytesApiTests.Observer.Mask([0xEF, 0xBB], new ArrayBufferWriter<byte>()));
     }
@@ -161,8 +162,8 @@ public abstract class SequenceInputTests
         context.Values.Should().Equal("a");
     }
 
-    private static JsonObserverValueDelegate<Extracted> ReadRules(Action<Builders.JsonValuePolicyBuilder<Extracted>> init) =>
-        JsonObserverValuePolicies<Extracted>.Relative(init, JsonObserverValuePolicies<Extracted>.BlockList);
+    private static JsonValuePolicy<Extracted> ReadRules(Action<Builders.JsonAnyDepthBuilder<Extracted>> init) =>
+        JsonValuePolicy.AnyDepth<Extracted>(init, ValuePolicy.BlockList);
 
     public sealed class Extracted
     {

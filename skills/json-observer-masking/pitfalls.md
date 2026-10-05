@@ -4,18 +4,19 @@ Symptom first, then the cause and the fix. Each block is a complete program.
 
 ## Everything became `"***"`
 
-**Cause:** the default policy is `AllowList`. `JsonObserver.Obj(rules)` without a second argument, and `Relative(rules)` without its second argument, mask every string, number and boolean no rule names.
+**Cause:** the default policy is `AllowList`. `JsonObserver.Obj(rules)` without a second argument, and `AnyDepth(rules)` without its second argument, mask every string, number and boolean no rule names.
 
 **Fix:** pass `BlockList` when only the named values are sensitive.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 const string json = """{"user":"alice","password":"p","active":true}""";
 
-Console.WriteLine(JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("x"))).Mask(json));
-Console.WriteLine(JsonObserver.Obj(Relative(rules => rules.Match("password").MaskAny("x"), BlockList)).Mask(json));
+Console.WriteLine(JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("x"))).Mask(json));
+Console.WriteLine(JsonObserver.Obj(AnyDepth(rules => rules.Match("password").Mask("x"), BlockList)).Mask(json));
 // Output:
 // {"user":"***","password":"x","active":"***"}
 // {"user":"alice","password":"x","active":true}
@@ -25,20 +26,20 @@ Console.WriteLine(JsonObserver.Obj(Relative(rules => rules.Match("password").Mas
 
 Check, in order:
 
-1. **The rule is absolute, the field is nested.** `JsonObserver.Obj(root => root.Match("password")…)` only matches a top-level `password`. Use `Relative(...)` to match at any depth.
-2. **The name differs.** Matching is exact (case-insensitive): `password` does not match `newPassword` or `passwd`. Use `PropMatches.Contains("password")` or `PropMatches.OneOf(...)`.
-3. **The path crosses an array.** An array item is a path level: `Match("users", "password")` does not reach `{"users":[{"password":…}]}`. Use a single name in `Relative(...)`, or `Match("users", AnyItem, "password")` with `AnyItem = new PropMatchingStrategy(_ => true)`.
-4. **The rule only reads.** A `Read*` rule leaves the writing to the default policy, which under `BlockList` writes the value unchanged; chain a mask method on the read (`ReadStr(f).MaskAny(MaskTag.Full)`) or use a `Mask*` rule.
+1. **The rule is absolute, the field is nested.** `JsonObserver.Obj(root => root.Match("password")…)` only matches a top-level `password`. Use `AnyDepth(...)` to match at any depth.
+2. **The name differs.** Matching is exact (case-insensitive): `password` does not match `newPassword` or `passwd`. Use `Names.Contains("password")` or `Names.OneOf(...)`.
+3. **The path crosses an array.** An array item is a path level: `Match("users", "password")` does not reach `{"users":[{"password":…}]}`. Use a single name in `AnyDepth(...)`, or `Match("users", AnyItem, "password")` with `AnyItem = new NameMatch(_ => true)`.
+4. **The rule only reads.** A `Read*` rule leaves the writing to the default policy, which under `BlockList` writes the value unchanged; chain a mask method on the read (`ReadStr(f).Mask(MaskTag.Full)`) or use a `Mask*` rule.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 const string json = """{"login":{"newPassword":"p1"},"users":[{"password":"p2"}]}""";
 
-var tooNarrow = JsonObserver.Obj(root => root.Match("password").MaskAny("***"), BlockList);
-var fixedRules = JsonObserver.Obj(Relative(rules => rules.Match(PropMatches.Contains("password")).MaskAny("***"), BlockList));
+var tooNarrow = JsonObserver.Obj(root => root.Match("password").Mask("***"), BlockList);
+var fixedRules = JsonObserver.Obj(AnyDepth(rules => rules.Match(Names.Contains("password")).Mask("***"), BlockList));
 
 Console.WriteLine(tooNarrow.Mask(json));
 Console.WriteLine(fixedRules.Mask(json));
@@ -55,17 +56,18 @@ Console.WriteLine(fixedRules.Mask(json));
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 const string json = """{"card":{"brand":"visa","number":"4111"}}""";
 
 var maskFirst = JsonObserver.Obj(root => root
-    .Match("card").MaskAny("***")
-    .Match("card").Obj(card => card.Match("number").MaskAny("***")), BlockList);
+    .Match("card").Mask("***")
+    .Match("card").Obj(card => card.Match("number").Mask("***")), BlockList);
 
 var objFirst = JsonObserver.Obj(root => root
-    .Match("card").Obj(card => card.Match("number").MaskAny("***"))
-    .Match("card").MaskAny("***"), BlockList);
+    .Match("card").Obj(card => card.Match("number").Mask("***"))
+    .Match("card").Mask("***"), BlockList);
 
 Console.WriteLine(maskFirst.Mask(json));
 Console.WriteLine(objFirst.Mask(json));
@@ -76,13 +78,14 @@ Console.WriteLine(objFirst.Mask(json));
 
 ## The output is empty
 
-**Cause:** `MaskStatus.NotJson` — the input is empty, or its root is a string or number. Or `Invalid` with nothing read: a root array given to `JsonObserver.Obj(...)` (or a root object to `JsonObserver.Array(...)`).
+**Cause:** `MaskStatus.Unrecognized` — the input is empty, or its root is a string or number. Or `Invalid` with nothing read: a root array given to `JsonObserver.Obj(...)` (or a root object to `JsonObserver.Array(...)`).
 
 **Fix:** check `MaskResult.Status`; use `JsonObserver.Any(...)` when the root can be an object or an array.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var objOnly = JsonObserver.Obj(BlockList);
 var any = JsonObserver.Any(_ => { }, _ => { }, BlockList);
@@ -92,7 +95,7 @@ Console.WriteLine($"[{objOnly.Mask("\"text\"", out var r2)}] {r2.Status}");
 Console.WriteLine($"[{any.Mask("[1]", out var r3)}] {r3.Status}");
 // Output:
 // [] Invalid
-// [] NotJson
+// [] Unrecognized
 // [[1]] Masked
 ```
 
@@ -106,7 +109,7 @@ Console.WriteLine($"[{any.Mask("[1]", out var r3)}] {r3.Status}");
 
 ## A masking function is slow on huge values
 
-**Cause:** a masking function receives the whole value, decoded to a `string`, whatever `MaxValueBytes` says; the cap limits values written unmasked only. Prefer `MaskAny(MaskTag…)` or a constant for fields that can be huge: they never decode the value to a `string`.
+**Cause:** a masking function receives the whole value, decoded to a `string`, whatever `MaxValueBytes` says; the cap limits values written unmasked only. Prefer `Mask(MaskTag…)` or a constant for fields that can be huge: they never decode the value to a `string`.
 
 ## Building an observer per call
 

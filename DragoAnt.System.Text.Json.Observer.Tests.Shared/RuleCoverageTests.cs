@@ -1,7 +1,8 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
-using DragoAnt.System.Text.Json.Observer.Strategies;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using DragoAnt.Observer;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
@@ -44,23 +45,23 @@ public abstract class RuleCoverageTests
 
     [Fact]
     public void PropMatchesRegex_MatchesName()
-        => JsonObserver.Obj(b => b.Match(PropMatches.Regex(new Regex("^pass", RegexOptions.IgnoreCase))).MaskStr("***"), BlockList)
+        => JsonObserver.Obj(b => b.Match(Names.Regex(new Regex("^pass", RegexOptions.IgnoreCase))).Mask("***", MaskNulls.Mask), BlockList)
             .Mask("""{"Password":"p","passcode":"c","bypass":"b"}""").Should().Be("""{"Password":"***","passcode":"***","bypass":"b"}""");
 
     [Fact]
     public void PropMatchesOneOf_InAbsoluteRule()
-        => JsonObserver.Obj(b => b.Match(PropMatches.OneOf("pin", "cvv")).MaskAny("***"), BlockList)
+        => JsonObserver.Obj(b => b.Match(Names.OneOf("pin", "cvv")).Mask("***"), BlockList)
             .Mask("""{"PIN":1,"cvv":2,"n":3}""").Should().Be("""{"PIN":"***","cvv":"***","n":3}""");
 
     [Fact]
     public void StringMaskingStrategy_RegexReplacementAndEvaluator()
     {
         var digits = new Regex("[0-9]");
-        var replaced = JsonObserver.Obj(b => b.Match("a").MaskStr(StringMaskingStrategy<JsonObserveringEmptyContext>.Regex(digits, "#")), BlockList);
+        var replaced = JsonObserver.Obj(b => b.Match("a").Mask(StringMaskingStrategy<NoContext>.Regex(digits, "#"), MaskNulls.Mask), BlockList);
         var evaluated = JsonObserver.Obj(
-            b => b.Match("a").MaskStr(StringMaskingStrategy<JsonObserveringEmptyContext>.Regex(digits, m => m.Index < 2 ? m.Value : "*")),
+            b => b.Match("a").Mask(StringMaskingStrategy<NoContext>.Regex(digits, m => m.Index < 2 ? m.Value : "*"), MaskNulls.Mask),
             BlockList);
-        var implicitRegex = JsonObserver.Obj(b => b.Match("a").MaskStr(digits), BlockList);
+        var implicitRegex = JsonObserver.Obj(b => b.Match("a").Mask(digits, MaskNulls.Mask), BlockList);
 
         replaced.Mask("""{"a":"ab12"}""").Should().Be("""{"a":"ab##"}""");
         evaluated.Mask("""{"a":"1234"}""").Should().Be("""{"a":"12**"}""");
@@ -72,9 +73,8 @@ public abstract class RuleCoverageTests
     public void CustomDelegate_PropertyPathApi()
     {
         var seen = new List<string>();
-        var observer = JsonObserver.Obj(Relative(b => b.Match("c").MaskValue((ref Utf8JsonReader _, JsonWriter writer, JsonObserveringEmptyContext _, ref PropertyPath path) =>
-        {
-            seen.Add($"{path.Length}|{path.GetPropertyName(0)}|{path.GetPropertyNameReverse(0)}|{path.GetPropertyNameReverse(1)}|{path.ToString()}|{path.GetPropertyName(9)}");
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("c").MaskValue((ref JsonValueContext<NoContext> __c) => { var writer = __c.Writer; var path = __c.Path;
+            seen.Add($"{path.Length}|{path.GetName(0)}|{path.GetNameFromEnd(0)}|{path.GetNameFromEnd(1)}|{path.ToString()}|{path.GetName(9)}");
             writer.WriteStringValue("x");
         }), BlockList));
 
@@ -95,7 +95,7 @@ public abstract class RuleCoverageTests
     [Fact]
     public void Last4_LongStringAndNumber_ShowTail()
     {
-        var observer = JsonObserver.Obj(Relative(b => b.Match("c").MaskAny(MaskTag.Last4), BlockList));
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("c").Mask(MaskTag.Last4), BlockList));
 
         observer.Mask("""{"c":"4111111111111111"}""").Should().Be("""{"c":"***1111"}""");
         observer.Mask("""{"c":4111111111111111}""").Should().Be("""{"c":"***1111"}""");
@@ -106,14 +106,14 @@ public abstract class RuleCoverageTests
     [InlineData("1234567", "***")]
     [InlineData("12345678", "***5678")]
     public void Last4_ShortValue_MaskedFully(string value, string expected)
-        => JsonObserver.Obj(Relative(b => b.Match("c").MaskAny(MaskTag.Last4), BlockList))
+        => JsonObserver.Obj(AnyDepth(b => b.Match("c").Mask(MaskTag.Last4), BlockList))
             .Mask($$"""{"c":"{{value}}"}""").Should().Be($$"""{"c":"{{expected}}"}""");
 
     [Fact]
     public void Hash_NumberLiteralAndStringOfSameText_Equal()
     {
-        var observer = JsonObserver.Obj(Relative(b => b.Match("h").MaskAny(MaskTag.Hash), BlockList));
-        var options = new JsonObserverOptions(HashKey: "k"u8.ToArray());
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("h").Mask(MaskTag.Hash), BlockList));
+        var options = new JsonObserverOptions { HashKey = "k"u8.ToArray() };
 
         var number = observer.Mask("""{"h":1}""", options);
         var text = observer.Mask("""{"h":"1"}""", options);
@@ -125,22 +125,22 @@ public abstract class RuleCoverageTests
 
     [Fact]
     public void Omit_InArray_WritesNull()
-        => JsonObserver.Array(a => a.MaskAny(MaskTag.Omit)).Mask("""["secret",1,{"a":1}]""").Should().Be("[null,null,null]");
+        => JsonObserver.Array(a => a.Mask(MaskTag.Null)).Mask("""["secret",1,{"a":1}]""").Should().Be("[null,null,null]");
 
     [Fact]
-    public void CustomUtf8MaskStrategy_ThatThrows_InvalidNoLeak()
+    public void CustomValueMaskStrategy_ThatThrows_InvalidNoLeak()
     {
-        var observer = JsonObserver.Obj(Relative(b => b.Match("p").MaskAny(MaskTag.Full), BlockList));
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("p").Mask(MaskTag.Full), BlockList));
 
-        var output = observer.Mask("""{"a":1,"p":"secret","b":2}""", out var result, new JsonObserverOptions(MaskStrategy: new ThrowingStrategy()));
+        var output = observer.Mask("""{"a":1,"p":"secret","b":2}""", out var result, new JsonObserverOptions { Strategy = new ThrowingStrategy() });
 
         result.Status.Should().Be(MaskStatus.Invalid);
         output.Should().Be("""{"a":1}""");
     }
 
-    private sealed class ThrowingStrategy : Utf8MaskStrategy
+    private sealed class ThrowingStrategy : ValueMaskStrategy
     {
-        public override void Mask(ReadOnlySpan<byte> value, JsonTokenType tokenType, MaskTag tag, JsonWriter writer, JsonObserverOptions options)
+        public override void Mask(in MaskContext context, MaskValueWriter output)
             => throw new InvalidOperationException("boom");
     }
 }

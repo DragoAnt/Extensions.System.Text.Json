@@ -33,14 +33,14 @@ public class ExtractBenchmarks
 
     public static JsonObserver<ExtractContext> BuildMaskAndExtract()
     {
-        var masking = JsonObserverValuePolicies<ExtractContext>.Relative(b =>
+        var masking = JsonValuePolicy.AnyDepth<ExtractContext>(b =>
             {
                 foreach (var name in Payloads.SensitiveNames)
                 {
-                    b.Match(name).MaskStr((_, _) => Baselines.Mask);
+                    b.Match(name).Mask((_, _) => Baselines.Mask, MaskNulls.Mask);
                 }
             },
-            JsonObserverValuePolicies<ExtractContext>.BlockList);
+            ValuePolicy.BlockList);
 
         return JsonObserver.Obj<ExtractContext>(b => b
                 .Match("id").ReadStr((v, c) => c.Id = v)

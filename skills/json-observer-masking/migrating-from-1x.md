@@ -1,10 +1,10 @@
 # Migrating from 1.x to 2.0 — json-observer-masking
 
-2.0 keeps the builder API (`JsonObserver.Obj/Array/Any`, `Match`, `Relative`, `Mask*`, `Read*`) and changes what the defaults produce. Work through this list; the "before" blocks are 1.x code and do not compile against 2.0.
+2.0 keeps the shape of the builder API (`JsonObserver.Obj/Array/Any`, `Match`, `Mask*`, `Read*`), renames parts of it (`Relative` → `AnyDepth`, multi-name `Match` → `Path`, `MaskAny`/`MaskStr`/`MaskRawValue` → `Mask`), moves the format-neutral types to the `DragoAnt.Observer` namespace of [DragoAnt.Observer.Core](https://www.nuget.org/packages/DragoAnt.Observer.Core), and changes what the defaults produce. The full rename table is in the repository's `docs/migrating-to-2.0.md`. Work through this list; the "before" blocks are 1.x code and do not compile against 2.0.
 
 ## 1. The default policy masks booleans and uses one token
 
-`AllowList` (still the default) now writes every string, number **and boolean** as `"***"`. 1.x wrote `"#str#*****"` / `"#number#*****"` and kept booleans; that output survives as the obsolete `LegacyAllowList`. Update golden strings in tests, and log parsers that looked for `#str#`.
+`AllowList` (still the default) now writes every string, number **and boolean** as `"***"`. 1.x wrote `"#str#*****"` / `"#number#*****"` and kept booleans; that output is gone (`LegacyAllowList` was removed). Update golden strings in tests, and log parsers that looked for `#str#`.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
@@ -33,10 +33,11 @@ catch (JsonException)
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 var observer = JsonObserver.Obj(BlockList);
-var masked = observer.Mask("""{"a":1,"b":null,}""", out var result, new JsonObserverOptions(IgnoreNulls: true));
+var masked = observer.Mask("""{"a":1,"b":null,}""", out var result, new JsonObserverOptions { IgnoreNulls = true });
 Console.WriteLine($"{result.Status} {masked}");
 // Output:
 // Masked {"a":1}
@@ -65,13 +66,14 @@ sealed class Holder
 
 ## 4. Every `Mask*` rule masks the whole value, whatever its type
 
-`MaskStr`, `MaskRawValue`, `MaskInt`, `MaskLong`, `MaskDecimal` and `MaskBool` used to hand a value of another type to the default policy (so under `BlockList` a numeric `cvv` under `MaskStr` stayed visible) and descended into objects. Now they mask any value and skip containers unread; `MaskStr` receives a number or boolean as its literal. Because they also match containers, a mask rule placed before an `Obj(...)`/`Array(...)` rule for the same name now wins over it — reorder such rules.
+1.x `MaskStr`, `MaskRawValue`, `MaskInt`, `MaskLong`, `MaskDecimal` and `MaskBool` used to hand a value of another type to the default policy (so under `BlockList` a numeric `cvv` under `MaskStr` stayed visible) and descended into objects. Now every mask rule masks any value and skips containers unread; `Mask` receives a number or boolean as its literal. Because they also match containers, a mask rule placed before an `Obj(...)`/`Array(...)` rule for the same name now wins over it — reorder such rules.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using static DragoAnt.System.Text.Json.Observer.JsonObserverValuePolicies;
+using static DragoAnt.Observer.ValuePolicy;
+using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
-var observer = JsonObserver.Obj(Relative(rules => rules.Match("cvv").MaskStr("***").Match("address").MaskStr("***"), BlockList));
+var observer = JsonObserver.Obj(AnyDepth(rules => rules.Match("cvv").Mask("***", MaskNulls.Mask).Match("address").Mask("***", MaskNulls.Mask), BlockList));
 Console.WriteLine(observer.Mask("""{"cvv":123,"address":{"street":"Main 1"}}"""));
 // Output:
 // {"cvv":"***","address":"***"}
@@ -85,9 +87,9 @@ It used to report success. `FailedAtByte` is -1 in that case (the whole document
 
 `ReadInt`, `ReadLong` and `ReadDecimal` receive `null` for a number that does not fit; the default policy writes the token.
 
-## 7. `PropertyPath` is a `ref struct`
+## 7. Custom rules take one context: `JsonValueRule<TContext>`
 
-Custom `MaskValue` rules that keep a `PropertyPath` beyond the call, construct one, or use `MaxLength`/`Dispose` must change: only `GetPropertyName`, `GetPropertyNameReverse`, `Length` and `ToString` remain. Rebuild custom rules against 2.0.
+`MaskValue`, `Obj(rule)` and `Array(rule)` take `(ref JsonValueContext<TContext> c) => …`: `c.Reader`, `c.Writer`, `c.Context`, `c.Path` (a `DataPath`, valid during the call only: `GetName`, `GetNameFromEnd`, `TryGetItemIndex`, `Length`, `ToString`) and `c.WriteDefault()`. A custom default policy is `JsonValuePolicy.Custom(rule)`. Rebuild custom rules against 2.0.
 
 ## 8. `JsonWriter` is sealed to the library
 
@@ -95,7 +97,7 @@ It cannot be derived from outside; `JsonWriter.FromUtf8JsonWriter`, `JsonWriter.
 
 ## 9. Internal types
 
-`JsonObserverException`, `PropertyPathMatch`, `JsonPropertyMatchDelegate`, `JsonPropertyPathMatchDelegate` and the builder constructors are internal. Start rules with `Match(...)` on the builder you are given.
+`JsonObserverException`, the engine's delegates, `JsonShape.FindMember` and the builder constructors are internal. Start rules with `Match(...)` or `Path(...)` on the builder you are given.
 
 ## 10. A UTF-8 byte order mark is skipped
 
@@ -105,11 +107,10 @@ A `Read*` rule used to write its value unchanged, even under `AllowList`. It now
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
-using DragoAnt.System.Text.Json.Observer.Strategies;
 
 var observer = JsonObserver.Obj<Person>(root => root
     .Match("id").ReadInt((id, p) => p.Id = id).Unmasked()
-    .Match("ssn").ReadStr((ssn, p) => p.Ssn = ssn).MaskAny(MaskTag.Last4));
+    .Match("ssn").ReadStr((ssn, p) => p.Ssn = ssn).Mask(MaskTag.Last4));
 var person = new Person();
 Console.WriteLine(observer.Mask("""{"id":7,"ssn":"123-45-6789","name":"Kim"}""", person));
 Console.WriteLine($"{person.Id} {person.Ssn}");
@@ -131,5 +132,5 @@ A masking function used to receive a value longer than `MaxValueBytes` cut to th
 ## New in 2.0, worth adopting while you migrate
 
 - The UTF-8 API with a reused `IBufferWriter<byte>` ([recipes.md](./recipes.md#hot-path-utf-8-api)).
-- `MaskAny(MaskTag.Last4/Hash/Omit)` instead of hand-written masking functions ([examples.md](./examples.md#tags)).
+- `Mask(MaskTag.Last4/Hash/Null)` instead of hand-written masking functions ([examples.md](./examples.md#tags)).
 - `JsonShape.FromTypeInfo` + `JsonObserver.FromShape` for structure-aware allow-lists ([examples.md](./examples.md#allow-list-from-a-type)).
