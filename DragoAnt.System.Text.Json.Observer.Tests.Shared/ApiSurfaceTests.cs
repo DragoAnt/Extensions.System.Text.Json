@@ -40,12 +40,12 @@ public abstract class ApiSurfaceTests
     {
         var context = new Values();
         var observer = JsonObserver.Obj(JsonObserverValuePolicies<Values>.Relative(b => b
-                .Match("s").ReadStr((v, c) => c.Str = v)
-                .Match("i").ReadInt((v, c) => c.Int = v)
-                .Match("l").ReadLong((v, c) => c.Long = v)
-                .Match("d").ReadDecimal((v, c) => c.Decimal = v)
-                .Match("b").ReadBool((v, c) => c.Bool = v)
-                .Match("r").ReadRaw((v, c) => c.Raw = v)
+                .Match("s").ReadStr((v, c) => c.Str = v).Unmasked()
+                .Match("i").ReadInt((v, c) => c.Int = v).Unmasked()
+                .Match("l").ReadLong((v, c) => c.Long = v).Unmasked()
+                .Match("d").ReadDecimal((v, c) => c.Decimal = v).Unmasked()
+                .Match("b").ReadBool((v, c) => c.Bool = v).Unmasked()
+                .Match("r").ReadRaw((v, c) => c.Raw = v).Unmasked()
                 .Match("m").MaskInt((_, _) => "i")
                 .Match("n").MaskLong((_, _) => "l")
                 .Match("o").MaskDecimal((_, _) => "d")

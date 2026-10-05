@@ -44,7 +44,16 @@ public readonly struct JsonObjBuilder<TContext>
         Add((int depth, ref PropertyPath path, JsonTokenType _) => propNameMatch(depth, ref path), policy, info);
 
     private JsonObjBuilder<TContext> AddValue(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverDelegate<TContext> policy, RuleInfo<TContext> info) =>
-        Add((int depth, ref PropertyPath path, JsonTokenType type) =>
+        Add(ValueMatch(propNameMatch), policy, info);
+
+    private JsonObjBuilder<TContext> AddRead(JsonPropertyPathMatchDelegate propNameMatch, JsonObserverItem<TContext>.ReadValue read, RuleInfo<TContext> info)
+    {
+        _policies.Add(JsonObserverItem<TContext>.Read(ValueMatch(propNameMatch), read, info));
+        return this;
+    }
+
+    private static JsonPropertyMatchDelegate ValueMatch(JsonPropertyPathMatchDelegate propNameMatch) =>
+        (int depth, ref PropertyPath path, JsonTokenType type) =>
         {
             var (success, propDepth) = propNameMatch(depth, ref path);
 
@@ -54,7 +63,7 @@ public readonly struct JsonObjBuilder<TContext>
             }
 
             return (true, propDepth);
-        }, policy, info);
+        };
 
     private JsonObjBuilder<TContext> Add(JsonPropertyMatchDelegate propMatch, JsonObserverDelegate<TContext> policy, RuleInfo<TContext> info)
     {
@@ -91,7 +100,7 @@ public readonly struct JsonObjBuilder<TContext>
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadStr"/>
         public ReadRuleBuilder ReadStr(Action<string?, TContext> strategy)
-            => Read(JsonObserverItem<TContext>.ReadStr(strategy, _builderDefaultValuePolicy), RuleText.ReadStr);
+            => Read(JsonObserverItem<TContext>.ReadStr(strategy), RuleText.ReadStr);
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskInt"/>
         public JsonObjBuilder<TContext> MaskInt(Func<int?, TContext, string?> strategy)
@@ -99,7 +108,7 @@ public readonly struct JsonObjBuilder<TContext>
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadInt"/>
         public ReadRuleBuilder ReadInt(Action<int?, TContext> strategy)
-            => Read(JsonObserverItem<TContext>.ReadInt(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadInt"));
+            => Read(JsonObserverItem<TContext>.ReadInt(strategy), RuleText.ReadNumber("ReadInt"));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskLong"/>
         public JsonObjBuilder<TContext> MaskLong(Func<long?, TContext, string?> strategy)
@@ -107,7 +116,7 @@ public readonly struct JsonObjBuilder<TContext>
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadLong"/>
         public ReadRuleBuilder ReadLong(Action<long?, TContext> strategy)
-            => Read(JsonObserverItem<TContext>.ReadLong(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadLong"));
+            => Read(JsonObserverItem<TContext>.ReadLong(strategy), RuleText.ReadNumber("ReadLong"));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskDecimal"/>
         public JsonObjBuilder<TContext> MaskDecimal(Func<decimal?, TContext, string?> strategy)
@@ -115,7 +124,7 @@ public readonly struct JsonObjBuilder<TContext>
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadDecimal"/>
         public ReadRuleBuilder ReadDecimal(Action<decimal?, TContext> strategy)
-            => Read(JsonObserverItem<TContext>.ReadDecimal(strategy, _builderDefaultValuePolicy), RuleText.ReadNumber("ReadDecimal"));
+            => Read(JsonObserverItem<TContext>.ReadDecimal(strategy), RuleText.ReadNumber("ReadDecimal"));
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskBool"/>
         public JsonObjBuilder<TContext> MaskBool(Func<bool?, TContext, string?> strategy)
@@ -123,7 +132,7 @@ public readonly struct JsonObjBuilder<TContext>
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadBool"/>
         public ReadRuleBuilder ReadBool(Action<bool?, TContext> strategy)
-            => Read(JsonObserverItem<TContext>.ReadBool(strategy, _builderDefaultValuePolicy), RuleText.ReadBool);
+            => Read(JsonObserverItem<TContext>.ReadBool(strategy), RuleText.ReadBool);
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskAny(Func{string, TContext, string})"/>
         public JsonObjBuilder<TContext> MaskAny(Func<string?, TContext, string?> strategy)
@@ -143,7 +152,7 @@ public readonly struct JsonObjBuilder<TContext>
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.ReadRaw"/>
         public ReadRuleBuilder ReadRaw(Action<string?, TContext> strategy)
-            => Read(JsonObserverItem<TContext>.ReadRaw(strategy, _builderDefaultValuePolicy), RuleText.ReadRaw);
+            => Read(JsonObserverItem<TContext>.ReadRaw(strategy), RuleText.ReadRaw);
 
         /// <inheritdoc cref="JsonValuePolicyBuilder{TContext}.PropertyMaskingStrategyBuilder.MaskValue(JsonObserverValueDelegate{TContext})"/>
         public JsonObjBuilder<TContext> MaskValue(JsonObserverValueDelegate<TContext> policy) =>
@@ -208,8 +217,8 @@ public readonly struct JsonObjBuilder<TContext>
         internal JsonObjBuilder<TContext> MaskWhole(JsonObserverDelegate<TContext> policy, string action)
             => _builder.AddAny(_propNameMatch.AbsoluteMatch, policy, Info(action, JsonPathOutcome.Masked));
 
-        private ReadRuleBuilder Read(JsonObserverDelegate<TContext> policy, string action)
-            => new(this, _builder.AddValue(_propNameMatch.AbsoluteMatch, policy, Info(action, JsonPathOutcome.Read)));
+        private ReadRuleBuilder Read(JsonObserverItem<TContext>.ReadValue read, string action)
+            => new(this, _builder.AddRead(_propNameMatch.AbsoluteMatch, read, Info(action, JsonPathOutcome.Read)));
 
         private JsonObjBuilder<TContext> Container(JsonTokenType container, JsonObserverDelegate<TContext> policy, RuleInfo<TContext> info)
         {
