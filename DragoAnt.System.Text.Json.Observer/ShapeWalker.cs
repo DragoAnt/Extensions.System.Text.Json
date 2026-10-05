@@ -30,13 +30,13 @@ internal sealed class ShapeWalker : PathExplainer
         };
     }
 
-    public void Invoke(
+    public void Invoke<TContext>(
         ref Utf8JsonReader reader,
         JsonWriter writer,
-        NoContext context,
+        TContext context,
         int depth,
         ref JsonWalk propPath,
-        ValueRule<NoContext> defaultValue)
+        ValueRule<TContext> defaultValue)
         => Write(ref reader, writer, ref propPath, _root);
 
     private void Write(ref Utf8JsonReader reader, JsonWriter writer, ref JsonWalk propPath, JsonShape shape)

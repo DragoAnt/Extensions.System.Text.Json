@@ -147,6 +147,11 @@ internal abstract class PathExplainer
             var start = i;
             while (i < path.Length && path[i] is not ('.' or '['))
             {
+                if (path[i] is '*' or ':')
+                {
+                    throw Invalid(path, i);
+                }
+
                 i++;
             }
 
