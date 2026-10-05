@@ -34,6 +34,12 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
                 var token = TokenAt(segments, i, valueKind);
                 var last = i == segments.Count - 1;
                 var (item, nextDepth) = JsonObserverItem<TContext>.MatchPolicy(items, depth, ref path, token);
+                var reads = last ? ReadsAt(items, depth, ref path, token) : [];
+                foreach (var read in reads)
+                {
+                    steps.Add($"{at}: {read.Match} → {read.Action}");
+                }
+
                 if (item is not null)
                 {
                     var info = item.Info;
@@ -42,7 +48,7 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
                     {
                         var (outcome, action) = last ? Resolve(info, token) : (info.Outcome, $"{info.Action} on the whole {Container(token)}");
                         steps.Add($"{at}: {info.Match} → {action}");
-                        return (outcome, string.Join(" > ", chain), action);
+                        return WithReads((outcome, string.Join(" > ", chain), action), chain.GetRange(0, chain.Count - 1), reads);
                     }
 
                     steps.Add($"{at}: {info.Match} → {info.Action}");
@@ -69,7 +75,7 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
                     continue;
                 }
 
-                return DefaultPolicy(effective, ref path, token, at, steps);
+                return WithReads(DefaultPolicy(effective, ref path, token, at, steps), chain, reads);
             }
 
             throw new InvalidOperationException("Unreachable: the last segment always returns.");
@@ -89,16 +95,22 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
     {
         if (policy.Target is RelativeValuePolicy<TContext> relative)
         {
+            var reads = ReadsAt(relative.Items, 0, ref path, token);
+            foreach (var read in reads)
+            {
+                steps.Add($"{at}: relative {read.Match} → {read.Action}");
+            }
+
             var (item, _) = JsonObserverItem<TContext>.MatchPolicy(relative.Items, 0, ref path, token);
             if (item is not null)
             {
                 var (relativeOutcome, relativeAction) = Resolve(item.Info, token);
                 steps.Add($"{at}: relative {item.Info.Match} → {relativeAction}");
-                return (relativeOutcome, $"relative {item.Info.Match}", relativeAction);
+                return WithReads((relativeOutcome, $"relative {item.Info.Match}", relativeAction), ["relative"], reads);
             }
 
             steps.Add($"{at}: no relative rule");
-            return DefaultPolicy(relative.DefaultValuePolicy, ref path, token, at, steps);
+            return WithReads(DefaultPolicy(relative.DefaultValuePolicy, ref path, token, at, steps), ["relative"], reads);
         }
 
         var name = KnownPolicyName(policy);
@@ -121,6 +133,39 @@ internal sealed class RuleExplainer<TContext>(RuleSet<TContext>? obj, RuleSet<TC
 
         steps.Add($"{at}: {rule} → {action}");
         return (outcome, rule, action);
+    }
+
+    private static List<RuleInfo<TContext>> ReadsAt(JsonObserverItem<TContext>[] items, int depth, ref PropertyPath path, JsonTokenType token)
+    {
+        List<RuleInfo<TContext>> reads = [];
+        foreach (var item in items)
+        {
+            if (item.Reader is not null && item.Match(depth, ref path, token).success)
+            {
+                reads.Add(item.Info);
+            }
+        }
+
+        return reads;
+    }
+
+    /// <summary>
+    /// A value that read rules hand to the context is still written by the rule or policy that decided the result.
+    /// </summary>
+    private static (JsonPathOutcome, string, string) WithReads(
+        (JsonPathOutcome Outcome, string Rule, string Action) written,
+        List<string> chain,
+        List<RuleInfo<TContext>> reads)
+    {
+        if (reads.Count == 0)
+        {
+            return written;
+        }
+
+        var readRules = string.Join(" + ", reads.Select(r => string.Join(" > ", chain.Append(r.Match))));
+        var readActions = string.Join("; ", reads.Select(r => r.Action));
+        var outcome = written.Outcome is JsonPathOutcome.Unchanged ? JsonPathOutcome.Read : written.Outcome;
+        return (outcome, $"{readRules} + {written.Rule}", $"{readActions}; {written.Action}");
     }
 
     private static string? KnownPolicyName(JsonObserverValueDelegate<TContext> policy)

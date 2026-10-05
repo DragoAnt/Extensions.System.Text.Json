@@ -26,20 +26,22 @@ public abstract class LimitsTests
         => BytesApiTests.Mask(Observer, """{"note":"abcde"}""", new JsonObserverOptions(MaxValueBytes: 5)).Result.Status.Should().Be(MaskStatus.Masked);
 
     [Fact]
-    public void MaxValueBytes_StrategyOutputCut_ReportsTruncated()
+    public void MaxValueBytes_StrategyOutput_IsNotCut()
     {
         var observer = JsonObserver.Obj(b => b.Match("a").MaskStr((_, _) => new string('x', 100)), BlockList);
 
         var (result, output) = BytesApiTests.Mask(observer, """{"a":"v"}""", new JsonObserverOptions(MaxValueBytes: 4));
 
-        result.Status.Should().Be(MaskStatus.Truncated);
-        output.Should().Be("{\"a\":\"xxxx…\"}");
+        result.Status.Should().Be(MaskStatus.Masked);
+        output.Should().Be($"{{\"a\":\"{new string('x', 100)}\"}}");
     }
 
     [Fact]
-    public void MaxValueBytes_LongStrategyString_SurrogatePairNotSplit()
+    public void MaxValueBytes_LongCustomRuleString_SurrogatePairNotSplit()
     {
-        var observer = JsonObserver.Obj(b => b.Match("a").MaskStr((_, _) => "ab\U0001F600cd"), BlockList);
+        var observer = JsonObserver.Obj(
+            b => b.Match("a").MaskValue((ref Utf8JsonReader _, JsonWriter w, JsonObserveringEmptyContext _, ref PropertyPath _) => w.WriteStringValue("ab\U0001F600cd")),
+            BlockList);
 
         var (_, output) = BytesApiTests.Mask(observer, """{"a":"v"}""", new JsonObserverOptions(MaxValueBytes: 4));
 
@@ -47,23 +49,17 @@ public abstract class LimitsTests
     }
 
     [Fact]
-    public void MaskAny_Strategy_HugeValue_DoesNotDecodeWhole()
+    public void MaskAny_Strategy_HugeValue_ReceivesTheWholeValue()
     {
         var secret = new string('s', 5 * 1024 * 1024);
         var utf8 = Encoding.UTF8.GetBytes($$"""{"password":"{{secret}}","n":1}""");
         var observer = JsonObserver.Obj(Relative(b => b.Match("password").MaskAny((v, _) => v is null ? null : "len:" + v.Length), BlockList));
-        var options = new JsonObserverOptions(MaxValueBytes: 256);
         var output = new ArrayBufferWriter<byte>(1024);
-        observer.Mask(utf8, output, options);
-        output.Clear();
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var result = observer.Mask(utf8, output, options);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var result = observer.Mask(utf8, output, new JsonObserverOptions(MaxValueBytes: 256));
 
         result.Status.Should().Be(MaskStatus.Masked);
-        Encoding.UTF8.GetString(output.WrittenSpan).Should().Be("""{"password":"len:256","n":1}""");
-        allocated.Should().BeLessThan(64 * 1024);
+        Encoding.UTF8.GetString(output.WrittenSpan).Should().Be($$"""{"password":"len:{{secret.Length}}","n":1}""");
     }
 
     [Fact]

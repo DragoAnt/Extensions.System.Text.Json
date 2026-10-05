@@ -88,9 +88,14 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         _safeDepth = 0;
         Exhausted = false;
         ValuesTruncated = false;
+        MaskOutput = false;
     }
 
     internal override bool Stopped => Exhausted;
+
+    internal override bool MaskOutput { get; set; }
+
+    private int MaxValueBytes => MaskOutput ? int.MaxValue : _maxValueBytes;
 
     private int Length => checked((int)(_writer.BytesCommitted + _writer.BytesPending));
 
@@ -139,14 +144,14 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
             return;
         }
 
-        if ((long)value.Length * 3 <= _maxValueBytes)
+        if ((long)value.Length * 3 <= MaxValueBytes)
         {
             _writer.WriteStringValue(value);
             Completed();
             return;
         }
 
-        var chars = value[..(int)Math.Min(value.Length, (long)_maxValueBytes + 1)];
+        var chars = value[..(int)Math.Min(value.Length, (long)MaxValueBytes + 1)];
         if (chars.Length < value.Length && char.IsHighSurrogate(chars[^1]))
         {
             chars = chars[..^1];
@@ -156,7 +161,7 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         try
         {
             var utf8 = encoded.AsSpan(0, Encoding.UTF8.GetBytes(chars, encoded));
-            if (chars.Length < value.Length && utf8.Length <= _maxValueBytes)
+            if (chars.Length < value.Length && utf8.Length <= MaxValueBytes)
             {
                 WriteCut(utf8, utf8.Length);
             }
@@ -178,14 +183,14 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
             return;
         }
 
-        if (utf8Value.Length <= _maxValueBytes)
+        if (utf8Value.Length <= MaxValueBytes)
         {
             _writer.WriteStringValue(utf8Value);
             Completed();
             return;
         }
 
-        var cut = _maxValueBytes;
+        var cut = MaxValueBytes;
         while (cut > 0 && (utf8Value[cut] & 0xC0) == 0x80)
         {
             cut--;
@@ -272,7 +277,7 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         }
 
         var length = Base64.GetMaxEncodedToUtf8Length(bytes.Length);
-        if (length <= _maxValueBytes)
+        if (length <= MaxValueBytes)
         {
             _writer.WriteBase64StringValue(bytes);
             Completed();

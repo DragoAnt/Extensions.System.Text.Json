@@ -8,10 +8,24 @@ public readonly struct PropMatchingStrategy
     private readonly NameMatcher? _matcher;
 
     /// <summary>
-    /// Matches property names with a custom test; the name is decoded to a <see cref="string"/> for it.
+    /// Matches property names with a custom test; the name is decoded to a <see cref="string"/> for it. The test decides
+    /// case on its own; the overload that takes a <see cref="StringComparison"/> follows <see cref="JsonObserverOptions.PropertyNameCaseInsensitive"/>.
     /// </summary>
     /// <param name="strategy">Name test; receives <c>null</c> for an array item.</param>
     public PropMatchingStrategy(Func<string?, bool> strategy)
+    {
+        _matcher = new NameMatcher.FuncNameMatcher(strategy);
+    }
+
+    /// <summary>
+    /// Matches property names with a custom test that honours <see cref="JsonObserverOptions.PropertyNameCaseInsensitive"/>;
+    /// the name is decoded to a <see cref="string"/> for it.
+    /// </summary>
+    /// <param name="strategy">
+    /// Name test; receives <c>null</c> for an array item, and <see cref="StringComparison.OrdinalIgnoreCase"/> or
+    /// <see cref="StringComparison.Ordinal"/> as the call's case option.
+    /// </param>
+    public PropMatchingStrategy(Func<string?, StringComparison, bool> strategy)
     {
         _matcher = new NameMatcher.FuncNameMatcher(strategy);
     }

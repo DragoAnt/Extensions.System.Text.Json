@@ -124,6 +124,15 @@ public abstract class JsonWriter
     /// </summary>
     internal virtual bool Stopped => false;
 
+    /// <summary>
+    /// The strings written now replace a value, so <see cref="JsonObserverOptions.MaxValueBytes"/> does not cut them.
+    /// </summary>
+    internal virtual bool MaskOutput
+    {
+        get => false;
+        set { }
+    }
+
     internal void CopyStringValue(ref Utf8JsonReader reader)
     {
         if (ReferenceEquals(this, Empty))
@@ -277,6 +286,12 @@ internal sealed class IgnoreNullsJsonWriter : JsonWriter, IDisposable
     internal override JsonObserverOptions Options => _inner.Options;
 
     internal override bool Stopped => _inner.Stopped;
+
+    internal override bool MaskOutput
+    {
+        get => _inner.MaskOutput;
+        set => _inner.MaskOutput = value;
+    }
 
     public override void WriteNullValue()
     {

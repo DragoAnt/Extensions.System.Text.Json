@@ -117,7 +117,7 @@ A value that is cut never leaks: a string being written when the input ends is d
 | Option | Default | Effect |
 | --- | --- | --- |
 | `MaxOutputBytes` | unlimited | output cap in UTF-8 bytes; reaching it closes the output → `Truncated` |
-| `MaxValueBytes` | unlimited | longest string written; a longer one is cut and ends with `…` → `Truncated`; masking functions also receive the cut value |
+| `MaxValueBytes` | unlimited | longest string written unmasked; a longer one is cut and ends with `…` → `Truncated`; masking functions receive the whole value and their output is never cut |
 | `MaxDepth` | 64 | deeper nesting → `Invalid` |
 | `RelaxedEscaping` | `true` | non-ASCII and HTML characters written unescaped |
 | `HashKey` | random per process | key of `MaskTag.Hash` |

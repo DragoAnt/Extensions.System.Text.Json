@@ -12,6 +12,19 @@ internal static class TagMasking
     /// </summary>
     public static void Mask(ref Utf8JsonReader reader, JsonWriter writer, MaskTag tag, ref PropertyPath propPath)
     {
+        writer.MaskOutput = true;
+        try
+        {
+            MaskValue(ref reader, writer, tag, ref propPath);
+        }
+        finally
+        {
+            writer.MaskOutput = false;
+        }
+    }
+
+    private static void MaskValue(ref Utf8JsonReader reader, JsonWriter writer, MaskTag tag, ref PropertyPath propPath)
+    {
         var options = writer.Options;
         var strategy = options.MaskStrategy ?? Utf8MaskStrategy.Default;
         var tokenType = reader.TokenType;

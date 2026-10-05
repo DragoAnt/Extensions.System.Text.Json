@@ -26,10 +26,12 @@ public static class PropMatches
     public static PropMatchingStrategy Contains(string value) => new(NameMatcher.Contains(value));
 
     /// <summary>
-    /// Matches property name by regular expression.
+    /// Matches property name by regular expression. Like the other tests it follows
+    /// <see cref="JsonObserverOptions.PropertyNameCaseInsensitive"/>: by default a name that differs in case only also matches.
+    /// A regular expression built with <see cref="RegexOptions.IgnoreCase"/> ignores case under either option.
     /// </summary>
     /// <param name="regex">Property name regular expression.</param>
-    public static PropMatchingStrategy Regex(Regex regex) => new(new NameMatcher.FuncNameMatcher(v => v is not null && regex.IsMatch(v), $"Regex(/{regex}/)"));
+    public static PropMatchingStrategy Regex(Regex regex) => new(new NameMatcher.RegexNameMatcher(regex));
 
     /// <summary>
     /// Matches property by full name equality.

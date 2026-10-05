@@ -158,7 +158,9 @@ public static class JsonObserverValuePolicies<TContext>
             case Number:
             case True:
             case False:
+                writer.MaskOutput = true;
                 writer.WriteStringValue("***"u8);
+                writer.MaskOutput = false;
                 break;
             case Null:
                 writer.WriteNullValue();
@@ -177,10 +179,14 @@ public static class JsonObserverValuePolicies<TContext>
         switch (reader.TokenType)
         {
             case JsonTokenType.String:
+                writer.MaskOutput = true;
                 writer.WriteStringValue("#str#*****");
+                writer.MaskOutput = false;
                 break;
             case Number:
+                writer.MaskOutput = true;
                 writer.WriteStringValue("#number#*****");
+                writer.MaskOutput = false;
                 break;
             case True:
                 writer.WriteBooleanValue(true);

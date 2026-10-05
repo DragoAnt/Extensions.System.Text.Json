@@ -79,11 +79,11 @@ Console.WriteLine(observer.Mask("""{"cvv":123,"address":{"street":"Main 1"}}""")
 
 ## 5. A string cut by `MaxValueBytes` reports `Truncated`
 
-It used to report success. `FailedAtByte` is -1 in that case (the whole document was read). Masking functions now receive such a value cut to `MaxValueBytes`.
+It used to report success. `FailedAtByte` is -1 in that case (the whole document was read). The cap applies to values written unmasked only: see 12.
 
 ## 6. Number read rules no longer fail the body
 
-`ReadInt`, `ReadLong` and `ReadDecimal` receive `null` for a number that does not fit, and the token is written unchanged.
+`ReadInt`, `ReadLong` and `ReadDecimal` receive `null` for a number that does not fit; the default policy writes the token.
 
 ## 7. `PropertyPath` is a `ref struct`
 
@@ -98,6 +98,35 @@ It cannot be derived from outside; `JsonWriter.FromUtf8JsonWriter`, `JsonWriter.
 `JsonObserverException`, `PropertyPathMatch`, `JsonPropertyMatchDelegate`, `JsonPropertyPathMatchDelegate` and the builder constructors are internal. Start rules with `Match(...)` on the builder you are given.
 
 ## 10. A UTF-8 byte order mark is skipped
+
+## 11. Read rules no longer decide what is written
+
+A `Read*` rule used to write its value unchanged, even under `AllowList`. It now only hands the value to the context; the next rule on the same match or the default policy writes it. Where you relied on clear text, chain `.Unmasked()`; to read and mask one value, chain a mask method on the read:
+
+```csharp
+using DragoAnt.System.Text.Json.Observer;
+using DragoAnt.System.Text.Json.Observer.Strategies;
+
+var observer = JsonObserver.Obj<Person>(root => root
+    .Match("id").ReadInt((id, p) => p.Id = id).Unmasked()
+    .Match("ssn").ReadStr((ssn, p) => p.Ssn = ssn).MaskAny(MaskTag.Last4));
+var person = new Person();
+Console.WriteLine(observer.Mask("""{"id":7,"ssn":"123-45-6789","name":"Kim"}""", person));
+Console.WriteLine($"{person.Id} {person.Ssn}");
+// Output:
+// {"id":7,"ssn":"***6789","name":"***"}
+// 7 123-45-6789
+
+sealed class Person
+{
+    public int? Id { get; set; }
+    public string? Ssn { get; set; }
+}
+```
+
+## 12. Masking functions receive the whole value
+
+A masking function used to receive a value longer than `MaxValueBytes` cut to that length, so a `Last4`-style function printed digits from the middle; a hash was cut too. The function now receives the whole value, and mask output is never cut: `MaxValueBytes` limits values written unmasked only.
 
 ## New in 2.0, worth adopting while you migrate
 

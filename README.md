@@ -35,7 +35,7 @@ Build an observer once (a `static readonly` field) and share it: it is thread-sa
 
 ### Mask or extract
 
-**Mask** rules (`MaskAny`, `MaskStr`, …) replace a value. **Read** rules (`ReadStr`, `ReadInt`, …) hand a value to a context object and write it unchanged. One observer can do both in the same pass:
+**Mask** rules (`MaskAny`, `MaskStr`, …) replace a value. **Read** rules (`ReadStr`, `ReadInt`, …) hand a value to a context object; they do not decide what is written, so the default policy writes the value unless `.Unmasked()` or a mask method is chained on the read (`Match("ssn").ReadStr(f).MaskAny(MaskTag.Last4)`). One observer can do both in the same pass:
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
@@ -94,7 +94,7 @@ Console.WriteLine(JsonObserver.Obj(NullList).Mask(json));
 
 ### Absolute and relative rules
 
-**Absolute** rules follow the path from the root, one `Match` per level or several names in one `Match`. **Relative** rules (inside `Relative(...)`) match the end of a property's path at any depth. Names match case-insensitively; `PropMatches.StartsWith`, `EndsWith`, `Contains`, `OneOf` and `Regex` test a name differently. The first rule that matches wins.
+**Absolute** rules follow the path from the root, one `Match` per level or several names in one `Match`. **Relative** rules (inside `Relative(...)`) match the end of a property's path at any depth. Names match case-insensitively; `PropMatches.StartsWith`, `EndsWith`, `Contains`, `OneOf` and `Regex` test a name differently and follow the same case option. The first rule that writes a value wins; read rules run on every match.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;
@@ -131,9 +131,9 @@ Every `Mask*` rule masks the **whole value whatever its JSON type** — a sensit
 | `MaskBool` | `true` / `false`, otherwise `null` | the function receives `null` |
 | `MaskAny(MaskTag)` | — the call's `Utf8MaskStrategy` writes `Full` `"***"`, `Last4` `"***1234"` (shorter than 8 characters: `"***"`), `Hash` `"hash:…"` or `Omit` `null` | stays `null` |
 | `Unmasked()` | — writes a string, number, boolean or `null` unchanged | |
-| `ReadStr` / `ReadInt` / `ReadLong` / `ReadDecimal` / `ReadBool` / `ReadRaw` | hands the value to the context and writes it unchanged; a number that does not fit arrives as `null` | |
+| `ReadStr` / `ReadInt` / `ReadLong` / `ReadDecimal` / `ReadBool` / `ReadRaw` | hands the value to the context; the default policy writes it unless `.Unmasked()` or a mask method follows on the same match; a number that does not fit arrives as `null` | |
 
-The table holds for absolute and relative rules alike. A strategy is a constant string, a `Regex` whose matches become `*`, or a function of the value and the context; a `null` result writes `null`. A value longer than `MaxValueBytes` reaches the function cut to that length. `Hash` uses `JsonObserverOptions.HashKey`, or a random key per process when it is empty.
+The table holds for absolute and relative rules alike. A strategy is a constant string, a `Regex` whose matches become `*`, or a function of the value and the context; a `null` result writes `null`. The function receives the whole value, and what it returns is never cut by `MaxValueBytes`, which limits values written unmasked only. `Hash` uses `JsonObserverOptions.HashKey`, or a random key per process when it is empty.
 
 ### Custom mask strategies
 
@@ -274,13 +274,13 @@ Console.WriteLine($"{result.Status} {Encoding.UTF8.GetString(output.WrittenSpan)
 | Option | Default | Effect |
 | --- | --- | --- |
 | `MaxOutputBytes` | unlimited | output limit; when reached the output is closed and the status is `Truncated` |
-| `MaxValueBytes` | unlimited | longest string written; a longer one is cut, ends with `…`, and the status is `Truncated` |
+| `MaxValueBytes` | unlimited | longest string written unmasked; a longer one is cut, ends with `…`, and the status is `Truncated`; mask output is never cut |
 | `MaxDepth` | 64 | deeper nesting is `Invalid` |
 | `RelaxedEscaping` | `true` | non-ASCII and HTML characters are written unescaped |
 | `HashKey`, `MaskStrategy` | random per process, built-in | used by `MaskTag` rules |
 | `IgnoreNulls` | `false` | drops `null` properties and items, and objects and arrays left empty by that |
 | `Indented` | `false` | indented output |
-| `PropertyNameCaseInsensitive` | `true` | match rule names and shapes ignoring case; pass the serializer's setting to match names as deserialization does |
+| `PropertyNameCaseInsensitive` | `true` | match rule names, `PropMatches` tests (`Regex` included) and shapes ignoring case; pass the serializer's setting to match names as deserialization does |
 
 Input may contain comments and trailing commas; a UTF-8 byte order mark is skipped. Comments are not written.
 
