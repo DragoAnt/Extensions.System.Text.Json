@@ -82,7 +82,12 @@ public abstract class RobustnessTests
     {
         var (result, output) = BytesApiTests.Mask(Observer, utf8);
 
-        result.Status.Should().BeOneOf(MaskStatus.Masked, MaskStatus.Invalid);
+        result.Status.Should().BeOneOf(MaskStatus.Masked, MaskStatus.Truncated, MaskStatus.Invalid);
+        if (result.Status == MaskStatus.Truncated)
+        {
+            result.Flags.Should().Be(MaskFlags.InvalidUtf8Replaced);
+        }
+
         if (output.Length > 0)
         {
             var parse = () => JsonDocument.Parse(output).Dispose();

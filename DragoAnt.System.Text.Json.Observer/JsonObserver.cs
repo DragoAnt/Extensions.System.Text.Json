@@ -330,7 +330,7 @@ public sealed class JsonObserver<TContext>
     {
         using var bounded = BoundedJsonWriter.Rent(options);
         using var ignoreNulls = options.IgnoreNulls ? IgnoreNullsJsonWriter.Rent(bounded) : null;
-        var (status, failedAt) = Observe(ref reader, input, (JsonWriter?)ignoreNulls ?? bounded, context, options);
+        var (status, failedAt, flags) = Observe(ref reader, input, (JsonWriter?)ignoreNulls ?? bounded, context, options);
         if (status == MaskStatus.Unrecognized)
         {
             return new MaskResult { Status = MaskStatus.Unrecognized };
@@ -338,17 +338,32 @@ public sealed class JsonObserver<TContext>
 
         try
         {
-            var written = bounded.CopyTo(output, status == MaskStatus.Masked);
-            if (status == MaskStatus.Masked && bounded.ValuesTruncated)
+            var written = bounded.CopyTo(output, status is MaskStatus.Masked or MaskStatus.Truncated && failedAt < 0);
+            if (bounded.Exhausted)
+            {
+                flags |= MaskFlags.OutputCapped;
+            }
+
+            if (bounded.ValuesTruncated)
+            {
+                flags |= MaskFlags.ValueCut;
+            }
+
+            if (bounded.InvalidUtf8Replaced)
+            {
+                flags |= MaskFlags.InvalidUtf8Replaced;
+            }
+
+            if (status == MaskStatus.Masked && flags != MaskFlags.None)
             {
                 status = MaskStatus.Truncated;
             }
 
-            return new MaskResult { Status = status, BytesWritten = written, FailedAtByte = failedAt };
+            return new MaskResult { Status = status, BytesWritten = written, FailedAtByte = failedAt, Flags = flags };
         }
         catch (Exception)
         {
-            return new MaskResult { Status = MaskStatus.Invalid, FailedAtByte = failedAt };
+            return new MaskResult { Status = MaskStatus.Invalid, FailedAtByte = failedAt, Flags = flags };
         }
     }
 
@@ -399,8 +414,8 @@ public sealed class JsonObserver<TContext>
         options ??= JsonObserverOptions.Default;
         utf8 = SkipBom(utf8);
         var reader = CreateReader(utf8, options);
-        var (status, failedAt) = Observe(ref reader, utf8, JsonWriter.Empty, context, options);
-        return new MaskResult { Status = status, FailedAtByte = failedAt };
+        var (status, failedAt, flags) = Observe(ref reader, utf8, JsonWriter.Empty, context, options);
+        return new MaskResult { Status = status, FailedAtByte = failedAt, Flags = flags };
     }
 
     /// <summary>
@@ -421,8 +436,8 @@ public sealed class JsonObserver<TContext>
 
         options ??= JsonObserverOptions.Default;
         var reader = CreateReader(SkipBom(utf8), options);
-        var (status, failedAt) = Observe(ref reader, default, JsonWriter.Empty, context, options);
-        return new MaskResult { Status = status, FailedAtByte = failedAt };
+        var (status, failedAt, flags) = Observe(ref reader, default, JsonWriter.Empty, context, options);
+        return new MaskResult { Status = status, FailedAtByte = failedAt, Flags = flags };
     }
 
     private static ReadOnlySpan<byte> SkipBom(ReadOnlySpan<byte> utf8) => utf8.StartsWith(Utf8Bom) ? utf8[Utf8Bom.Length..] : utf8;
@@ -452,7 +467,7 @@ public sealed class JsonObserver<TContext>
     private static Utf8JsonReader CreateReader(in ReadOnlySequence<byte> utf8, JsonObserverOptions options) =>
         new(utf8, isFinalBlock: false, ReaderState(options));
 
-    private (MaskStatus Status, long FailedAt) Observe(
+    private (MaskStatus Status, long FailedAt, MaskFlags Flags) Observe(
         ref Utf8JsonReader reader,
         ReadOnlySpan<byte> input,
         JsonWriter writer,
@@ -464,22 +479,48 @@ public sealed class JsonObserver<TContext>
         {
             if (!reader.Read() || reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))
             {
-                return (MaskStatus.Unrecognized, 0);
+                return (MaskStatus.Unrecognized, 0, MaskFlags.None);
             }
 
             _maskDelegate(ref reader, writer, context, 0, ref propPath, JsonValuePolicy<TContext>.Default.Rule);
             UpdateMaxDepth(propPath.MaxLength);
-            return propPath.Stopped || writer.Stopped
-                ? (MaskStatus.Truncated, reader.BytesConsumed)
-                : (MaskStatus.Masked, -1);
+            if (writer.Stopped)
+            {
+                return (MaskStatus.Truncated, reader.BytesConsumed, MaskFlags.OutputCapped);
+            }
+
+            if (propPath.Stopped)
+            {
+                return (MaskStatus.Truncated, reader.BytesConsumed, MaskFlags.InputTruncated);
+            }
+
+            return HasTrailingData(ref reader)
+                ? (MaskStatus.Truncated, -1, MaskFlags.TrailingData)
+                : (MaskStatus.Masked, -1, MaskFlags.None);
         }
         catch (Exception)
         {
-            return (MaskStatus.Invalid, reader.BytesConsumed);
+            var depth = reader.CurrentDepth >= Math.Max(options.MaxDepth, 1) ? MaskFlags.Depth : MaskFlags.None;
+            return (MaskStatus.Invalid, reader.BytesConsumed, depth);
         }
         finally
         {
             propPath.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Whether anything but whitespace follows the root, which the reader reports as a second token or an error.
+    /// </summary>
+    private static bool HasTrailingData(ref Utf8JsonReader reader)
+    {
+        try
+        {
+            return reader.Read();
+        }
+        catch (JsonException)
+        {
+            return true;
         }
     }
 

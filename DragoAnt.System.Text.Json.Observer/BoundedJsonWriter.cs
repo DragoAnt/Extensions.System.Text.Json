@@ -51,6 +51,11 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
     /// </summary>
     public bool ValuesTruncated { get; private set; }
 
+    /// <summary>
+    /// At least one string or name written held invalid UTF-8, which the writer replaced with U+FFFD.
+    /// </summary>
+    public bool InvalidUtf8Replaced { get; private set; }
+
     internal override JsonObserverOptions Options => _options;
 
     private JsonObserverOptions _options = null!;
@@ -88,6 +93,7 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         _safeDepth = 0;
         Exhausted = false;
         ValuesTruncated = false;
+        InvalidUtf8Replaced = false;
         MaskOutput = false;
     }
 
@@ -182,6 +188,8 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         {
             return;
         }
+
+        CheckUtf8(utf8Value);
 
         if (utf8Value.Length <= MaxValueBytes)
         {
@@ -316,7 +324,16 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
     {
         if (!Exhausted)
         {
+            CheckUtf8(utf8PropertyName);
             _writer.WritePropertyName(utf8PropertyName);
+        }
+    }
+
+    private void CheckUtf8(ReadOnlySpan<byte> utf8)
+    {
+        if (!InvalidUtf8Replaced && !global::System.Text.Unicode.Utf8.IsValid(utf8))
+        {
+            InvalidUtf8Replaced = true;
         }
     }
 
