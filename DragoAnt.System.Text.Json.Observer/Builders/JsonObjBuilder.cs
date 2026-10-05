@@ -31,6 +31,29 @@ public readonly struct JsonObjBuilder<TContext>
     public PropertyMaskingStrategyBuilder Path(params NameMatch[] path) =>
         new(this, new NamePathMatch(path, isPath: true), _builderDefaultValuePolicy);
 
+    /// <summary>
+    /// Decides the comments of the values the rule just added matches, for the placements in <paramref name="kinds"/>,
+    /// instead of the call's <see cref="ObserverOptions.Comments"/> policy. A kept comment of a masked value is still
+    /// written masked unless <paramref name="rule"/> calls <see cref="CommentContext.Raw"/>.
+    /// </summary>
+    /// <param name="kinds">Placements the rule decides, for example <see cref="CommentKind.Any"/>.</param>
+    /// <param name="rule">The comment rule, for example <see cref="CommentRules.Drop"/>.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">No rule was added yet.</exception>
+    public JsonObjBuilder<TContext> Comment(CommentKind kinds, CommentRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        if (_policies.Count == 0)
+        {
+            throw new InvalidOperationException("Add a rule before its comment rule.");
+        }
+
+        var last = _policies[^1];
+        last.CommentKinds = kinds;
+        last.CommentRule = rule;
+        return this;
+    }
+
     internal static (ObserveRule<TContext> Delegate, RuleSet<TContext> Set) Build(JsonObjBuilder<TContext> builder) => builder.Build();
 
     private (ObserveRule<TContext>, RuleSet<TContext>) Build()

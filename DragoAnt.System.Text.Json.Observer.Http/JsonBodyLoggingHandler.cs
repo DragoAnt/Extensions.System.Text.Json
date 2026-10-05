@@ -293,7 +293,7 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
                 return new Body("[body withheld]", JsonBodyStatus.Withheld, truncated);
             }
 
-            result = masker.Mask(utf8, output, new JsonObserverOptions { MaxOutputBytes = Math.Max(limit, 1) });
+            result = masker.Mask(utf8, output, new JsonObserverOptions { MaxOutputBytes = Math.Max(limit, 1), Comments = CommentPolicy.DropAll });
         }
         catch (Exception ex)
         {

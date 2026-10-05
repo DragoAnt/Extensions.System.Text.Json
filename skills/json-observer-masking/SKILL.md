@@ -52,7 +52,7 @@ Console.WriteLine(masker.Mask("""{"user":"alice","password":"s3cret","card":{"nu
 - "The secret is still visible" → the rule is absolute but the field is nested, or the name differs (`Password` vs `passwd`); use `AnyDepth` and a `Names`.
 - A rule written before an `Obj(...)` rule for the same name wins and masks the whole object.
 - `JsonObserver.Obj(...)` on a root array returns `Invalid`; use `JsonObserver.Any(...)` when the root can be either.
-- Comments in the input are accepted and never written; a UTF-8 BOM is skipped.
+- Comments in the input are accepted and dropped by default; `new JsonObserverOptions { Comments = CommentPolicy.BlockList }` keeps them (masked when their value is masked), and `.Comment(kinds, rule)` after a rule overrides it. A UTF-8 BOM is skipped.
 
 ## Companions
 

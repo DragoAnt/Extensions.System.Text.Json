@@ -16,7 +16,7 @@ Console.WriteLine(JsonObserver.Obj(root => root.Match("id").Unmasked()).Mask("""
 
 ## 2. `Mask(string)` never throws, and its options moved
 
-1.x threw on invalid JSON and took `JsonReaderOptions`, `JsonWriterOptions`, `ignoreNulls` and `ignoreComments`. 2.0 never throws, always skips comments, accepts trailing commas, writes non-ASCII unescaped, and takes one `JsonObserverOptions`. Drop the `try/catch` around `Mask`, and read `MaskResult` when you need to know what happened.
+1.x threw on invalid JSON and took `JsonReaderOptions`, `JsonWriterOptions`, `ignoreNulls` and `ignoreComments`. 2.0 never throws, drops comments unless `JsonObserverOptions.Comments` or a comment rule keeps them, accepts trailing commas, writes non-ASCII unescaped, and takes one `JsonObserverOptions`. Drop the `try/catch` around `Mask`, and read `MaskResult` when you need to know what happened.
 
 <!-- doc-test: skip -->
 ```csharp

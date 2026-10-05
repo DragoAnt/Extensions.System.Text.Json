@@ -90,33 +90,75 @@ internal sealed class ShapeWalker : PathExplainer
     {
         RuntimeHelpers.EnsureSufficientExecutionStack();
         writer.WriteStartObject();
+        var comments = propPath.Comments is not null;
+        var previousOpen = false;
+        var previousMasked = false;
         while (true)
         {
             if (propPath.Stopped || writer.Stopped || !reader.Read())
             {
+                if (previousOpen)
+                {
+                    propPath.RemovePropertyName();
+                }
+
                 propPath.Stop();
                 return;
             }
 
             switch (reader.TokenType)
             {
+                case Comment:
+                    JsonComments.OnComment<NoContext>(ref reader, writer, ref propPath, previousOpen, null, previousMasked);
+                    break;
                 case EndObject:
+                    if (previousOpen)
+                    {
+                        propPath.RemovePropertyName();
+                    }
+
+                    if (comments)
+                    {
+                        JsonComments.Flush(writer, ref propPath, CommentKind.After, null, ownerMasked: false);
+                    }
+
                     writer.WriteEndObject();
                     return;
                 case PropertyName:
+                    if (previousOpen)
+                    {
+                        propPath.RemovePropertyName();
+                        previousOpen = false;
+                    }
+
                     propPath.AddPropertyName(ref reader);
                     var name = propPath.CurrentUtf8;
                     var child = values ?? shape!.Find(name, _ignoreCase ?? propPath.Options.NameCaseInsensitive) ?? _unknown;
-                    if (!reader.Read())
+                    if (!ReadMemberValue(ref reader, ref propPath))
                     {
                         propPath.RemovePropertyName();
                         propPath.Stop();
                         return;
                     }
 
-                    writer.WritePropertyName(name);
+                    if (comments)
+                    {
+                        previousMasked = IsMasked(child, reader.TokenType);
+                        JsonComments.Flush(writer, ref propPath, CommentKind.Before, null, previousMasked);
+                    }
+
+                    writer.WritePropertyName(propPath.CurrentUtf8);
                     Write(ref reader, writer, ref propPath, child);
-                    propPath.RemovePropertyName();
+                    if (comments)
+                    {
+                        propPath.LastValueEnd = reader.BytesConsumed;
+                        previousOpen = true;
+                    }
+                    else
+                    {
+                        propPath.RemovePropertyName();
+                    }
+
                     break;
             }
         }
@@ -126,11 +168,19 @@ internal sealed class ShapeWalker : PathExplainer
     {
         RuntimeHelpers.EnsureSufficientExecutionStack();
         writer.WriteStartArray();
+        var comments = propPath.Comments is not null;
+        var previousOpen = false;
+        var previousMasked = false;
         var index = 0;
         while (true)
         {
             if (propPath.Stopped || writer.Stopped || !reader.Read())
             {
+                if (previousOpen)
+                {
+                    propPath.RemovePropertyName();
+                }
+
                 propPath.Stop();
                 return;
             }
@@ -138,17 +188,99 @@ internal sealed class ShapeWalker : PathExplainer
             switch (reader.TokenType)
             {
                 case EndArray:
+                    if (previousOpen)
+                    {
+                        propPath.RemovePropertyName();
+                    }
+
+                    if (comments)
+                    {
+                        JsonComments.Flush(writer, ref propPath, CommentKind.After, null, ownerMasked: false);
+                    }
+
                     writer.WriteEndArray();
                     return;
                 case Comment:
+                    JsonComments.OnComment<NoContext>(ref reader, writer, ref propPath, previousOpen, null, previousMasked);
                     break;
                 default:
+                    if (previousOpen)
+                    {
+                        propPath.RemovePropertyName();
+                        previousOpen = false;
+                    }
+
                     propPath.AddArrayItem(index++);
+                    if (comments)
+                    {
+                        previousMasked = IsMasked(item, reader.TokenType);
+                        JsonComments.Flush(writer, ref propPath, CommentKind.Before, null, previousMasked);
+                    }
+
                     Write(ref reader, writer, ref propPath, item);
-                    propPath.RemovePropertyName();
+                    if (comments)
+                    {
+                        propPath.LastValueEnd = reader.BytesConsumed;
+                        previousOpen = true;
+                    }
+                    else
+                    {
+                        propPath.RemovePropertyName();
+                    }
+
                     break;
             }
         }
+    }
+
+    private static bool ReadMemberValue(ref Utf8JsonReader reader, ref JsonWalk walk)
+    {
+        while (reader.Read())
+        {
+            if (reader.TokenType != Comment)
+            {
+                return true;
+            }
+
+            walk.Pending!.Add(ref reader, walk.StyleAt(reader.TokenStartIndex));
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether the shape masks the value, for the comments the value owns.
+    /// </summary>
+    private bool IsMasked(JsonShape shape, JsonTokenType token)
+    {
+        if (token is Null && _keepNulls)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(shape, JsonShape.UnknownPassThrough))
+        {
+            return false;
+        }
+
+        if (token is Null && shape.Kind is JsonShapeKind.Object or JsonShapeKind.Map or JsonShapeKind.Array)
+        {
+            return false;
+        }
+
+        var container = token is StartObject or StartArray;
+        if (ReferenceEquals(shape, JsonShape.UnknownDescend))
+        {
+            return !container;
+        }
+
+        return shape.Kind switch
+        {
+            JsonShapeKind.Scalar => container,
+            JsonShapeKind.Object or JsonShapeKind.Map => token is not StartObject,
+            JsonShapeKind.Array => token is not StartArray,
+            _ => true,
+        };
     }
 
     /// <summary>

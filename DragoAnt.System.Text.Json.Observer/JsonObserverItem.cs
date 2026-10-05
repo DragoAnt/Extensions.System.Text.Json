@@ -19,6 +19,18 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     public RuleInfo<TContext> Info { get; init; } = RuleInfo<TContext>.Unknown;
 
     /// <summary>
+    /// Placements whose comments <see cref="CommentRule"/> decides for the members this rule matches.
+    /// </summary>
+    public CommentKind CommentKinds { get; set; }
+
+    /// <summary>
+    /// The rule's comment rule, set with <c>.Comment(kinds, rule)</c>; <c>null</c> leaves comments to the call's policy.
+    /// </summary>
+    public CommentRule? CommentRule { get; set; }
+
+    public CommentRule? CommentRuleFor(CommentKind kind) => (CommentKinds & kind) != 0 ? CommentRule : null;
+
+    /// <summary>
     /// Any payload object or array.
     /// </summary>
     /// <param name="initObj">Init masking for object.</param>
@@ -410,21 +422,39 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
 
             RuntimeHelpers.EnsureSufficientExecutionStack();
             writer.WriteStartObject();
+            var comments = propPath.Comments is not null;
+            var previousOpen = false;
+            JsonObserverItem<TContext>? previousItem = null;
+            var previousMasked = false;
 
             while (true)
             {
                 if (propPath.Stopped || writer.Stopped || !reader.Read())
                 {
+                    if (previousOpen)
+                    {
+                        propPath.RemovePropertyName();
+                    }
+
                     propPath.Stop();
                     return;
                 }
 
                 switch (reader.TokenType)
                 {
+                    case Comment:
+                        JsonComments.OnComment(ref reader, writer, ref propPath, previousOpen, previousItem, previousMasked);
+                        break;
                     case PropertyName:
+                        if (previousOpen)
+                        {
+                            propPath.RemovePropertyName();
+                            previousOpen = false;
+                        }
+
                         propPath.AddPropertyName(ref reader);
 
-                        if (!reader.Read())
+                        if (!ReadMemberValue(ref reader, ref propPath))
                         {
                             propPath.RemovePropertyName();
                             propPath.Stop();
@@ -438,6 +468,11 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                         }
 
                         var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
+                        if (comments)
+                        {
+                            (previousMasked, previousItem) = CommentOwner(matchPolicy, effective, tokenType, ref propPath);
+                            JsonComments.Flush(writer, ref propPath, CommentKind.Before, previousItem?.CommentRuleFor(CommentKind.Before), previousMasked);
+                        }
 
                         writer.WritePropertyName(propPath.CurrentUtf8);
                         if (matchPolicy is not null)
@@ -449,10 +484,28 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                             defaultPolicy(ref reader, writer, context, nextDepth, ref propPath, effective);
                         }
 
-                        propPath.RemovePropertyName();
+                        if (comments)
+                        {
+                            propPath.LastValueEnd = reader.BytesConsumed;
+                            previousOpen = true;
+                        }
+                        else
+                        {
+                            propPath.RemovePropertyName();
+                        }
 
                         break;
                     case EndObject:
+                        if (previousOpen)
+                        {
+                            propPath.RemovePropertyName();
+                        }
+
+                        if (comments)
+                        {
+                            JsonComments.Flush(writer, ref propPath, CommentKind.After, null, ownerMasked: false);
+                        }
+
                         writer.WriteEndObject();
                         return;
                     case None:
@@ -495,18 +548,30 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
 
             RuntimeHelpers.EnsureSufficientExecutionStack();
             writer.WriteStartArray();
+            var comments = propPath.Comments is not null;
+            var previousOpen = false;
+            JsonObserverItem<TContext>? previousItem = null;
+            var previousMasked = false;
 
             var index = 0;
             while (true)
             {
                 if (propPath.Stopped || writer.Stopped || !reader.Read())
                 {
+                    if (previousOpen)
+                    {
+                        propPath.RemovePropertyName();
+                    }
+
                     propPath.Stop();
                     return;
                 }
 
                 switch (reader.TokenType)
                 {
+                    case Comment:
+                        JsonComments.OnComment(ref reader, writer, ref propPath, previousOpen, previousItem, previousMasked);
+                        break;
                     case StartObject:
                     case StartArray:
                     case JsonTokenType.String:
@@ -514,6 +579,12 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                     case True:
                     case False:
                     case Null:
+                        if (previousOpen)
+                        {
+                            propPath.RemovePropertyName();
+                            previousOpen = false;
+                        }
+
                         var tokenType = reader.TokenType;
 
                         propPath.AddArrayItem(index++);
@@ -523,6 +594,11 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                         }
 
                         var (matchPolicy, nextDepth) = MatchPolicy(policies, depth, ref propPath, tokenType);
+                        if (comments)
+                        {
+                            (previousMasked, previousItem) = CommentOwner(matchPolicy, effective, tokenType, ref propPath);
+                            JsonComments.Flush(writer, ref propPath, CommentKind.Before, previousItem?.CommentRuleFor(CommentKind.Before), previousMasked);
+                        }
 
                         if (matchPolicy is not null)
                         {
@@ -532,9 +608,29 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                         {
                             defaultPolicy(ref reader, writer, context, nextDepth, ref propPath, effective);
                         }
-                        propPath.RemovePropertyName();
+
+                        if (comments)
+                        {
+                            propPath.LastValueEnd = reader.BytesConsumed;
+                            previousOpen = true;
+                        }
+                        else
+                        {
+                            propPath.RemovePropertyName();
+                        }
+
                         break;
                     case EndArray:
+                        if (previousOpen)
+                        {
+                            propPath.RemovePropertyName();
+                        }
+
+                        if (comments)
+                        {
+                            JsonComments.Flush(writer, ref propPath, CommentKind.After, null, ownerMasked: false);
+                        }
+
                         writer.WriteEndArray();
                         return;
                     case PropertyName:
@@ -545,6 +641,60 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 }
             }
         };
+    }
+
+    /// <summary>
+    /// Moves from a property name to its value, keeping the comments in between for the member.
+    /// </summary>
+    private static bool ReadMemberValue(ref Utf8JsonReader reader, ref JsonWalk walk)
+    {
+        while (reader.Read())
+        {
+            if (reader.TokenType != Comment)
+            {
+                return true;
+            }
+
+            walk.Pending!.Add(ref reader, walk.StyleAt(reader.TokenStartIndex));
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether the member's value is masked, and the rule whose comment rules apply to its comments.
+    /// </summary>
+    internal static (bool Masked, JsonObserverItem<TContext>? RuleItem) CommentOwner(
+        JsonObserverItem<TContext>? item,
+        ValueRule<TContext> effective,
+        JsonTokenType tokenType,
+        ref JsonWalk walk)
+    {
+        if (item is not null)
+        {
+            var masked = item.Info.Outcome switch
+            {
+                PathOutcome.Masked => !(tokenType is Null && item.Info.KeepsNull),
+                PathOutcome.Custom => true,
+                _ => false,
+            };
+            return (masked, item);
+        }
+
+        if (effective.Target is RelativeValuePolicy<TContext> relative)
+        {
+            var (relativeItem, _) = MatchPolicy(relative.Items, 0, ref walk, tokenType);
+            return relativeItem is not null
+                ? CommentOwner(relativeItem, relative.Fallback.Rule, tokenType, ref walk)
+                : CommentOwner(null, relative.Fallback.Rule, tokenType, ref walk);
+        }
+
+        if (tokenType is StartObject or StartArray or Null)
+        {
+            return (false, null);
+        }
+
+        return (!ReferenceEquals(effective, BuiltInPolicies<TContext>.BlockList), null);
     }
 
     private static ObserveRule<TContext> GetApplyDefaultPolicy(ValueRule<TContext>? valuePolicy, UnknownContainers unknown)

@@ -304,6 +304,43 @@ internal sealed class BoundedJsonWriter : JsonWriter, IDisposable
         }
     }
 
+    internal override void WriteComment(ReadOnlySpan<byte> utf8Text)
+    {
+        if (Exhausted)
+        {
+            return;
+        }
+
+        if (utf8Text.IndexOf("*/"u8) < 0)
+        {
+            _writer.WriteCommentValue(utf8Text);
+        }
+        else
+        {
+            var safe = ArrayPool<byte>.Shared.Rent(utf8Text.Length * 2);
+            try
+            {
+                var length = 0;
+                for (var i = 0; i < utf8Text.Length; i++)
+                {
+                    safe[length++] = utf8Text[i];
+                    if (utf8Text[i] == (byte)'*' && i + 1 < utf8Text.Length && utf8Text[i + 1] == (byte)'/')
+                    {
+                        safe[length++] = (byte)' ';
+                    }
+                }
+
+                _writer.WriteCommentValue(safe.AsSpan(0, length));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(safe, clearArray: true);
+            }
+        }
+
+        Completed();
+    }
+
     public override void WritePropertyName(string propertyName)
     {
         if (!Exhausted)

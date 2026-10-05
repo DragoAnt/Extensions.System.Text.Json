@@ -157,6 +157,19 @@ internal sealed class JsonMaskValueWriter : MaskValueWriter
 
     public override void Keep() => KeepRequested = true;
 
+    public override void Comment(ReadOnlySpan<char> text)
+    {
+        var bytes = ArrayPool<byte>.Shared.Rent(global::System.Text.Encoding.UTF8.GetMaxByteCount(text.Length));
+        try
+        {
+            _writer.WriteComment(bytes.AsSpan(0, global::System.Text.Encoding.UTF8.GetBytes(text, bytes)));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(bytes, clearArray: true);
+        }
+    }
+
     protected override void WriteNumber(ReadOnlySpan<byte> utf8Literal) => _writer.WriteRawValue(utf8Literal);
 
     protected override void InvalidNumber() => Failed = true;

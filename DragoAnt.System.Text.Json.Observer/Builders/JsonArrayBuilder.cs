@@ -127,6 +127,29 @@ public readonly struct JsonArrayBuilder<TContext>
     internal JsonArrayBuilder<TContext> MaskWhole(ObserveRule<TContext> policy, string action, bool keepsNull = false) =>
         Add(_ => true, policy, new RuleInfo<TContext>(AnyItem, action, PathOutcome.Masked, KeepsNull: keepsNull));
 
+    /// <summary>
+    /// Decides the comments of the values the rule just added matches, for the placements in <paramref name="kinds"/>,
+    /// instead of the call's <see cref="ObserverOptions.Comments"/> policy. A kept comment of a masked value is still
+    /// written masked unless <paramref name="rule"/> calls <see cref="CommentContext.Raw"/>.
+    /// </summary>
+    /// <param name="kinds">Placements the rule decides, for example <see cref="CommentKind.Any"/>.</param>
+    /// <param name="rule">The comment rule, for example <see cref="CommentRules.Drop"/>.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">No rule was added yet.</exception>
+    public JsonArrayBuilder<TContext> Comment(CommentKind kinds, CommentRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        if (_policies.Count == 0)
+        {
+            throw new InvalidOperationException("Add a rule before its comment rule.");
+        }
+
+        var last = _policies[^1];
+        last.CommentKinds = kinds;
+        last.CommentRule = rule;
+        return this;
+    }
+
     internal static (ObserveRule<TContext> Delegate, RuleSet<TContext> Set) Build(JsonArrayBuilder<TContext> builder) => builder.Build();
 
     private JsonArrayBuilder<TContext> Read(JsonObserverItem<TContext>.ReadValue read, string action)

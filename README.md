@@ -284,7 +284,7 @@ Console.WriteLine($"{result.Status} {Encoding.UTF8.GetString(output.WrittenSpan)
 | `Indented` | `false` | indented output |
 | `NameCaseInsensitive` | `true` | match rule names, `Names` tests (`Regex` included) and shapes ignoring case; pass the serializer's setting to match names as deserialization does |
 
-Input may contain comments and trailing commas; a UTF-8 byte order mark is skipped. Comments are not written.
+Input may contain comments and trailing commas; a UTF-8 byte order mark is skipped. Comments are dropped by default (`Comments = CommentPolicy.AllowList`): `CommentPolicy.BlockList` keeps them, `MaskAll` keeps them masked, and `.Comment(CommentKind.Inline, CommentRules.Keep)` after a rule decides the comments of the values it matches. A kept comment of a masked value is written masked. Kept comments are written as `/* … */`; see [comments](https://github.com/DragoAnt/Observer/blob/main/docs/comments.md).
 
 ## Performance
 

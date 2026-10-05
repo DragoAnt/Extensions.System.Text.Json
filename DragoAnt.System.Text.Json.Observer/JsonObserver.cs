@@ -76,7 +76,7 @@ public sealed class JsonObserver
         JsonValuePolicy<TContext>? defaultMasking = null)
     {
         var (masking, obj, array) = JsonObserverItem<TContext>.Any(initObj, initArray, defaultMasking);
-        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(obj, array));
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(obj, array), CommentRuleScan.Any(obj) || CommentRuleScan.Any(array));
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ public sealed class JsonObserver
         JsonValuePolicy<TContext>? defaultMasking = null)
     {
         var (masking, set) = JsonObserverItem<TContext>.Obj(init, defaultMasking);
-        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(set, null));
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(set, null), CommentRuleScan.Any(set));
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ public sealed class JsonObserver
         JsonValuePolicy<TContext>? defaultMasking = null)
     {
         var (masking, set) = JsonObserverItem<TContext>.Array(init, defaultMasking);
-        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(null, set));
+        return new JsonObserver<TContext>(masking, new RuleExplainer<TContext>(null, set), CommentRuleScan.Any(set));
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ public sealed class JsonObserver
     {
         ArgumentNullException.ThrowIfNull(shape);
         var walker = new ShapeWalker(shape, options ?? JsonShapeOptions.Default);
-        return new JsonObserver(new JsonObserver<NoContext>(walker.Invoke, walker));
+        return new JsonObserver(new JsonObserver<NoContext>(walker.Invoke, walker, hasCommentRules: false));
     }
 
     private JsonObserver(JsonObserver<NoContext> masking)
@@ -209,8 +209,11 @@ public sealed class JsonObserver<TContext>
     private readonly PathExplainer _explainer;
     private int _maxDepth = 6;
 
-    internal JsonObserver(ObserveRule<TContext> maskDelegate, PathExplainer explainer)
+    private readonly bool _hasCommentRules;
+
+    internal JsonObserver(ObserveRule<TContext> maskDelegate, PathExplainer explainer, bool hasCommentRules)
     {
+        _hasCommentRules = hasCommentRules;
         _maskDelegate = maskDelegate;
         _explainer = explainer;
     }
@@ -299,8 +302,9 @@ public sealed class JsonObserver<TContext>
     {
         options ??= JsonObserverOptions.Default;
         utf8 = SkipBom(utf8);
-        var reader = CreateReader(utf8, options);
-        return Mask(ref reader, utf8, output, context, options);
+        var comments = CommentsOf(options);
+        var reader = CreateReader(utf8, options, comments is not null);
+        return Mask(ref reader, utf8, default, output, context, options, comments);
     }
 
     /// <summary>
@@ -322,15 +326,24 @@ public sealed class JsonObserver<TContext>
         }
 
         options ??= JsonObserverOptions.Default;
-        var reader = CreateReader(SkipBom(utf8), options);
-        return Mask(ref reader, default, output, context, options);
+        var comments = CommentsOf(options);
+        var input = SkipBom(utf8);
+        var reader = CreateReader(input, options, comments is not null);
+        return Mask(ref reader, default, input, output, context, options, comments);
     }
 
-    private MaskResult Mask(ref Utf8JsonReader reader, ReadOnlySpan<byte> input, IBufferWriter<byte> output, TContext context, JsonObserverOptions options)
+    private MaskResult Mask(
+        ref Utf8JsonReader reader,
+        ReadOnlySpan<byte> input,
+        in ReadOnlySequence<byte> sequence,
+        IBufferWriter<byte> output,
+        TContext context,
+        JsonObserverOptions options,
+        CommentPolicy? comments)
     {
         using var bounded = BoundedJsonWriter.Rent(options);
         using var ignoreNulls = options.IgnoreNulls ? IgnoreNullsJsonWriter.Rent(bounded) : null;
-        var (status, failedAt, flags) = Observe(ref reader, input, (JsonWriter?)ignoreNulls ?? bounded, context, options);
+        var (status, failedAt, flags) = Observe(ref reader, input, sequence, (JsonWriter?)ignoreNulls ?? bounded, context, options, comments);
         if (status == MaskStatus.Unrecognized)
         {
             return new MaskResult { Status = MaskStatus.Unrecognized };
@@ -413,8 +426,8 @@ public sealed class JsonObserver<TContext>
     {
         options ??= JsonObserverOptions.Default;
         utf8 = SkipBom(utf8);
-        var reader = CreateReader(utf8, options);
-        var (status, failedAt, flags) = Observe(ref reader, utf8, JsonWriter.Empty, context, options);
+        var reader = CreateReader(utf8, options, comments: false);
+        var (status, failedAt, flags) = Observe(ref reader, utf8, default, JsonWriter.Empty, context, options, null);
         return new MaskResult { Status = status, FailedAtByte = failedAt, Flags = flags };
     }
 
@@ -435,8 +448,8 @@ public sealed class JsonObserver<TContext>
         }
 
         options ??= JsonObserverOptions.Default;
-        var reader = CreateReader(SkipBom(utf8), options);
-        var (status, failedAt, flags) = Observe(ref reader, default, JsonWriter.Empty, context, options);
+        var reader = CreateReader(SkipBom(utf8), options, comments: false);
+        var (status, failedAt, flags) = Observe(ref reader, default, default, JsonWriter.Empty, context, options, null);
         return new MaskResult { Status = status, FailedAtByte = failedAt, Flags = flags };
     }
 
@@ -454,32 +467,49 @@ public sealed class JsonObserver<TContext>
         return head.SequenceEqual(Utf8Bom) ? utf8.Slice(Utf8Bom.Length) : utf8;
     }
 
-    private static JsonReaderState ReaderState(JsonObserverOptions options) => new(new JsonReaderOptions
+    /// <summary>
+    /// The comment policy of a writing call, or <c>null</c> when every comment would be dropped anyway, so that the
+    /// reader skips them at no cost.
+    /// </summary>
+    private CommentPolicy? CommentsOf(JsonObserverOptions options)
     {
-        CommentHandling = JsonCommentHandling.Skip,
+        var policy = options.Comments ?? CommentPolicy.AllowList;
+        return policy.Kind == CommentPolicyKind.DropAll || (policy.Kind == CommentPolicyKind.AllowList && !_hasCommentRules) ? null : policy;
+    }
+
+    private static JsonReaderState ReaderState(JsonObserverOptions options, bool comments) => new(new JsonReaderOptions
+    {
+        CommentHandling = comments ? JsonCommentHandling.Allow : JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
         MaxDepth = Math.Max(options.MaxDepth, 1),
     });
 
-    private static Utf8JsonReader CreateReader(ReadOnlySpan<byte> utf8, JsonObserverOptions options) =>
-        new(utf8, isFinalBlock: false, ReaderState(options));
+    private static Utf8JsonReader CreateReader(ReadOnlySpan<byte> utf8, JsonObserverOptions options, bool comments) =>
+        new(utf8, isFinalBlock: false, ReaderState(options, comments));
 
-    private static Utf8JsonReader CreateReader(in ReadOnlySequence<byte> utf8, JsonObserverOptions options) =>
-        new(utf8, isFinalBlock: false, ReaderState(options));
+    private static Utf8JsonReader CreateReader(in ReadOnlySequence<byte> utf8, JsonObserverOptions options, bool comments) =>
+        new(utf8, isFinalBlock: false, ReaderState(options, comments));
 
     private (MaskStatus Status, long FailedAt, MaskFlags Flags) Observe(
         ref Utf8JsonReader reader,
         ReadOnlySpan<byte> input,
+        in ReadOnlySequence<byte> sequence,
         JsonWriter writer,
         TContext context,
-        JsonObserverOptions options)
+        JsonObserverOptions options,
+        CommentPolicy? comments)
     {
-        var propPath = new JsonWalk(_maxDepth, input, options);
+        var propPath = new JsonWalk(_maxDepth, input, sequence, options, comments);
         try
         {
-            if (!reader.Read() || reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))
+            if (!ReadRoot(ref reader, ref propPath) || reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))
             {
                 return (MaskStatus.Unrecognized, 0, MaskFlags.None);
+            }
+
+            if (comments is not null)
+            {
+                JsonComments.Flush(writer, ref propPath, CommentKind.Before, null, ownerMasked: false);
             }
 
             _maskDelegate(ref reader, writer, context, 0, ref propPath, JsonValuePolicy<TContext>.Default.Rule);
@@ -494,13 +524,13 @@ public sealed class JsonObserver<TContext>
                 return (MaskStatus.Truncated, reader.BytesConsumed, MaskFlags.InputTruncated);
             }
 
-            return HasTrailingData(ref reader)
+            return HasTrailingData(ref reader, writer, ref propPath)
                 ? (MaskStatus.Truncated, -1, MaskFlags.TrailingData)
                 : (MaskStatus.Masked, -1, MaskFlags.None);
         }
         catch (Exception)
         {
-            var depth = reader.CurrentDepth >= Math.Max(options.MaxDepth, 1) ? MaskFlags.Depth : MaskFlags.None;
+            var depth = reader.CurrentDepth >= Math.Max(options.MaxDepth, 1) - 1 ? MaskFlags.Depth : MaskFlags.None;
             return (MaskStatus.Invalid, reader.BytesConsumed, depth);
         }
         finally
@@ -512,16 +542,49 @@ public sealed class JsonObserver<TContext>
     /// <summary>
     /// Whether anything but whitespace follows the root, which the reader reports as a second token or an error.
     /// </summary>
-    private static bool HasTrailingData(ref Utf8JsonReader reader)
+    private static bool HasTrailingData(ref Utf8JsonReader reader, JsonWriter writer, ref JsonWalk walk)
     {
+        var end = reader.BytesConsumed;
+        var inline = true;
         try
         {
-            return reader.Read();
+            while (reader.Read())
+            {
+                if (reader.TokenType != JsonTokenType.Comment)
+                {
+                    return true;
+                }
+
+                inline = inline && walk.IsSameLine(end, reader.TokenStartIndex);
+                var kind = inline ? CommentKind.Inline : CommentKind.After;
+                walk.Pending!.Add(ref reader, walk.StyleAt(reader.TokenStartIndex));
+                JsonComments.Flush(writer, ref walk, kind, null, ownerMasked: false);
+            }
+
+            return false;
         }
         catch (JsonException)
         {
             return true;
         }
+    }
+
+    /// <summary>
+    /// Reads the root token, keeping the comments before it.
+    /// </summary>
+    private static bool ReadRoot(ref Utf8JsonReader reader, ref JsonWalk walk)
+    {
+        while (reader.Read())
+        {
+            if (reader.TokenType != JsonTokenType.Comment)
+            {
+                return true;
+            }
+
+            walk.Pending!.Add(ref reader, walk.StyleAt(reader.TokenStartIndex));
+        }
+
+        return false;
     }
 
     /// <summary>
