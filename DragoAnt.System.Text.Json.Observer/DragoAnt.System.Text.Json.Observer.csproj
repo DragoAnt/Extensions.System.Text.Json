@@ -2,13 +2,11 @@
   <PropertyGroup>
     <Description>Mask or extract JSON values by property-path rules in a single streaming pass from Utf8JsonReader to Utf8JsonWriter, without deserialization or a DOM.</Description>
     <EnforcePublicApiDocs>true</EnforcePublicApiDocs>
+    <MSKit_PackageValidationBaselineVersion>1.0.2</MSKit_PackageValidationBaselineVersion>
     <PackageTags>json;system.text.json;utf8jsonreader;masking;redaction;pii;extraction;streaming;logging</PackageTags>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="DragoAnt.Observer.Core" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="buildTransitive\DragoAnt.System.Text.Json.Observer.props" Pack="true" PackagePath="buildTransitive\DragoAnt.System.Text.Json.Observer.props" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="DragoAnt.System.Text.Json.Observer.Tests.Shared" />
