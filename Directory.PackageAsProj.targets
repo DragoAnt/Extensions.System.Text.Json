@@ -10,4 +10,23 @@
 
   <Import Condition="Exists('$(PackageAsProj_DragoAnt_Shared_Path)')" Project="$(PackageAsProj_DragoAnt_Shared_Path)" />
 
+  <!-- DragoAntObserverLocal=true builds DragoAnt.Observer.Core from a sibling checkout of DragoAnt/Observer
+       (DragoAntObserverRoot, ../Observer by default) instead of the package. -->
+  <PropertyGroup>
+    <DragoAntObserverRoot Condition="'$(DragoAntObserverRoot)'==''">$(MSBuildThisFileDirectory)../Observer/</DragoAntObserverRoot>
+    <DragoAntObserverRoot>$([MSBuild]::EnsureTrailingSlash('$(DragoAntObserverRoot)'))</DragoAntObserverRoot>
+    <_DragoAntObserverCoreProject>$(DragoAntObserverRoot)DragoAnt.Observer.Core/DragoAnt.Observer.Core.csproj</_DragoAntObserverCoreProject>
+    <_DragoAntObserverAsProj>false</_DragoAntObserverAsProj>
+    <_DragoAntObserverAsProj Condition="'$(DragoAntObserverLocal)'=='true'">true</_DragoAntObserverAsProj>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Update="DragoAnt.Observer.Core" ProjPath="$(_DragoAntObserverCoreProject)" AsProj="$(_DragoAntObserverAsProj)" />
+  </ItemGroup>
+
+  <Target Name="DragoAntObserverLocal_Validation" BeforeTargets="CollectPackageReferences;ResolveProjectReferences"
+          Condition="'$(_DragoAntObserverAsProj)'=='true' And !Exists('$(_DragoAntObserverCoreProject)')">
+    <Error Code="DAOBS001" Text="DragoAntObserverLocal is true but '$(_DragoAntObserverCoreProject)' does not exist. Clone DragoAnt/Observer next to this repository or set DragoAntObserverRoot." />
+  </Target>
+
 </Project>
