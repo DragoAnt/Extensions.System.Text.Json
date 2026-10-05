@@ -201,8 +201,8 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     public static JsonObserverDelegate<TContext> ApplyAnyPolicy(Func<string?, TContext, string?> maskingRule, string? constant = null) =>
         ApplyMaskPolicy(
             constant is not null
-                ? (ref Utf8JsonReader _, TContext _, int _) => constant
-                : (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: true), context),
+                ? (ref Utf8JsonReader _, TContext _) => constant
+                : (ref Utf8JsonReader reader, TContext context) => maskingRule(ScalarText(ref reader, decode: true), context),
             keepNull: true);
 
     /// <summary>
@@ -211,8 +211,8 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     public static JsonObserverDelegate<TContext> ApplyStringPolicy(Func<string?, TContext, string?> maskingRule, string? constant = null) =>
         ApplyMaskPolicy(
             constant is not null
-                ? (ref Utf8JsonReader _, TContext _, int _) => constant
-                : (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: true), context),
+                ? (ref Utf8JsonReader _, TContext _) => constant
+                : (ref Utf8JsonReader reader, TContext context) => maskingRule(ScalarText(ref reader, decode: true), context),
             keepNull: false);
 
     /// <summary>
@@ -220,7 +220,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     public static JsonObserverDelegate<TContext> ApplyRawPolicy(Func<string?, TContext, string?> maskingRule) =>
         ApplyMaskPolicy(
-            (ref Utf8JsonReader reader, TContext context, int maxBytes) => maskingRule(ScalarText(ref reader, maxBytes, decode: false), context),
+            (ref Utf8JsonReader reader, TContext context) => maskingRule(ScalarText(ref reader, decode: false), context),
             keepNull: false);
 
     /// <summary>
@@ -228,7 +228,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     public static JsonObserverDelegate<TContext> ApplyBoolPolicy(Func<bool?, TContext, string?> maskingRule) =>
         ApplyMaskPolicy(
-            (ref Utf8JsonReader reader, TContext context, int _) => maskingRule(reader.TokenType switch
+            (ref Utf8JsonReader reader, TContext context) => maskingRule(reader.TokenType switch
             {
                 True => true,
                 False => false,
@@ -241,7 +241,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     public static JsonObserverDelegate<TContext> ApplyIntPolicy(Func<int?, TContext, string?> maskingRule) =>
         ApplyMaskPolicy(
-            (ref Utf8JsonReader reader, TContext context, int _) =>
+            (ref Utf8JsonReader reader, TContext context) =>
                 maskingRule(reader.TokenType is Number && reader.TryGetInt32(out var value) ? value : null, context),
             keepNull: false);
 
@@ -250,7 +250,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     public static JsonObserverDelegate<TContext> ApplyLongPolicy(Func<long?, TContext, string?> maskingRule) =>
         ApplyMaskPolicy(
-            (ref Utf8JsonReader reader, TContext context, int _) =>
+            (ref Utf8JsonReader reader, TContext context) =>
                 maskingRule(reader.TokenType is Number && reader.TryGetInt64(out var value) ? value : null, context),
             keepNull: false);
 
@@ -259,11 +259,11 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     /// </summary>
     public static JsonObserverDelegate<TContext> ApplyDecimalPolicy(Func<decimal?, TContext, string?> maskingRule) =>
         ApplyMaskPolicy(
-            (ref Utf8JsonReader reader, TContext context, int _) =>
+            (ref Utf8JsonReader reader, TContext context) =>
                 maskingRule(reader.TokenType is Number && reader.TryGetDecimal(out var value) ? value : null, context),
             keepNull: false);
 
-    private delegate string? MaskToken(ref Utf8JsonReader reader, TContext context, int maxValueBytes);
+    private delegate string? MaskToken(ref Utf8JsonReader reader, TContext context);
 
     /// <summary>
     /// Writes the function's replacement for the current value whatever its type, then moves past it; a container is never read.
@@ -284,14 +284,16 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
                 return;
             }
 
-            var result = mask(ref reader, context, writer.Options.MaxValueBytes);
+            var result = mask(ref reader, context);
             if (result is null)
             {
                 writer.WriteNullValue();
             }
             else
             {
+                writer.MaskOutput = true;
                 writer.WriteStringValue(result);
+                writer.MaskOutput = false;
             }
 
             if (reader.TokenType is StartObject or StartArray && !reader.TrySkip())
@@ -302,9 +304,9 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
     }
 
     /// <summary>
-    /// Text of a string, number or boolean token, at most <paramref name="maxBytes"/> UTF-8 bytes of it; <c>null</c> for anything else.
+    /// The whole text of a string, number or boolean token; <c>null</c> for anything else.
     /// </summary>
-    private static string? ScalarText(ref Utf8JsonReader reader, int maxBytes, bool decode)
+    private static string? ScalarText(ref Utf8JsonReader reader, bool decode)
     {
         if (reader.TokenType is not (JsonTokenType.String or Number or True or False))
         {
@@ -317,7 +319,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             var buffer = ArrayPool<byte>.Shared.Rent(length);
             try
             {
-                return Utf8Prefix(buffer.AsSpan(0, reader.CopyString(buffer)), maxBytes);
+                return Encoding.UTF8.GetString(buffer.AsSpan(0, reader.CopyString(buffer)));
             }
             finally
             {
@@ -325,29 +327,7 @@ internal sealed class JsonObserverItem<TContext>(JsonPropertyMatchDelegate propM
             }
         }
 
-        if (!reader.HasValueSequence)
-        {
-            return Utf8Prefix(reader.ValueSpan, maxBytes);
-        }
-
-        var sequence = reader.ValueSequence;
-        return Utf8Prefix(sequence.Slice(0, Math.Min(sequence.Length, (long)maxBytes + 4)).ToArray(), maxBytes);
-    }
-
-    private static string Utf8Prefix(ReadOnlySpan<byte> utf8, int maxBytes)
-    {
-        if (utf8.Length > maxBytes)
-        {
-            var cut = Math.Max(maxBytes, 0);
-            while (cut > 0 && (utf8[cut] & 0xC0) == 0x80)
-            {
-                cut--;
-            }
-
-            utf8 = utf8[..cut];
-        }
-
-        return Encoding.UTF8.GetString(utf8);
+        return reader.HasValueSequence ? Encoding.UTF8.GetString(reader.ValueSequence) : Encoding.UTF8.GetString(reader.ValueSpan);
     }
 
     /// <summary>

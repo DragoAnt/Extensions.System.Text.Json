@@ -88,8 +88,8 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type: a string arrives decoded,
         /// a number or boolean as its JSON literal (<c>"12.50"</c>, <c>"true"</c>), <c>null</c> as <c>null</c>, and an object
-        /// or array is skipped unread and arrives as <c>null</c>. A value longer than
-        /// <see cref="JsonObserverOptions.MaxValueBytes"/> arrives cut to that length.
+        /// or array is skipped unread and arrives as <c>null</c>. The strategy receives the whole value and its result is not cut by
+        /// <see cref="JsonObserverOptions.MaxValueBytes"/>.
         /// </summary>
         /// <param name="strategy">Returns the replacement string; <c>null</c> writes <c>null</c>.</param>
         public JsonValuePolicyBuilder<TContext> MaskStr(Func<string?, TContext, string?> strategy)
@@ -98,8 +98,8 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type: a string arrives decoded,
         /// a number or boolean as its JSON literal (<c>"12.50"</c>, <c>"true"</c>), <c>null</c> as <c>null</c>, and an object
-        /// or array is skipped unread and arrives as <c>null</c>. A value longer than
-        /// <see cref="JsonObserverOptions.MaxValueBytes"/> arrives cut to that length.
+        /// or array is skipped unread and arrives as <c>null</c>. The strategy receives the whole value and its result is not cut by
+        /// <see cref="JsonObserverOptions.MaxValueBytes"/>.
         /// </summary>
         /// <param name="strategy">
         /// Replacement: a constant string, a <see cref="global::System.Text.RegularExpressions.Regex"/> whose matches become <c>*</c>,
@@ -191,8 +191,8 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type: a string arrives decoded,
         /// a number or boolean as its JSON literal, and an object or array is skipped unread and arrives as <c>null</c>.
-        /// A <c>null</c> value stays <c>null</c> without calling the strategy. A value longer than
-        /// <see cref="JsonObserverOptions.MaxValueBytes"/> arrives cut to that length.
+        /// A <c>null</c> value stays <c>null</c> without calling the strategy. The strategy receives the whole value and its result is not cut by
+        /// <see cref="JsonObserverOptions.MaxValueBytes"/>.
         /// </summary>
         /// <param name="strategy">Returns the replacement string; <c>null</c> writes <c>null</c>.</param>
         public JsonValuePolicyBuilder<TContext> MaskAny(Func<string?, TContext, string?> strategy)
@@ -201,8 +201,8 @@ public readonly struct JsonValuePolicyBuilder<TContext>
         /// <summary>
         /// Masks the whole value with <paramref name="strategy"/>, whatever its JSON type: a string arrives decoded,
         /// a number or boolean as its JSON literal, and an object or array is skipped unread and arrives as <c>null</c>.
-        /// A <c>null</c> value stays <c>null</c> without calling the strategy. A value longer than
-        /// <see cref="JsonObserverOptions.MaxValueBytes"/> arrives cut to that length.
+        /// A <c>null</c> value stays <c>null</c> without calling the strategy. The strategy receives the whole value and its result is not cut by
+        /// <see cref="JsonObserverOptions.MaxValueBytes"/>.
         /// </summary>
         /// <param name="strategy">
         /// Replacement: a constant string, a <see cref="global::System.Text.RegularExpressions.Regex"/> whose matches become <c>*</c>,

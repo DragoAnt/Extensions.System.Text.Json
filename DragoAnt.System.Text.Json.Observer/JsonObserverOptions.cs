@@ -8,7 +8,7 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// <param name="MaxOutputBytes">Output size limit in UTF-8 bytes; when reached the output is closed and the status is <see cref="MaskStatus.Truncated"/>.</param>
 /// <param name="MaxValueBytes">
 /// Longest string value written, in UTF-8 bytes; a longer one is cut, ends with an ellipsis and makes the status <see cref="MaskStatus.Truncated"/>.
-/// A rule's masking function also receives a longer value cut to this length.
+/// It applies to values written unmasked: a masking function receives the whole value, and mask output, a hash included, is never cut.
 /// </param>
 /// <param name="MaxDepth">Deepest nesting accepted; a deeper payload is <see cref="MaskStatus.Invalid"/>.</param>
 /// <param name="RelaxedEscaping">Write non-ASCII and HTML-sensitive characters unescaped, which keeps logs readable.</param>
