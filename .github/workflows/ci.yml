@@ -96,6 +96,11 @@ jobs:
           dotnet test --solution "$SOLUTION" -c "$CONFIGURATION" --no-build --no-progress \
             --results-directory "$RESULTS_DIR" --report-xunit-trx --report-xunit-junit --coverage --coverage-output-format cobertura
 
+      - name: Pack (package validation against 1.0.2)
+        run: |
+          # shellcheck disable=SC2086
+          dotnet pack "$SOLUTION" -c "$CONFIGURATION" --no-build -o "$GITHUB_WORKSPACE/packages" $BUILD_PROPS
+
       - name: Coverage
         if: ${{ !cancelled() && hashFiles('TestResults/**/*.cobertura.xml') != '' }}
         run: |
