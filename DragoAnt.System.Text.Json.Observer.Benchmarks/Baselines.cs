@@ -2,6 +2,11 @@ using System.Buffers;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+#if NET10_0_OR_GREATER
+using REDox.Json;
+using RedoxJsonDocument = REDox.Json.JsonDocument;
+using RedoxJsonValueKind = REDox.Json.JsonValueKind;
+#endif
 
 namespace DragoAnt.System.Text.Json.Observer.Benchmarks;
 
@@ -196,6 +201,72 @@ public static partial class Baselines
         MaskNode(node);
         return node.ToJsonString();
     }
+
+#if NET10_0_OR_GREATER
+    private static readonly REDox.Json.JsonDocumentOptions RedoxOptions = new()
+    {
+        EnableValueValidation = true,
+        MaxDepth = 64,
+    };
+
+    public static ExtractContext RedoxExtract(ReadOnlyMemory<byte> json)
+    {
+        using var doc = RedoxJsonDocument.Parse(json, options: RedoxOptions);
+        var root = doc.RootElement;
+        return new ExtractContext
+        {
+            Id = root.GetProperty("id").GetString(),
+            Type = root.GetProperty("type").GetString(),
+            CustomerId = root.GetProperty("customer").GetProperty("customerId").GetInt32(),
+        };
+    }
+
+    public static string RedoxMask(string json)
+    {
+        using var doc = RedoxJsonDocument.Parse(json, options: RedoxOptions);
+        MaskRedox(doc.RootElement);
+        return RedoxJsonDocument.EncodeToString(doc.RootElement);
+    }
+
+    public static void RedoxMask(ReadOnlyMemory<byte> json, IBufferWriter<byte> output)
+    {
+        using var doc = RedoxJsonDocument.Parse(json, options: RedoxOptions);
+        MaskRedox(doc.RootElement);
+        RedoxJsonDocument.EncodeTo(doc.RootElement, output);
+    }
+
+    private static void MaskRedox(REDox.DElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case RedoxJsonValueKind.Object:
+                var obj = element.AsObject();
+                for (var i = 0; i < obj.Count; i++)
+                {
+                    var property = obj.GetAt(i);
+                    if (SensitiveSet.Contains(property.Key))
+                    {
+                        obj[i] = Mask;
+                    }
+                    else
+                    {
+                        MaskRedox(property.Value.AsElement());
+                    }
+                }
+
+                break;
+            case RedoxJsonValueKind.Array:
+                var array = element.AsArray();
+                for (var i = 0; i < array.Count; i++)
+                {
+                    MaskRedox(array[i].AsElement());
+                }
+
+                break;
+        }
+    }
+
+#endif
 
     private static void MaskNode(JsonNode node)
     {
