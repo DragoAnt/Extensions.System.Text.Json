@@ -1,5 +1,10 @@
 using System.Diagnostics;
 using System.Text;
+#if NET10_0_OR_GREATER
+using System.Buffers;
+using RedoxJsonDocument = REDox.Json.JsonDocument;
+using RedoxJsonValueKind = REDox.Json.JsonValueKind;
+#endif
 
 namespace DragoAnt.System.Text.Json.Observer.Benchmarks.Harness;
 
@@ -53,6 +58,91 @@ public static class Probes
             File.WriteAllText(outputPath, sb.ToString());
         }
     }
+
+#if NET10_0_OR_GREATER
+    public static void RunRedox()
+    {
+        var maskChecks = 0;
+        foreach (var shape in Enum.GetValues<PayloadShape>())
+        {
+            foreach (var size in new[] { 1024, 8 * 1024, 64 * 1024 })
+            {
+                var json = Payloads.Build(shape, size);
+                var expected = Baselines.Dom(json);
+                var actual = Baselines.RedoxMask(json);
+                AssertEqual(expected, actual, $"mask string {shape}/{size}");
+
+                var output = new ArrayBufferWriter<byte>();
+                Baselines.RedoxMask(Encoding.UTF8.GetBytes(json), output);
+                AssertEqual(expected, Encoding.UTF8.GetString(output.WrittenSpan), $"mask bytes {shape}/{size}");
+                maskChecks += 2;
+            }
+        }
+
+        var extractChecks = 0;
+        foreach (var shape in new[] { PayloadShape.Flat, PayloadShape.Nested })
+        {
+            foreach (var size in new[] { 1024, 8 * 1024, 64 * 1024 })
+            {
+                var utf8 = Encoding.UTF8.GetBytes(Payloads.Build(shape, size));
+                using var expectedDocument = JsonDocument.Parse(utf8);
+                var expectedRoot = expectedDocument.RootElement;
+                var expected = new ExtractContext
+                {
+                    Id = expectedRoot.GetProperty("id").GetString(),
+                    Type = expectedRoot.GetProperty("type").GetString(),
+                    CustomerId = expectedRoot.GetProperty("customer").GetProperty("customerId").GetInt32(),
+                };
+                var actual = Baselines.RedoxExtract(utf8);
+                AssertEqual(expected.Id, actual.Id, $"extract id {shape}/{size}");
+                AssertEqual(expected.Type, actual.Type, $"extract type {shape}/{size}");
+                AssertEqual(expected.CustomerId, actual.CustomerId, $"extract customerId {shape}/{size}");
+                extractChecks++;
+            }
+        }
+
+        var invalidUtf8 = new (string Name, byte[] Bytes)[]
+        {
+            ("overlong sequence C0 AF", BuildInvalidUtf8(0xC0, 0xAF)),
+            ("lone continuation byte 80", BuildInvalidUtf8(0x80)),
+            ("truncated multi-byte sequence E2 82", BuildInvalidUtf8(0xE2, 0x82)),
+        };
+
+        foreach (var (name, input) in invalidUtf8)
+        {
+            var output = new ArrayBufferWriter<byte>();
+            using var document = RedoxJsonDocument.Parse(input.AsMemory(), options: new REDox.Json.JsonDocumentOptions
+            {
+                EnableValueValidation = true,
+                MaxDepth = 64,
+            });
+            RedoxJsonDocument.EncodeTo(document.RootElement, output);
+            if (!input.AsSpan().SequenceEqual(output.WrittenSpan))
+            {
+                throw new InvalidOperationException($"REDox did not pass through {name} in strict mode.");
+            }
+
+            Console.WriteLine($"REDox strict invalid UTF-8: {name} => accepted and passed through unchanged");
+        }
+
+        Console.WriteLine($"REDox correctness: {maskChecks} mask outputs, {extractChecks} extraction contexts, {invalidUtf8.Length} invalid UTF-8 cases passed");
+    }
+
+    private static byte[] BuildInvalidUtf8(params byte[] invalidBytes) =>
+    [
+        .. Encoding.UTF8.GetBytes("{\"value\":\""),
+        .. invalidBytes,
+        .. Encoding.UTF8.GetBytes("\"}"),
+    ];
+
+    private static void AssertEqual<T>(T expected, T actual, string scenario)
+    {
+        if (!EqualityComparer<T>.Default.Equals(expected, actual))
+        {
+            throw new InvalidOperationException($"REDox correctness mismatch for {scenario}.");
+        }
+    }
+#endif
 
     private static Func<string, JsonReaderOptions, string?> Wrap(JsonObserver observer) => (json, options) => observer.Mask(json, ToOptions(options));
 

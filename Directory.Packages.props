@@ -47,5 +47,6 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftExtensionsVersion)" />
     <PackageVersion Include="JsonMasking" Version="2.0.0" />
+    <PackageVersion Include="CAPCOM.REDox" Version="1.0.1" />
   </ItemGroup>
 </Project>
