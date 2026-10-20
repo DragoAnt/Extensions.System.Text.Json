@@ -27,6 +27,7 @@ namespace DragoAnt.System.Text.Json.Observer.Http;
 /// </remarks>
 public sealed class JsonBodyLoggingHandler : DelegatingHandler
 {
+    private const int TimeoutToleranceMilliseconds = 50;
     private static readonly JsonObserver DefaultMasker = JsonObserver.Any(static _ => { }, static _ => { });
 
     private readonly string _clientName;
@@ -37,6 +38,8 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
     private readonly ILogger _logger;
     private int _failureReported;
     private int _sensitiveReported;
+
+    internal Func<long, TimeSpan> ElapsedTime { get; init; } = Stopwatch.GetElapsedTime;
 
     /// <summary>
     /// Creates a handler that reads the options named <paramref name="clientName"/> from <paramref name="optionsMonitor"/> on every call,
@@ -99,7 +102,16 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
             var failure = ExceptionDispatchInfo.Capture(ex);
             if (options.When != JsonBodyLogWhen.Never)
             {
-                var outcome = ex is OperationCanceledException ? JsonBodyOutcome.Canceled : JsonBodyOutcome.Exception;
+                request.Options.TryGetValue(JsonBodyLogging.Key, out var context);
+                var outcome = ex is OperationCanceledException
+                    && cancellationToken.IsCancellationRequested
+                    && context?.CallerToken is { IsCancellationRequested: false }
+                    && context.RequestTimeout is { } requestTimeout
+                    && ElapsedTime(context.TimeoutStarted) + TimeSpan.FromMilliseconds(TimeoutToleranceMilliseconds) >= requestTimeout
+                    ? JsonBodyOutcome.Timeout
+                    : ex is OperationCanceledException
+                        ? JsonBodyOutcome.Canceled
+                        : JsonBodyOutcome.Exception;
                 await TryLogAsync(request, response: null, outcome, ex, started, options).ConfigureAwait(false);
             }
 
@@ -142,8 +154,9 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
         long started,
         JsonBodyLoggingOptions options)
     {
-        var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        var elapsedMs = ElapsedTime(started).TotalMilliseconds;
         var limit = Math.Clamp(options.MaxBodyBytes, 0, Array.MaxLength - 1);
+        var maskOptions = CreateMaskOptions(options.MaskOptions, limit);
         request.Options.TryGetValue(JsonBodyLogging.Key, out var context);
 
         if (options.IncludeSensitive && Interlocked.Exchange(ref _sensitiveReported, 1) == 0)
@@ -151,7 +164,12 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
             _logger.LogWarning("HTTP body logging for client {ClientName} writes bodies unmasked because IncludeSensitive is on", _clientName);
         }
 
-        var requestBody = await ReadRequestAsync(request.Content, context?.RequestType ?? options.DefaultRequestType, options, limit)
+        var requestBody = await ReadRequestAsync(
+                request.Content,
+                context?.RequestType ?? options.DefaultRequestType,
+                options.IncludeSensitive,
+                maskOptions,
+                limit)
             .ConfigureAwait(false);
 
         var entry = new JsonBodyLogEntry
@@ -189,8 +207,8 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
             try
             {
                 var body = end is CaptureEnd.Failed or CaptureEnd.Stopped
-                    ? Render(prefix, truncated, responseType, options, limit, incomplete: true)
-                    : Render(prefix, truncated, responseType, options, limit, incomplete: false);
+                    ? Render(prefix, truncated, responseType, options.IncludeSensitive, maskOptions, incomplete: true)
+                    : Render(prefix, truncated, responseType, options.IncludeSensitive, maskOptions, incomplete: false);
                 Write(entry with
                 {
                     ResponseBody = body.Text,
@@ -210,7 +228,12 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
 
     private void Write(in JsonBodyLogEntry entry) => _sink.Write(entry);
 
-    private async Task<Body> ReadRequestAsync(HttpContent? content, Type? modelType, JsonBodyLoggingOptions options, int limit)
+    private async Task<Body> ReadRequestAsync(
+        HttpContent? content,
+        Type? modelType,
+        bool includeSensitive,
+        JsonObserverOptions maskOptions,
+        int limit)
     {
         if (content is null)
         {
@@ -268,17 +291,29 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
         }
 
         var truncated = captured.WrittenCount > limit;
-        return Render(captured.WrittenSpan[..Math.Min(captured.WrittenCount, limit)], truncated, modelType, options, limit, incomplete: false);
+        return Render(
+            captured.WrittenSpan[..Math.Min(captured.WrittenCount, limit)],
+            truncated,
+            modelType,
+            includeSensitive,
+            maskOptions,
+            incomplete: false);
     }
 
-    private Body Render(ReadOnlySpan<byte> utf8, bool truncated, Type? modelType, JsonBodyLoggingOptions options, int limit, bool incomplete)
+    private Body Render(
+        ReadOnlySpan<byte> utf8,
+        bool truncated,
+        Type? modelType,
+        bool includeSensitive,
+        JsonObserverOptions maskOptions,
+        bool incomplete)
     {
         if (utf8.IsEmpty && !truncated && !incomplete)
         {
             return new Body(null, JsonBodyStatus.None, false);
         }
 
-        if (options.IncludeSensitive)
+        if (includeSensitive)
         {
             return new Body(Encoding.UTF8.GetString(utf8), incomplete ? JsonBodyStatus.Incomplete : JsonBodyStatus.Raw, truncated);
         }
@@ -293,7 +328,7 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
                 return new Body("[body withheld]", JsonBodyStatus.Withheld, truncated);
             }
 
-            result = masker.Mask(utf8, output, new JsonObserverOptions { MaxOutputBytes = Math.Max(limit, 1), Comments = CommentPolicy.DropAll });
+            result = masker.Mask(utf8, output, maskOptions);
         }
         catch (Exception ex)
         {
@@ -322,6 +357,17 @@ public sealed class JsonBodyLoggingHandler : DelegatingHandler
             };
 
         return new Body(text, status, truncated || result.Status == MaskStatus.Truncated);
+    }
+
+    private static JsonObserverOptions CreateMaskOptions(JsonObserverOptions? configuredOptions, int limit)
+    {
+        configuredOptions ??= JsonObserverOptions.Default;
+        var configuredLimit = configuredOptions.MaxOutputBytes <= 0 ? int.MaxValue : configuredOptions.MaxOutputBytes;
+        return configuredOptions with
+        {
+            MaxOutputBytes = Math.Max(Math.Min(configuredLimit, limit), 1),
+            Comments = CommentPolicy.DropAll,
+        };
     }
 
     private static string? SkipReason(HttpContentHeaders headers, int limit)

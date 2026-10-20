@@ -2,6 +2,7 @@
   <PropertyGroup>
     <Description>HTTP message handler and extensions for logging and masking JSON request and response bodies using DragoAnt.System.Text.Json.Observer.</Description>
     <PackageTags>json;system.text.json;http;httpclient;delegatinghandler;masking;redaction;pii;logging</PackageTags>
+    <EnforcePublicApiDocs>true</EnforcePublicApiDocs>
   </PropertyGroup>
 
   <ItemGroup>
