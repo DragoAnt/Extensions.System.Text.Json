@@ -114,7 +114,7 @@ jobs:
             "-reports:$RESULTS_DIR/**/*.cobertura.xml" \
             "-targetdir:$COVERAGE_DIR" \
             "-reporttypes:MarkdownSummaryGithub;Cobertura" \
-            "-assemblyfilters:-*.Tests;-*.Tests.*;-*.Benchmarks;-DragoAnt.Observer.*"
+            "-assemblyfilters:-*.Tests;-*.Tests.*;-*.IntegrationTests;-*.IntegrationTests.*;-*.Benchmarks;-DragoAnt.Observer.*"
           cat "$COVERAGE_DIR/SummaryGithub.md" >> "$GITHUB_STEP_SUMMARY"
           rate=$(grep -oE '<coverage [^>]*line-rate="[0-9.]+"' "$COVERAGE_DIR/Cobertura.xml" | grep -oE 'line-rate="[0-9.]+"' | grep -oE '[0-9.]+')
           awk -v rate="$rate" -v min="$COVERAGE_THRESHOLD" 'BEGIN {

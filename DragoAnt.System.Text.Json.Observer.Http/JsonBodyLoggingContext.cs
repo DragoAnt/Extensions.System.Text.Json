@@ -1,7 +1,7 @@
 namespace DragoAnt.System.Text.Json.Observer.Http;
 
 /// <summary>
-/// Per-request logging details, attached with <see cref="JsonBodyLogging.WithBodyLogging{TRequest,TResponse}"/> and stored under
+/// Per-request logging details, attached through <see cref="JsonBodyLogging"/> and stored under
 /// <see cref="JsonBodyLogging.Key"/>.
 /// </summary>
 public sealed record JsonBodyLoggingContext
@@ -20,4 +20,10 @@ public sealed record JsonBodyLoggingContext
     /// Operation name written to <see cref="JsonBodyLogEntry.Operation"/>.
     /// </summary>
     public string? Operation { get; init; }
+
+    internal CancellationToken? CallerToken { get; init; }
+
+    internal TimeSpan? RequestTimeout { get; init; }
+
+    internal long TimeoutStarted { get; init; }
 }
