@@ -7,7 +7,7 @@ using static DragoAnt.System.Text.Json.Observer.JsonValuePolicy;
 
 namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
-public abstract class RobustnessTests
+public abstract partial class RobustnessTests
 {
     private const string Secret = "S3cr3tV4l";
 

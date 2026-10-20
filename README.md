@@ -95,7 +95,7 @@ Console.WriteLine(JsonObserver.Obj(NullList).Mask(json));
 
 ### Absolute and any-depth rules
 
-**Absolute** rules follow the path from the root: `Match(name)` for one level, `Path(a, b, …)` for several. **Any-depth** rules (inside `AnyDepth(...)`) match a property's name, or with `Path` the end of its path, wherever it is nested. Names match case-insensitively; `Names.StartsWith`, `EndsWith`, `Contains`, `OneOf` and `Regex` test a name differently and follow the same case option. The first rule that writes a value wins; read rules run on every match.
+**Absolute** rules follow the path from the root: `Match(name)` for one level, `Path(a, b, …)` for several. **Any-depth** rules (inside `AnyDepth(...)`) match a property's name, or with `Path` the end of its path, wherever it is nested. Names match case-insensitively; `Names.StartsWith`, `EndsWith`, `Contains`, `OneOf` and `Regex` test a name differently and follow the same case option. Case variants are caught by default: a `driverLicense` rule masks `DRiverLicensE` and `driverlicense` too. A name with a look-alike letter, such as a Cyrillic `і` or a Turkish `İ`, is a different name and is not matched — as in System.Text.Json's case-insensitive binding. The first rule that writes a value wins; read rules run on every match.
 
 ```csharp
 using DragoAnt.System.Text.Json.Observer;

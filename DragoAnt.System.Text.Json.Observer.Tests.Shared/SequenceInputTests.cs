@@ -98,6 +98,31 @@ public abstract class SequenceInputTests
         return new ReadOnlySequence<byte>(first!, 0, last!, last!.Memory.Length);
     }
 
+    internal static ReadOnlySequence<byte> SplitAt(byte[] utf8, int index)
+    {
+        if (index is 0 || index == utf8.Length)
+        {
+            return new ReadOnlySequence<byte>(utf8);
+        }
+
+        var first = new Segment(utf8.AsMemory(0, index), 0);
+        var last = first.Append(utf8.AsMemory(index));
+        return new ReadOnlySequence<byte>(first, 0, last, last.Memory.Length);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(5)]
+    [InlineData(9)]
+    public void SplitAt_KeepsBytesAndOrder(int index)
+    {
+        var utf8 = "0123456789"u8.ToArray()[..9];
+        var sequence = SplitAt(utf8, index);
+        sequence.ToArray().Should().Equal(utf8);
+        sequence.IsSingleSegment.Should().Be(index is 0 || index == utf8.Length);
+    }
+
     [Theory]
     [MemberData(nameof(Replays))]
     public void Mask_SplitIntoSegments_SameAsSpan(string name, int segmentSize)
