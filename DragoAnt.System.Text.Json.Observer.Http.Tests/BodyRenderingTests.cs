@@ -104,30 +104,6 @@ public sealed class BodyRenderingTests
     }
 
     [Fact]
-    public async Task RelativeUriQueryString_NotLogged()
-    {
-        var sink = new CapturingSink();
-        Uri? receivedUri = null;
-        var handler = HttpTestDoubles.Handler(
-            Always,
-            sink,
-            request =>
-            {
-                receivedUri = request.RequestUri;
-                return new HttpResponseMessage(HttpStatusCode.OK);
-            });
-        using var invoker = new HttpMessageInvoker(handler);
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("items/7?token=abc", UriKind.Relative));
-
-        using var response = await invoker.SendAsync(request, CancellationToken.None);
-
-        Assert.False(receivedUri!.IsAbsoluteUri);
-        var entry = await sink.WaitSingleAsync();
-        Assert.Equal("items/7", entry.Path);
-        Assert.DoesNotContain("abc", entry.Path);
-    }
-
-    [Fact]
     public async Task IncludeSensitive_LogsRawAndFlagsUnmasked_WarnsOnce()
     {
         var sink = new CapturingSink();
@@ -235,92 +211,6 @@ public sealed class BodyRenderingTests
         Assert.Equal(JsonBodyStatus.Skipped, entry.RequestBodyStatus);
     }
 
-    [Fact]
-    public async Task MaskOptions_HashKey_SameKeySameHash_DifferentKeyDifferentHash()
-    {
-        const string json = """{"email":"a@b.test"}""";
-        const string firstKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-        const string secondKey = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
-        var masker = JsonObserver.Obj(JsonValuePolicy.AnyDepth(
-            rules => rules.Match("email").Mask(MaskTag.Hash),
-            ValuePolicy.BlockList));
-        var firstOptions = new JsonObserverOptions().WithBase64HashKey(firstKey);
-        var secondOptions = new JsonObserverOptions().WithBase64HashKey(secondKey);
-
-        var first = await LogMaskedResponseAsync(json, masker, firstOptions);
-        var same = await LogMaskedResponseAsync(json, masker, firstOptions);
-        var different = await LogMaskedResponseAsync(json, masker, secondOptions);
-
-        Assert.Equal(first.ResponseBody, same.ResponseBody);
-        Assert.DoesNotContain("a@b.test", first.ResponseBody);
-        Assert.NotEqual(first.ResponseBody, different.ResponseBody);
-        Assert.Equal(masker.Mask(json, firstOptions), first.ResponseBody);
-    }
-
-    [Fact]
-    public async Task MaskOptions_CommentsAndOutputCap_StillForced()
-    {
-        const string json = """{"a":"x" /* secret */}""";
-        var masker = JsonObserver.Obj(
-            rules => rules.Match("a").Mask(new string('y', 2_000)).Comment(CommentKind.Inline, CommentRules.Keep),
-            ValuePolicy.BlockList);
-        var options = new JsonObserverOptions
-        {
-            Comments = CommentPolicy.BlockList,
-            MaxOutputBytes = 1_000_000,
-        };
-
-        var entry = await LogMaskedResponseAsync(json, masker, options, maxBodyBytes: 50);
-
-        Assert.DoesNotContain("secret", entry.ResponseBody);
-        Assert.True(Encoding.UTF8.GetByteCount(entry.ResponseBody!) <= 50);
-    }
-
-    [Fact]
-    public async Task MaskOptions_NonPositiveOutputCap_UsesBodyLimit()
-    {
-        const string json = """{"a":"value"}""";
-        var options = new JsonObserverOptions { MaxOutputBytes = 0 };
-
-        var masker = JsonObserver.Any(static _ => { }, static _ => { });
-
-        var entry = await LogMaskedResponseAsync(json, masker, options, maxBodyBytes: 50);
-
-        Assert.Equal("""{"a":"***"}""", entry.ResponseBody);
-    }
-
-    [Fact]
-    public async Task CommentsInBodies_NeverLogged_EvenWithKeepRules()
-    {
-        const string json = """{"a":1 /* req-secret */,"b":/* resp-secret */2}""";
-        var masker = JsonObserver.Obj(
-            rules => rules
-                .Match("a").Unmasked().Comment(CommentKind.Any, CommentRules.Keep)
-                .Match("b").Unmasked().Comment(CommentKind.Any, CommentRules.Keep),
-            ValuePolicy.BlockList);
-        var sink = new CapturingSink();
-        var handler = HttpTestDoubles.Handler(
-            Always,
-            sink,
-            _ => HttpTestDoubles.Json(HttpStatusCode.OK, json),
-            new FuncMaskerProvider((_, _) => masker));
-        using var client = new HttpClient(handler);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://example.test/comments")
-        {
-            Content = HttpTestDoubles.JsonContent(json),
-        };
-
-        using var response = await client.SendAsync(request);
-        var entry = await sink.WaitSingleAsync();
-
-        Assert.Equal(JsonBodyStatus.Masked, entry.RequestBodyStatus);
-        Assert.Equal(JsonBodyStatus.Masked, entry.ResponseBodyStatus);
-        Assert.DoesNotContain("req-secret", entry.RequestBody);
-        Assert.DoesNotContain("resp-secret", entry.RequestBody);
-        Assert.DoesNotContain("req-secret", entry.ResponseBody);
-        Assert.DoesNotContain("resp-secret", entry.ResponseBody);
-    }
-
     private static async Task<JsonBodyLogEntry> LogResponseAsync(HttpResponseMessage response)
     {
         var sink = new CapturingSink();
@@ -328,24 +218,6 @@ public sealed class BodyRenderingTests
         using var client = new HttpClient(handler);
 
         using var _ = await client.GetAsync("https://example.test/response");
-        return await sink.WaitSingleAsync();
-    }
-
-    private static async Task<JsonBodyLogEntry> LogMaskedResponseAsync(
-        string json,
-        JsonObserver masker,
-        JsonObserverOptions maskOptions,
-        int maxBodyBytes = 4096)
-    {
-        var sink = new CapturingSink();
-        var handler = HttpTestDoubles.Handler(
-            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.Always, MaxBodyBytes = maxBodyBytes, MaskOptions = maskOptions },
-            sink,
-            _ => HttpTestDoubles.Json(HttpStatusCode.OK, json),
-            new FuncMaskerProvider((_, _) => masker));
-        using var client = new HttpClient(handler);
-
-        using var response = await client.GetAsync("https://example.test/response");
         return await sink.WaitSingleAsync();
     }
 

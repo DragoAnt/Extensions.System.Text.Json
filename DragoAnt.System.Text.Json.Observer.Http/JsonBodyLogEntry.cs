@@ -11,7 +11,7 @@ public readonly record struct JsonBodyLogEntry
     public string ClientName { get; init; }
 
     /// <summary>
-    /// Operation name attached through <see cref="JsonBodyLogging"/>, or <c>null</c>.
+    /// Operation name passed to <see cref="JsonBodyLogging.WithBodyLogging{TRequest,TResponse}"/>, or <c>null</c>.
     /// </summary>
     public string? Operation { get; init; }
 

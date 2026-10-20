@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Net;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -14,13 +13,8 @@ internal static class HttpTestDoubles
         IJsonBodyLogSink sink,
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> inner,
         IJsonBodyMaskerProvider? maskerProvider = null,
-        ILogger<JsonBodyLoggingHandler>? logger = null,
-        Func<long, TimeSpan>? elapsedTime = null) =>
-        new(options, maskerProvider, sink, logger)
-        {
-            InnerHandler = new FuncHandler(inner),
-            ElapsedTime = elapsedTime ?? Stopwatch.GetElapsedTime,
-        };
+        ILogger<JsonBodyLoggingHandler>? logger = null) =>
+        new(options, maskerProvider, sink, logger) { InnerHandler = new FuncHandler(inner) };
 
     public static JsonBodyLoggingHandler Handler(
         JsonBodyLoggingOptions options,

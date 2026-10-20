@@ -316,9 +316,8 @@ services.AddHttpClient("PaymentApi", client => client.BaseAddress = new Uri("htt
 using var request = new HttpRequestMessage(HttpMethod.Post, "charges")
 {
     Content = JsonContent.Create(charge),
-};
-using var response = await httpClient.SendWithBodyLoggingAsync<ChargeRequest, ChargeResponse>(
-    request, "Charge", cancellationToken);
+}.WithBodyLogging<ChargeRequest, ChargeResponse>("Charge");
+using var response = await httpClient.SendAsync(request, cancellationToken);
 
 public sealed class PaymentMaskers : IJsonBodyMaskerProvider
 {
@@ -332,9 +331,8 @@ public sealed class PaymentMaskers : IJsonBodyMaskerProvider
 
 Without an `IJsonBodyMaskerProvider` every value of an object or array body is masked. Each call becomes one `JsonBodyLogEntry`, written by an `IJsonBodyLogSink` — by default one structured `ILogger` message, `Information` for a success and `Warning` otherwise.
 
-- **What is logged** — `When`: `Never`, `OnFailure` (default: a non-success status, an exception, a cancellation or a timeout) or `Always`. `Timeout` means `HttpClient.Timeout` elapsed for a call through `SendWithBodyLoggingAsync` while the caller's token was not canceled. Every other cancellation, and any call when `HttpClient.Timeout` is infinite, is `Canceled`. The original exception is rethrown with its stack trace.
+- **What is logged** — `When`: `Never`, `OnFailure` (default: a non-success status, an exception, or a cancellation) or `Always`. A cancellation and an `HttpClient.Timeout` reach the handler as one token, so both are logged with the outcome `Canceled`. The original exception is rethrown with its stack trace.
 - **Bodies** — at most `MaxBodyBytes` (default 4096; 0 turns bodies off) of each body is read and masked. `RequestBodyStatus` / `ResponseBodyStatus` say what was logged: `Masked`, `Truncated`, `Invalid`, `NotJson`, `Incomplete`, `Withheld`, `Skipped` (non-JSON media type, a non-UTF-8 charset, a `Content-Encoding`), `NotBuffered` (a request stream that cannot be read twice), `Raw` or `Failed`. When no JSON could be written the body is a marker such as `[body not JSON]`.
-- **Masking options** — `MaskOptions` passes `HashKey`, `HashKeyId`, `MaxValueBytes`, `MaxDepth`, `Strategy`, `IgnoreNulls`, `Indented`, `RelaxedEscaping` and `NameCaseInsensitive` to the masker. `MaxOutputBytes` is capped at `MaxBodyBytes`, and `Comments` is always `DropAll`.
 - **The caller is unaffected** — the response is returned as soon as its headers arrive (`ResponseHeadersRead` keeps streaming), its body stays readable in full, and a failure inside logging is reported through the handler's logger instead of reaching the caller. The response body is captured in the background, so its entry is written when the captured part ends, the body ends, or the caller disposes the response.
 - **Not logged** — the query string (`Path` is the path only). `IncludeSensitive = true` logs bodies unmasked, marks the entry `BodyUnmasked` and logs a warning; use it for local debugging only.
 - **Options** are named per client and read on every call, so a reload applies to the next call; `services.ConfigureAll<JsonBodyLoggingOptions>(...)` changes every client. Add the handler with `AddJsonBodyLogging`, not `AddHttpMessageHandler<JsonBodyLoggingHandler>()`.

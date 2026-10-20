@@ -18,14 +18,6 @@ public sealed class JsonBodyLoggingOptions
     public int MaxBodyBytes { get; set; } = 4096;
 
     /// <summary>
-    /// Options for masking each body. The hash key, hash key id, value limit, depth limit, strategy, null handling,
-    /// indentation, relaxed escaping and name matching pass through. <see cref="ObserverOptions.MaxOutputBytes"/> is capped at
-    /// <see cref="MaxBodyBytes"/>, with a non-positive value treated as no additional cap, and comments are always dropped.
-    /// Default: <see cref="JsonObserverOptions.Default"/>.
-    /// </summary>
-    public JsonObserverOptions? MaskOptions { get; set; }
-
-    /// <summary>
     /// Log bodies as is, without masking. Every such entry is marked <see cref="JsonBodyLogEntry.BodyUnmasked"/>, and the handler
     /// logs a warning the first time it does so. Meant for local debugging only. Default: <c>false</c>.
     /// </summary>

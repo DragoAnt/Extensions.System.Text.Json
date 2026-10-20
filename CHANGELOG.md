@@ -77,10 +77,9 @@ Items 13 and later are new since the 2.0.0 previews; [Migrating to 2.0](./docs/m
 
 ### Observer.Http 2.0.0 — breaking (since the preview builds)
 
-- `JsonBodyOutcome.Canceled` is new. `Timeout` is narrowed relative to the 2.0 previews: it means `HttpClient.Timeout` elapsed for a call through `SendWithBodyLoggingAsync` while the caller's token was not canceled; every other cancellation, and any call when `HttpClient.Timeout` is infinite, is `Canceled`.
+- `JsonBodyOutcome.Timeout` is replaced by `Canceled`: every cancellation, an `HttpClient.Timeout` included, is logged as `Canceled`.
 - `JsonBodyLoggingContext` uses `init` properties (`RequestType`, `ResponseType`, `Operation`).
 - The HTTP handler never writes a comment of a body (`CommentPolicy.DropAll`).
-- `JsonBodyLoggingOptions.MaskOptions` passes `HashKey`, `HashKeyId`, `MaxValueBytes`, `MaxDepth`, `Strategy`, `IgnoreNulls`, `Indented`, `RelaxedEscaping` and `NameCaseInsensitive` to the masker. `MaxOutputBytes` is capped at `MaxBodyBytes`, and `Comments` is always `DropAll`.
 - `JsonBodyLogEntry` uses `init` properties and adds `Operation`, `RequestBodyStatus` and `ResponseBodyStatus`.
 - New `JsonBodyStatus` type; a body that could not be logged as JSON is a marker such as `[body not JSON]` or `[invalid JSON]`, and a truncated body is flagged.
 - `JsonBodyLoggingHandler` is sealed.

@@ -21,7 +21,6 @@
     <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">10.0.12</MicrosoftExtensionsVersion>
     <MicrosoftExtensionsHttpVersion Condition="'$(MicrosoftExtensionsHttpVersion)'==''">10.0.12</MicrosoftExtensionsHttpVersion>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(IsNET11)'=='True'">
     <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">11.0.0</MicrosoftExtensionsVersion>
   </PropertyGroup>
@@ -33,13 +32,6 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET14)'=='True'">
     <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">14.0.0</MicrosoftExtensionsVersion>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(IsNET8)'=='True'">
-    <MicrosoftAspNetCoreMvcTestingVersion Condition="'$(MicrosoftAspNetCoreMvcTestingVersion)'==''">8.0.32</MicrosoftAspNetCoreMvcTestingVersion>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(IsNET10)'=='True'">
-    <MicrosoftAspNetCoreMvcTestingVersion Condition="'$(MicrosoftAspNetCoreMvcTestingVersion)'==''">10.0.13</MicrosoftAspNetCoreMvcTestingVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -55,10 +47,5 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftExtensionsVersion)" />
     <PackageVersion Include="JsonMasking" Version="2.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(MicrosoftAspNetCoreMvcTestingVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Compliance.Redaction" Version="10.10.0" />
   </ItemGroup>
 </Project>

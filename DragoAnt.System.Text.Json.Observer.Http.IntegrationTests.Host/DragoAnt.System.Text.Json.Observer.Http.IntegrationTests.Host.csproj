@@ -1,8 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
-  <PropertyGroup>
-    <IsPackable>False</IsPackable>
-    <IsTestProject>False</IsTestProject>
-    <ExcludeFromCodeCoverage>True</ExcludeFromCodeCoverage>
-    <DragoAntObserverImplicitUsing>false</DragoAntObserverImplicitUsing>
-  </PropertyGroup>
-</Project>

@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace DragoAnt.System.Text.Json.Observer.Http;
 
 /// <summary>
@@ -67,15 +65,6 @@ public static class JsonBodyLogging
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(request);
-        request.Options.Set(Key, new JsonBodyLoggingContext
-        {
-            RequestType = typeof(TRequest),
-            ResponseType = typeof(TResponse),
-            Operation = operation,
-            CallerToken = cancellationToken,
-            RequestTimeout = client.Timeout == Timeout.InfiniteTimeSpan ? null : client.Timeout,
-            TimeoutStarted = Stopwatch.GetTimestamp(),
-        });
-        return client.SendAsync(request, cancellationToken);
+        return client.SendAsync(request.WithBodyLogging<TRequest, TResponse>(operation), cancellationToken);
     }
 }

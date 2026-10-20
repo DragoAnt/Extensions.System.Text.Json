@@ -21,15 +21,8 @@ public enum JsonBodyOutcome
     Exception,
 
     /// <summary>
-    /// <see cref="HttpClient.Timeout"/> elapsed for a call through
-    /// <see cref="JsonBodyLogging.SendWithBodyLoggingAsync{TRequest,TResponse}"/> while the caller's token was not canceled.
-    /// Every other cancellation, and any call when <see cref="HttpClient.Timeout"/> is infinite, is <see cref="Canceled"/>.
-    /// </summary>
-    Timeout,
-
-    /// <summary>
-    /// The call was canceled before a response arrived. A timeout sent without a helper-owned deadline is also
-    /// recorded as canceled because the handler cannot distinguish it from another cancellation source.
+    /// The call was canceled before a response arrived. This covers both a canceled caller token and
+    /// <see cref="HttpClient.Timeout"/>: the handler receives them as one token and cannot tell them apart.
     /// </summary>
     Canceled,
 }
