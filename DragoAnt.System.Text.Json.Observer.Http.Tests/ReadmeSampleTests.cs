@@ -34,8 +34,9 @@ public sealed class ReadmeSampleTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "charges")
         {
             Content = JsonContent.Create(charge),
-        }.WithBodyLogging<ChargeRequest, ChargeResponse>("Charge");
-        using var response = await httpClient.SendAsync(request, cancellationToken);
+        };
+        using var response = await httpClient.SendWithBodyLoggingAsync<ChargeRequest, ChargeResponse>(
+            request, "Charge", cancellationToken);
 
         var entry = await sink.WaitSingleAsync();
         Assert.Equal("Charge", entry.Operation);

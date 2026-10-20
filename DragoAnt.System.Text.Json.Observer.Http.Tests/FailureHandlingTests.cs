@@ -8,7 +8,7 @@ namespace DragoAnt.System.Text.Json.Observer.Http.Tests;
 public sealed class FailureHandlingTests
 {
     [Fact]
-    public async Task HttpClientTimeout_LoggedAsCanceled()
+    public async Task HttpClientTimeout_ViaHelper_LoggedAsTimeout()
     {
         var sink = new CapturingSink();
         var handler = HttpTestDoubles.Handler(
@@ -25,17 +25,60 @@ public sealed class FailureHandlingTests
             Content = HttpTestDoubles.JsonContent("""{"secret":"pw"}"""),
         };
 
-        await Assert.ThrowsAsync<TaskCanceledException>(() => client.SendAsync(request));
+        await Assert.ThrowsAsync<TaskCanceledException>(() =>
+            client.SendWithBodyLoggingAsync<object, object>(request));
 
         var entry = Assert.Single(sink.Entries);
-        Assert.Equal(JsonBodyOutcome.Canceled, entry.Outcome);
+        Assert.Equal(JsonBodyOutcome.Timeout, entry.Outcome);
         Assert.Null(entry.StatusCode);
         Assert.IsAssignableFrom<OperationCanceledException>(entry.Exception);
         Assert.DoesNotContain("pw", entry.RequestBody);
     }
 
     [Fact]
-    public async Task CallerCancel_LoggedAsCanceledAndRethrown()
+    public async Task HttpClientTimeout_PlainSendAsync_LoggedAsCanceled()
+    {
+        var sink = new CapturingSink();
+        var handler = HttpTestDoubles.Handler(
+            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.OnFailure },
+            sink,
+            async (_, ct) =>
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(100) };
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/slow");
+
+        await Assert.ThrowsAsync<TaskCanceledException>(() => client.SendAsync(request));
+
+        Assert.Equal(JsonBodyOutcome.Canceled, Assert.Single(sink.Entries).Outcome);
+    }
+
+    [Fact]
+    public async Task HttpClientTimeout_ViaHelper_EarlyElapsed_LoggedAsTimeout()
+    {
+        var sink = new CapturingSink();
+        var handler = HttpTestDoubles.Handler(
+            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.OnFailure },
+            sink,
+            async (_, ct) =>
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            },
+            elapsedTime: _ => TimeSpan.FromMilliseconds(95));
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(100) };
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/slow");
+
+        await Assert.ThrowsAsync<TaskCanceledException>(() =>
+            client.SendWithBodyLoggingAsync<object, object>(request));
+
+        Assert.Equal(JsonBodyOutcome.Timeout, Assert.Single(sink.Entries).Outcome);
+    }
+
+    [Fact]
+    public async Task CallerCancel_ViaHelper_LoggedAsCanceled()
     {
         var sink = new CapturingSink();
         using var cts = new CancellationTokenSource();
@@ -50,7 +93,113 @@ public sealed class FailureHandlingTests
             });
         using var client = new HttpClient(handler);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetAsync("https://example.test/cancel", cts.Token));
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/cancel");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            client.SendWithBodyLoggingAsync<object, object>(request, cancellationToken: cts.Token));
+
+        Assert.Equal(JsonBodyOutcome.Canceled, Assert.Single(sink.Entries).Outcome);
+    }
+
+    [Fact]
+    public async Task CancelPendingRequests_ViaHelper_LoggedAsCanceled()
+    {
+        var sink = new CapturingSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = HttpTestDoubles.Handler(
+            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.OnFailure },
+            sink,
+            async (_, ct) =>
+            {
+                started.SetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/cancel");
+
+        var send = client.SendWithBodyLoggingAsync<object, object>(request);
+        await started.Task;
+        client.CancelPendingRequests();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => send);
+
+        Assert.Equal(JsonBodyOutcome.Canceled, Assert.Single(sink.Entries).Outcome);
+    }
+
+    [Fact]
+    public async Task HttpClientTimeoutInfinite_ViaHelper_LoggedAsCanceled()
+    {
+        var sink = new CapturingSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = HttpTestDoubles.Handler(
+            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.OnFailure },
+            sink,
+            async (_, ct) =>
+            {
+                started.SetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            },
+            elapsedTime: _ => TimeSpan.FromSeconds(1));
+        using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/cancel");
+
+        var send = client.SendWithBodyLoggingAsync<object, object>(request);
+        await started.Task;
+        client.CancelPendingRequests();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => send);
+
+        Assert.Equal(JsonBodyOutcome.Canceled, Assert.Single(sink.Entries).Outcome);
+    }
+
+    [Fact]
+    public async Task ClientDisposedMidCall_ViaHelper_LoggedAsCanceled()
+    {
+        var sink = new CapturingSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = HttpTestDoubles.Handler(
+            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.OnFailure },
+            sink,
+            async (_, ct) =>
+            {
+                started.SetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
+        var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/dispose");
+
+        var send = client.SendWithBodyLoggingAsync<object, object>(request);
+        await started.Task;
+        client.Dispose();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => send);
+
+        Assert.Equal(JsonBodyOutcome.Canceled, Assert.Single(sink.Entries).Outcome);
+    }
+
+    [Fact]
+    public async Task WithBodyLogging_SeparateSendToken_LoggedAsCanceled()
+    {
+        var sink = new CapturingSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var sent = new CancellationTokenSource();
+        var handler = HttpTestDoubles.Handler(
+            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.OnFailure },
+            sink,
+            async (_, ct) =>
+            {
+                started.SetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/cancel");
+        request.WithBodyLogging<object, object>("SeparateSendToken");
+
+        var send = client.SendAsync(request, sent.Token);
+        await started.Task;
+        await sent.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => send);
 
         Assert.Equal(JsonBodyOutcome.Canceled, Assert.Single(sink.Entries).Outcome);
     }
@@ -150,19 +299,37 @@ public sealed class FailureHandlingTests
     }
 
     [Fact]
-    public async Task LoggerThrows_ResponseStillReturned()
+    public async Task LoggerThrows_OriginalExceptionStillRethrown()
+    {
+        var sink = new CapturingSink { Throw = _ => true };
+        var original = new HttpRequestException("network failure");
+        var handler = HttpTestDoubles.Handler(
+            new JsonBodyLoggingOptions { When = JsonBodyLogWhen.OnFailure },
+            sink,
+            (_, _) => Task.FromException<HttpResponseMessage>(original),
+            logger: new ThrowingLogger());
+        using var client = new HttpClient(handler);
+
+        var thrown = await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync("https://example.test/fail"));
+
+        Assert.Same(original, thrown);
+    }
+
+    [Fact]
+    public async Task Success_LoggerThrows_CallerUnaffected()
     {
         var sink = new CapturingSink { Throw = _ => true };
         var handler = HttpTestDoubles.Handler(
             new JsonBodyLoggingOptions { When = JsonBodyLogWhen.Always },
             sink,
-            _ => HttpTestDoubles.Json(HttpStatusCode.OK, """{"a":1}"""),
+            _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("ok") },
             logger: new ThrowingLogger());
         using var client = new HttpClient(handler);
 
         using var response = await client.GetAsync("https://example.test/ok");
 
-        Assert.Equal("""{"a":1}""", await response.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("ok", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
