@@ -6,6 +6,11 @@ namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 public abstract class ExplainTests
 {
+    [Fact]
+    public void Explain_Binary_Throws()
+        => FluentActions.Invoking(() => JsonObserver.Obj(BlockList).Explain("a", ValueKind.Binary))
+            .Should().Throw<ArgumentOutOfRangeException>().WithMessage("JSON has no binary values.*");
+
     private static readonly JsonObserver Lines = JsonObserver.Obj(
         root => root
             .Match("lines").Array(l => l.Obj(x => x.Match("qty").Mask("***").Match("note").ReadStr((_, _) => { })))

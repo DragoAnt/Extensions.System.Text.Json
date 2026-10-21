@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);DAOEXP001;DAOEXP002</NoWarn>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer.Tests.Shared\DragoAnt.System.Text.Json.Observer.Tests.Shared.csproj" />
     <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer\DragoAnt.System.Text.Json.Observer.csproj" />

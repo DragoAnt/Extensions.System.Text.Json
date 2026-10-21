@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`JsonObserver.From(MaskRules)` (experimental, `DAOEXP001`):** builds the same observer as the equivalent `JsonObserver.Any(…)` declaration from rules the other DragoAnt.Observer formats read too.
+- **`JsonObserverFormat` (experimental, `DAOEXP002`):** JSON as an `IObserverFormat` — `Bind(MaskRules)` masks a document in memory with `Mask`, or a `PipeReader` into a `PipeWriter` with `MaskAsync`, which returns the run result of one document; `MaskAsync` holds the document in memory up to 2 GiB, and a longer input is masked up to that length and reported `Truncated` with `InputTruncated`.
+- **Conformance:** the JSON observer passes the DragoAnt.Observer conformance seed through `JsonObserverFormat` (leak on every prefix, statuses, visible values, tag output, sync and async alike).
 - **[DragoAnt.Observer.Core](https://www.nuget.org/packages/DragoAnt.Observer.Core) and [DragoAnt.Observer.Abstractions](https://www.nuget.org/packages/DragoAnt.Observer.Abstractions)** carry the format-neutral types (see *Changed — breaking*). The package imports the `DragoAnt.Observer` namespace into every C# file; set `<DragoAntObserverImplicitUsing>false</DragoAntObserverImplicitUsing>` to opt out.
 - **`MaskResult.Flags`** (`MaskFlags`): `InputTruncated`, `OutputCapped`, `ValueCut`, `TrailingData`, `InvalidUtf8Replaced`, `Depth` say why a result is not a clean `Masked`.
 - **Comment policy:** `JsonObserverOptions.Comments` (`CommentPolicy.AllowList` by default, `BlockList`, `MaskAll`, `Mask(tag)`, `DropAll`) and `.Comment(CommentKind, CommentRule)` after any rule decide what happens to comments in the input; a kept comment of a masked value is written masked unless `CommentRules.Raw`. Comments are still dropped by default.
@@ -18,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`HashKeyId`** and `WithBase64HashKey(key)` (takes a Microsoft `HmacRedactorOptions.Key`); `Mask(strategy, tag)` gives one rule its own strategy; `JsonShapeOptions.UnknownTag`; `MaskTag.Create` and `WithKey`.
 - **UTF-8 API:** `JsonObserver.Mask(ReadOnlySpan<byte>, IBufferWriter<byte>, JsonObserverOptions?)` masks bytes into a reusable writer. With constant or tag rules it allocates a small constant amount per call, whatever the body size.
 - **Never-throw contract with `MaskResult`:** every `Mask` and `Read` overload reports `MaskStatus` (`Masked`, `Truncated`, `Invalid`, `Unrecognized`), the bytes written and the input offset where reading stopped. On cut-off or invalid input the output is the masked part read so far, with every open object and array closed, so it is always valid JSON and never holds a masked value in clear.
-- **`JsonObserverOptions`** for both APIs: `MaxOutputBytes`, `MaxValueBytes`, `MaxDepth`, `RelaxedEscaping`, `HashKey`, `HashKeyId`, `Strategy`, `IgnoreNulls`, `Comments`, `Indented`.
+- **`JsonObserverOptions`** for both APIs: `MaxOutputBytes`, `MaxValueBytes`, `MaxDepth`, `MaxMaskValueBytes`, `MaxRecordBytes` (ignored by JSON), `RelaxedEscaping`, `HashKey`, `HashKeyId`, `Strategy`, `IgnoreNulls`, `Comments`, `Indented`.
+- **`MaxMaskValueBytes`** (from `ObserverOptions`): a value longer than the limit is written as `***` without calling the strategy, and the result is `Truncated` with `MaskFlags.ValueTooLarge`; no limit by default.
 - **Tag rules:** `Mask(MaskTag)` with `Full`, `Last4`, `Hash` (keyed HMAC-SHA256) and `Null`, served by a replaceable `ValueMaskStrategy`.
 - **Allow-lists from your types:** `JsonShape.FromTypeInfo(...)` and `JsonObserver.FromShape(...)`; anything the shape does not describe is masked (`UnknownMemberPolicy`).
 - **UTF-8 name matching:** property names are compared on their UTF-8 bytes, without creating strings.
@@ -51,7 +55,6 @@ Items 13 and later are new since the 2.0.0 previews; [Migrating to 2.0](./docs/m
 10. **A UTF-8 byte order mark at the start of the input is skipped.**
 11. **Read rules no longer decide what is written.** `ReadStr`, `ReadInt`, `ReadLong`, `ReadDecimal`, `ReadBool` and `ReadRaw` hand the value to the context; the next rule on the same match or the default policy writes it, so under `AllowList` a read value is `"***"`, not clear text. Chain `.Unmasked()` to keep it clear, or a mask method to read and mask one match: `Match("ssn").ReadStr(f).Mask(MaskTag.Last4)`. A read rule runs wherever it stands among the rules, so `Match("ssn").Mask(…).Match("ssn").ReadStr(f)` reads too. `Explain` reports `Read` only for a value read and written unchanged.
 12. **A masking function receives the whole value, and mask output is never cut by `MaxValueBytes`.** A `Last4`-style function sees the real last characters (`***4444`, not the ones at the cap), and `MaskTag.Hash`, a function's result and the `AllowList` stars are written whole, with status `Masked`. A function therefore decodes a long value in full.
-
 13. **Format-neutral types live in `DragoAnt.Observer` (DragoAnt.Observer.Core and .Abstractions)** under their final names: `MaskKind`, `MaskTag` (Abstractions); `MaskResult`, `MaskStatus`, `PathExplanation` (was `JsonPathExplanation`), `PathOutcome` (was `JsonPathOutcome`), `UnknownMemberPolicy`, `NoContext` (was `JsonObserveringEmptyContext`), `DataPath` (was `PropertyPath`), `NameMatch` and `Names` (were `PropMatchingStrategy` and `PropMatches`), `ValueMaskStrategy` (was `Utf8MaskStrategy`) and `MaskContext` (was `Utf8MaskContext`). The `.Strategies` namespace is gone; `StringMaskingStrategy<TContext>` moved to the root namespace.
 14. **`MaskStatus.NotJson` is `Unrecognized`**, and `Masked` now means no `Flags`: data after the root (`{"a":1}{"b":2}`, formerly `Masked`) and invalid UTF-8 replaced by U+FFFD report `Truncated` with the whole document written.
 15. **The hash is Microsoft's `HmacRedactor` format:** HMAC-SHA256 over the value's UTF-16 text, the first 16 bytes in base64 (24 characters), after `"<HashKeyId>:"` when a key id is set; `""` hashes to `""`; numbers and booleans hash their literal, so `1` and `"1"` hash alike. The 1.x/preview `hash:` + 16 hex characters over UTF-8 is gone, so stored hashes change.
@@ -67,6 +70,7 @@ Items 13 and later are new since the 2.0.0 previews; [Migrating to 2.0](./docs/m
 25. **Engine details are internal:** `JsonShape.FindMember` and the case flag of the path (read `JsonValueContext.Options.NameCaseInsensitive`).
 26. **`net9.0` is dropped;** the package targets `net8.0` and `net10.0` (a `net9.0` app uses the `net8.0` assets).
 27. **`JsonWriter.IgnoreNullsJsonTokenType`**, a public nested enum in 1.0.2, is removed.
+28. **`MaskResult.BytesWritten` is a `long`**, so a result type can describe more than 2 GB written.
 
 ### Fixed
 

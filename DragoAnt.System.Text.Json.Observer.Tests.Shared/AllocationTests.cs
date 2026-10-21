@@ -24,6 +24,9 @@ public abstract class AllocationTests
         _ => { },
         AnyDepth(b => b.Match("password").Mask(MaskTag.Hash).Path("card", "number").Mask(MaskTag.Last4), BlockList));
 
+    private static readonly JsonObserver FromRules = JsonObserver.From(MaskRules.Create(
+        b => b.Match("password").Mask(MaskTag.Hash).Path("card", "number").Mask(MaskTag.Last4), BlockList));
+
     private static readonly JsonObserverOptions IgnoreNulls = new() { IgnoreNulls = true };
 
     private static readonly JsonObserverOptions Keyed = new JsonObserverOptions { HashKeyId = 3 }
@@ -32,7 +35,7 @@ public abstract class AllocationTests
     public static TheoryData<string, int, string> Budgets()
     {
         var data = new TheoryData<string, int, string>();
-        foreach (var api in new[] { "span", "sequence", "ignore-nulls", "read", "tag-hash" })
+        foreach (var api in new[] { "span", "sequence", "ignore-nulls", "read", "tag-hash", "from-rules" })
         {
             data.Add("flat", 1024, api);
             data.Add("flat", 64 * 1024, api);
@@ -63,6 +66,7 @@ public abstract class AllocationTests
                 "sequence" => Observer.Mask(sequence, output),
                 "ignore-nulls" => Observer.Mask(utf8, output, IgnoreNulls),
                 "tag-hash" => Tags.Mask(utf8, output, Keyed),
+                "from-rules" => FromRules.Mask(utf8, output, Keyed),
                 _ => Reader.Read(utf8, NoContext.Instance),
             };
         }

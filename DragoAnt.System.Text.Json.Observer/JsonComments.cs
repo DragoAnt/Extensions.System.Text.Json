@@ -186,6 +186,13 @@ internal static class JsonComments
         var output = CommentTextWriter.Rent(text);
         try
         {
+            if (text.Length > Math.Max(options.MaxMaskValueBytes, 0))
+            {
+                walk.ValueTooLarge = true;
+                writer.WriteComment("***"u8);
+                return;
+            }
+
             strategy.Mask(new MaskContext(text, ValueKind.String, tag, options, in walk.Path, walk.ValueIndex++), output);
             if (output.HasText)
             {

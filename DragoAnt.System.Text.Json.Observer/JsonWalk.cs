@@ -84,6 +84,8 @@ internal ref struct JsonWalk
     /// </summary>
     public long ValueIndex { get; set; }
 
+    public bool ValueTooLarge { get; set; }
+
     public readonly int CurrentDepth => Path.Length - 1;
 
     public readonly int MaxLength => Path.MaxLength;

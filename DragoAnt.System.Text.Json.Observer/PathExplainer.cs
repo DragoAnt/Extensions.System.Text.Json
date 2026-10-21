@@ -27,6 +27,7 @@ internal abstract class PathExplainer
             ValueKind.Null => JsonTokenType.Null,
             ValueKind.Object => JsonTokenType.StartObject,
             ValueKind.Array => JsonTokenType.StartArray,
+            ValueKind.Binary => throw new ArgumentOutOfRangeException(nameof(valueKind), valueKind, "JSON has no binary values."),
             _ => throw new ArgumentOutOfRangeException(nameof(valueKind), valueKind, "Expected a defined value kind."),
         };
 

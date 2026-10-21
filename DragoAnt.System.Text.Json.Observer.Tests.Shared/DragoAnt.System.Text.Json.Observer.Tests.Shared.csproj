@@ -1,10 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <NoWarn>$(NoWarn);DAOEXP001;DAOEXP002</NoWarn>
     <IsPackable>False</IsPackable>
     <IsTestsLibProject>True</IsTestsLibProject>
     <ExcludeFromCodeCoverage>True</ExcludeFromCodeCoverage>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="DragoAnt.Observer.Conformance" />
     <PackageReference Include="Bogus" />
     <PackageReference Include="Verify" />
     <PackageReference Include="Verify.XunitV3" />

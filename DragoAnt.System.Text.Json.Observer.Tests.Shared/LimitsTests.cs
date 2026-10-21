@@ -7,6 +7,129 @@ namespace DragoAnt.System.Text.Json.Observer.Tests.Shared;
 
 public abstract class LimitsTests
 {
+    [Fact]
+    public void MaxMaskValueBytes_Default_ChangesNothing()
+    {
+        var output = JsonObserver.Obj(AnyDepth(b => b.Match("card").Mask(MaskTag.Last4), BlockList))
+            .Mask("""{"card":"4111111111111111"}""", out var result);
+        output.Should().Be("""{"card":"***1111"}""");
+        result.Should().Match<MaskResult>(r => r.Status == MaskStatus.Masked && r.Flags == MaskFlags.None);
+    }
+
+    [Theory]
+    [InlineData("""{"card":"4111111111111111"}""", 15, """{"card":"***"}""")]
+    [InlineData("""{"card":"4111111111111111"}""", 16, """{"card":"***1111"}""")]
+    [InlineData("""{"card":1234567890123456}""", 15, """{"card":"***"}""")]
+    public void MaxMaskValueBytes_LongerValue_IsStarsAndFlagged(string json, int limit, string expected)
+    {
+        var strategy = new CountingStrategy();
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("card").Mask(MaskTag.Last4), BlockList));
+        var output = observer.Mask(json, out var result, new JsonObserverOptions { MaxMaskValueBytes = limit, Strategy = strategy });
+        output.Should().Be(expected);
+        var tooLarge = expected.EndsWith("\"***\"}", StringComparison.Ordinal);
+        strategy.Calls.Should().Be(tooLarge ? 0 : 1);
+        result.Flags.Should().Be(tooLarge ? MaskFlags.ValueTooLarge : MaskFlags.None);
+        result.Status.Should().Be(tooLarge ? MaskStatus.Truncated : MaskStatus.Masked);
+    }
+
+    [Fact]
+    public void MaxMaskValueBytes_IsMeasuredAfterUnescaping()
+        => MaxMaskValueBytes_LongerValue_IsStarsAndFlagged(
+            """{"card":"\u0034\u0031\u0031\u0031\u0031\u0031\u0031\u0031\u0031\u0031\u0031\u0031\u0031\u0031\u0031\u0031"}""",
+            16, """{"card":"***1111"}""");
+
+    [Fact]
+    public void MaxMaskValueBytes_SequenceUsesTheSameLimit()
+    {
+        var json = """{"card":"4111111111111111"}"""u8.ToArray();
+        var strategy = new CountingStrategy();
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("card").Mask(MaskTag.Last4), BlockList));
+        var output = new ArrayBufferWriter<byte>();
+
+        var result = observer.Mask(SequenceInputTests.Split(json, 1), output,
+            new JsonObserverOptions { MaxMaskValueBytes = 15, Strategy = strategy });
+
+        Encoding.UTF8.GetString(output.WrittenSpan).Should().Be("""{"card":"***"}""");
+        strategy.Calls.Should().Be(0);
+        result.Status.Should().Be(MaskStatus.Truncated);
+        result.Flags.Should().Be(MaskFlags.ValueTooLarge);
+    }
+
+    [Fact]
+    public void MaxMaskValueBytes_AppliesToTheTaggedUnmatchedPolicy()
+    {
+        var strategy = new CountingStrategy();
+        var observer = JsonObserver.Obj(JsonValuePolicy.AnyDepth(_ => { }, Tagged(MaskTag.Hash)));
+
+        var output = observer.Mask("""{"card":"long"}""", out var result,
+            new JsonObserverOptions { MaxMaskValueBytes = 3, Strategy = strategy });
+
+        output.Should().Be("""{"card":"***"}""");
+        strategy.Calls.Should().Be(0);
+        result.Flags.Should().Be(MaskFlags.ValueTooLarge);
+    }
+
+    [Fact]
+    public void MaxMaskValueBytes_AppliesToCommentStrategies()
+    {
+        var strategy = new CountingStrategy();
+        var options = new JsonObserverOptions
+        {
+            MaxMaskValueBytes = 3,
+            Strategy = strategy,
+            Comments = CommentPolicy.Mask(MaskTag.Hash),
+        };
+
+        var output = JsonObserver.Obj(BlockList).Mask("""{"a":1 /* long comment */}""", out var result, options);
+
+        output.Should().Contain("/*****/");
+        strategy.Calls.Should().Be(0);
+        result.Flags.Should().Be(MaskFlags.ValueTooLarge);
+    }
+
+    [Fact]
+    public void MaxMaskValueBytes_ZeroKeepsNullButLimitsNonEmptyValues()
+    {
+        var strategy = new CountingStrategy();
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match(new NameMatch(_ => true)).Mask(MaskTag.Full), BlockList));
+
+        var output = observer.Mask("""{"a":"x","b":null}""", out var result,
+            new JsonObserverOptions { MaxMaskValueBytes = 0, Strategy = strategy });
+
+        output.Should().Be("""{"a":"***","b":null}""");
+        strategy.Calls.Should().Be(0);
+        result.Flags.Should().Be(MaskFlags.ValueTooLarge);
+    }
+
+    [Fact]
+    public void MaxMaskValueBytes_ZeroLeavesALoneNullUnflagged()
+    {
+        var strategy = new CountingStrategy();
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match(new NameMatch(_ => true)).Mask(MaskTag.Full), BlockList));
+
+        var output = observer.Mask("""{"b":null}""", out var result,
+            new JsonObserverOptions { MaxMaskValueBytes = 0, Strategy = strategy });
+
+        output.Should().Be("""{"b":null}""");
+        strategy.Calls.Should().Be(0);
+        result.Status.Should().Be(MaskStatus.Masked);
+        result.Flags.Should().Be(MaskFlags.None);
+    }
+
+    [Fact]
+    public void MaxMaskValueBytes_ReadReportsTheSameFlag()
+    {
+        var observer = JsonObserver.Obj(AnyDepth(b => b.Match("card").Mask(MaskTag.Last4), BlockList));
+        var options = new JsonObserverOptions { MaxMaskValueBytes = 15 };
+
+        var masked = observer.Mask("""{"card":"4111111111111111"}""", out var maskResult, options);
+        var readResult = observer.Read("""{"card":"4111111111111111"}""", options);
+
+        masked.Should().Be("""{"card":"***"}""");
+        readResult.Flags.Should().Be(maskResult.Flags);
+        readResult.Status.Should().Be(maskResult.Status);
+    }
+
     private static readonly JsonObserver Observer = JsonObserver.Any(
         _ => { },
         _ => { },
@@ -117,5 +240,16 @@ public abstract class LimitsTests
     {
         public int Count { get; set; }
         public int? Value { get; set; }
+    }
+
+    private sealed class CountingStrategy : ValueMaskStrategy
+    {
+        public int Calls { get; private set; }
+
+        public override void Mask(in MaskContext context, MaskValueWriter output)
+        {
+            Calls++;
+            Default.Mask(context, output);
+        }
     }
 }

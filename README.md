@@ -230,7 +230,7 @@ Both APIs never throw. `MaskResult` says what happened:
 | `MaskStatus` | Meaning | Output |
 | --- | --- | --- |
 | `Masked` | the whole payload was masked; `Flags` is empty | the masked JSON |
-| `Truncated` | the payload ended early or hit `MaxOutputBytes` (`FailedAtByte` is where reading stopped), or a string was cut to `MaxValueBytes` (`FailedAtByte` is `-1`); `Flags` says which | valid JSON: the masked part, every open object and array closed |
+| `Truncated` | the payload ended early or hit `MaxOutputBytes` (`FailedAtByte` is where reading stopped), a string was cut to `MaxValueBytes`, or a value longer than `MaxMaskValueBytes` was written as `***` (`ValueTooLarge`; `FailedAtByte` is `-1` for both); `Flags` says which | valid JSON: the masked part, every open object and array closed |
 | `Invalid` | the payload is not valid JSON, or a rule failed | valid JSON: the masked part read before the failure |
 | `Unrecognized` | empty, or the root is not an object or an array | empty |
 
@@ -278,6 +278,7 @@ Console.WriteLine($"{result.Status} {Encoding.UTF8.GetString(output.WrittenSpan)
 | `MaxOutputBytes` | unlimited | output limit; when reached the output is closed and the status is `Truncated` |
 | `MaxValueBytes` | unlimited | longest string written unmasked; a longer one is cut, ends with `…`, and the status is `Truncated`; mask output is never cut |
 | `MaxDepth` | 64 | deeper nesting is `Invalid` |
+| `MaxMaskValueBytes` | unlimited | longest value handed to a masking strategy; a longer one is written as `***` without calling it, and the status is `Truncated` with `ValueTooLarge` |
 | `RelaxedEscaping` | `true` | non-ASCII and HTML characters are written unescaped |
 | `HashKey`, `HashKeyId`, `Strategy` | random per process, none, built-in | used by `MaskTag` rules; `WithBase64HashKey(key)` takes a Microsoft `HmacRedactorOptions.Key` |
 | `IgnoreNulls` | `false` | drops `null` properties and items, and objects and arrays left empty by that |

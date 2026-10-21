@@ -6,6 +6,27 @@ namespace DragoAnt.System.Text.Json.Observer;
 /// </summary>
 public sealed record JsonObserverOptions : ObserverOptions
 {
+    internal static JsonObserverOptions From(ObserverOptions? options)
+        => options switch
+        {
+            null => Default,
+            JsonObserverOptions json => json,
+            _ => new JsonObserverOptions
+            {
+                MaxOutputBytes = options.MaxOutputBytes,
+                MaxValueBytes = options.MaxValueBytes,
+                MaxDepth = options.MaxDepth,
+                MaxRecordBytes = options.MaxRecordBytes,
+                MaxMaskValueBytes = options.MaxMaskValueBytes,
+                HashKey = options.HashKey,
+                HashKeyId = options.HashKeyId,
+                Strategy = options.Strategy,
+                NameCaseInsensitive = options.NameCaseInsensitive,
+                IgnoreNulls = options.IgnoreNulls,
+                Comments = options.Comments,
+            },
+        };
+
     /// <summary>
     /// Defaults: no size limits, depth 64, relaxed escaping, compact output, a per-process hash key, the built-in
     /// strategy, <c>null</c> values kept and names matched ignoring case.

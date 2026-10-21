@@ -28,7 +28,7 @@ public abstract class BytesApiTests
     {
         var output = new ArrayBufferWriter<byte>();
         var result = observer.Mask(utf8, output, options);
-        output.WrittenCount.Should().Be(result.BytesWritten);
+        result.BytesWritten.Should().Be(output.WrittenCount);
         return (result, Encoding.UTF8.GetString(output.WrittenSpan));
     }
 
