@@ -46,6 +46,12 @@ Benchmarks live in `DragoAnt.System.Text.Json.Observer.Benchmarks` (BenchmarkDot
 dotnet run -c Release --project DragoAnt.System.Text.Json.Observer.Benchmarks
 ```
 
+CI runs the allocation gate on `net10.0`: it fails when a gated call allocates more than its `[AllocationBudget]` plus 23 B of meter noise, when the control case allocates less than its lower limit, or when a benchmark has no budget. Run it locally with:
+
+```sh
+dotnet run -c Release -f net10.0 --project DragoAnt.System.Text.Json.Observer.Benchmarks -- --filter '*AllocationGate*'
+```
+
 ### Build kit
 
 `.toolkit/` is installed by DragoAnt.MSBuildKit; don't edit it by hand. Move to another kit release with its update script and commit the result:
