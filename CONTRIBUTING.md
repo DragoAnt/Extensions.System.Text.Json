@@ -11,7 +11,7 @@ git clone https://github.com/DragoAnt/Extensions.System.Text.Json.git
 cd Extensions.System.Text.Json
 ```
 
-You need the .NET SDK pinned in [global.json](./global.json), plus the .NET 8 and .NET 9 runtimes so the tests run for every target framework. Then run the same steps as CI:
+You need the .NET SDK pinned in [global.json](./global.json), plus the .NET 8 runtime so the tests run for every target framework. Then run the same steps as CI:
 
 ```sh
 dotnet restore
@@ -19,7 +19,19 @@ dotnet build -c Release --no-restore
 dotnet test --solution DragoAnt.System.Text.Json.slnx -c Release --no-build
 ```
 
-Tests use xUnit v3 on Microsoft.Testing.Platform v2, with [AwesomeAssertions](https://github.com/AwesomeAssertions/AwesomeAssertions) and Verify snapshots. When a snapshot changes on purpose, review the `*.received.*` file and replace the matching `*.verified.*` file with it. Core tests live in `DragoAnt.System.Text.Json.Observer.Tests.Shared` as abstract classes, each run by a sealed `Run…` class in `DragoAnt.System.Text.Json.Observer.Tests` for every target framework.
+Until DragoAnt.Observer.Core 1.0.0 is on nuget.org, clone [DragoAnt/Observer](https://github.com/DragoAnt/Observer) next to this repository and add `-p:DragoAntObserverLocal=true` to each command (or `-p:DragoAntObserverRoot=<path>/` for another location).
+
+CI runs these steps on Ubuntu and Windows.
+
+The stack:
+
+- [xUnit v3](https://xunit.net/docs/getting-started/v3/cmdline) on [Microsoft.Testing.Platform](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-intro) v2.
+- [AwesomeAssertions](https://github.com/AwesomeAssertions/AwesomeAssertions) for assertions.
+- [Verify](https://github.com/VerifyTests/Verify) snapshots, pinned to [32.0.0](https://www.nuget.org/packages/Verify.XunitV3/32.0.0): later versions are expected to need a paid maintenance subscription, while 32.0.0 is MIT. When a snapshot changes on purpose, review the `*.received.*` file and replace the matching `*.verified.*` file with it.
+- [package validation](https://learn.microsoft.com/dotnet/fundamentals/apicompat/package-validation/overview) on every pack, against the last published release.
+- [BenchmarkDotNet](https://benchmarkdotnet.org/) for performance claims (see Benchmarks below).
+
+Core tests live in `DragoAnt.System.Text.Json.Observer.Tests.Shared` as abstract classes, each run by a sealed `Run…` class in `DragoAnt.System.Text.Json.Observer.Tests` for every target framework.
 
 ### Code in the READMEs is tested
 
@@ -40,7 +52,7 @@ The core library builds with `EnforcePublicApiDocs`: a public member without an 
 
 ### Benchmarks
 
-Benchmarks live in `DragoAnt.System.Text.Json.Observer.Benchmarks` (BenchmarkDotNet):
+Benchmarks live in `DragoAnt.System.Text.Json.Observer.Benchmarks` ([BenchmarkDotNet](https://benchmarkdotnet.org/)):
 
 ```sh
 dotnet run -c Release --project DragoAnt.System.Text.Json.Observer.Benchmarks
