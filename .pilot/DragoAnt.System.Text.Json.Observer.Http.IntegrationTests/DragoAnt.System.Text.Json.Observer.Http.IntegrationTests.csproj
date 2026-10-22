@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>DragoAnt.System.Text.Json.Observer.Http.IntegrationTests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\$(AssemblyName)\**\*.cs" Exclude="..\..\$(AssemblyName)\obj\**;..\..\$(AssemblyName)\bin\**" LinkBase="src" />
+    <Content Include="..\..\$(AssemblyName)\xunit.runner.json" Link="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DragoAnt.System.Text.Json.Observer.Http" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.Compliance.Redaction" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer.Http.IntegrationTests.Host\DragoAnt.System.Text.Json.Observer.Http.IntegrationTests.Host.csproj" />
+  </ItemGroup>
+</Project>

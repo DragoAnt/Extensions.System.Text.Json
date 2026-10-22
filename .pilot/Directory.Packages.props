@@ -1,0 +1,13 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Packages.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- The published version under test: dotnet test -p:PilotVersion=<version>. -->
+  <PropertyGroup>
+    <PilotVersion Condition="'$(PilotVersion)'==''">2.0.0-beta.1</PilotVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="DragoAnt.System.Text.Json.Observer" Version="$(PilotVersion)" />
+    <PackageVersion Include="DragoAnt.System.Text.Json.Observer.Http" Version="$(PilotVersion)" />
+  </ItemGroup>
+</Project>

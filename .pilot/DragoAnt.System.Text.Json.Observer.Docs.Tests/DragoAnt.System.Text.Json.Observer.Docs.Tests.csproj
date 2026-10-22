@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>DragoAnt.System.Text.Json.Observer.Docs.Tests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\$(AssemblyName)\**\*.cs" Exclude="..\..\$(AssemblyName)\obj\**;..\..\$(AssemblyName)\bin\**" LinkBase="src" />
+    <Content Include="..\..\$(AssemblyName)\xunit.runner.json" Link="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DragoAnt.System.Text.Json.Observer" />
+    <PackageReference Include="DragoAnt.System.Text.Json.Observer.Http" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\README.md" Link="docs\README.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The package readme is the one nuget.org shows: read it from the restored package, not the repo. -->
+    <None Include="$([MSBuild]::EnsureTrailingSlash($(NuGetPackageRoot)))dragoant.system.text.json.observer/$(PilotVersion.ToLowerInvariant())/readme.md" Link="docs\package.readme.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\migrating-to-2.0.md" Link="docs\migrating-to-2.0.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

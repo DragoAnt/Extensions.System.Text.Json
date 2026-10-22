@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>DragoAnt.System.Text.Json.Observer.Tests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\$(AssemblyName)\**\*.cs" Exclude="..\..\$(AssemblyName)\obj\**;..\..\$(AssemblyName)\bin\**" LinkBase="src" />
+    <Content Include="..\..\$(AssemblyName)\xunit.runner.json" Link="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DragoAnt.System.Text.Json.Observer" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DragoAnt.System.Text.Json.Observer.Tests.Shared\DragoAnt.System.Text.Json.Observer.Tests.Shared.csproj" />
+  </ItemGroup>
+</Project>

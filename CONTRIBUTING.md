@@ -23,6 +23,8 @@ Until DragoAnt.Observer.Core 1.0.0 is on nuget.org, clone [DragoAnt/Observer](ht
 
 CI runs these steps on Ubuntu and Windows.
 
+To run the same tests against a version published on nuget.org, use the [package pilot](./.pilot/README.md).
+
 The stack:
 
 - [xUnit v3](https://xunit.net/docs/getting-started/v3/cmdline) on [Microsoft.Testing.Platform](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-intro) v2.

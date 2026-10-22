@@ -406,3 +406,6 @@ FodyWeavers.xsd
 
 # Local AI agent context (never committed)
 /.claude/
+
+# Package pilot: an isolated package cache (NUGET_PACKAGES=.pilot/packages)
+/.pilot/packages/

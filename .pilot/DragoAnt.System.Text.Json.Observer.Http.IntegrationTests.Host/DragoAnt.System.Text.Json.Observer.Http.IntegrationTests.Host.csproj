@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>DragoAnt.System.Text.Json.Observer.Http.IntegrationTests.Host</AssemblyName>
+    <IsPackable>False</IsPackable>
+    <IsTestProject>False</IsTestProject>
+    <ExcludeFromCodeCoverage>True</ExcludeFromCodeCoverage>
+    <DragoAntObserverImplicitUsing>false</DragoAntObserverImplicitUsing>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\$(AssemblyName)\**\*.cs" Exclude="..\..\$(AssemblyName)\obj\**;..\..\$(AssemblyName)\bin\**" LinkBase="src" />
+  </ItemGroup>
+</Project>
