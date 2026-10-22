@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>DragoAnt.System.Text.Json.Observer.Tests.Shared</AssemblyName>
+    <IsPackable>False</IsPackable>
+    <IsTestsLibProject>True</IsTestsLibProject>
+    <ExcludeFromCodeCoverage>True</ExcludeFromCodeCoverage>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\$(AssemblyName)\**\*.cs" Exclude="..\..\$(AssemblyName)\obj\**;..\..\$(AssemblyName)\bin\**" LinkBase="src" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DragoAnt.System.Text.Json.Observer" />
+    <PackageReference Include="Bogus" />
+    <PackageReference Include="Verify" />
+    <PackageReference Include="Verify.XunitV3" />
+    <PackageReference Include="Verify.DiffPlex" />
+  </ItemGroup>
+</Project>

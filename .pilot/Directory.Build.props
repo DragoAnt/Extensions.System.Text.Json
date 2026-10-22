@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <DragoAntPilot>true</DragoAntPilot>
+  </PropertyGroup>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+</Project>

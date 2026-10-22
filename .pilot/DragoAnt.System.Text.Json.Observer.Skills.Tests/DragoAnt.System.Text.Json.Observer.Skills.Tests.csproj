@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>DragoAnt.System.Text.Json.Observer.Skills.Tests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\$(AssemblyName)\**\*.cs" Exclude="..\..\$(AssemblyName)\obj\**;..\..\$(AssemblyName)\bin\**" LinkBase="src" />
+    <Content Include="..\..\$(AssemblyName)\xunit.runner.json" Link="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DragoAnt.System.Text.Json.Observer" />
+    <PackageReference Include="DragoAnt.System.Text.Json.Observer.Http" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\skills\**\*.md" Link="skills\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\skills.md" Link="docs\skills.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
