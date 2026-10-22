@@ -61,7 +61,7 @@ internal static class TagMasking
             case StartObject:
             case StartArray:
             case Null:
-                strategy.Mask(new MaskContext(default, kind, tag, options, in walk.Path, index), output);
+                MaskOrStars(default, kind, tag, strategy, output, ref walk, index);
                 return;
             case JsonTokenType.String when reader.HasValueSequence || reader.ValueIsEscaped:
             {
@@ -70,7 +70,7 @@ internal static class TagMasking
                 try
                 {
                     var written = reader.CopyString(buffer);
-                    strategy.Mask(new MaskContext(buffer.AsSpan(0, written), kind, tag, options, in walk.Path, index), output);
+                    MaskOrStars(buffer.AsSpan(0, written), kind, tag, strategy, output, ref walk, index);
                 }
                 finally
                 {
@@ -87,7 +87,7 @@ internal static class TagMasking
                 try
                 {
                     reader.ValueSequence.CopyTo(buffer);
-                    strategy.Mask(new MaskContext(buffer[..length], kind, tag, options, in walk.Path, index), output);
+                    MaskOrStars(buffer[..length], kind, tag, strategy, output, ref walk, index);
                 }
                 finally
                 {
@@ -100,9 +100,21 @@ internal static class TagMasking
                 return;
             }
             default:
-                strategy.Mask(new MaskContext(reader.ValueSpan, kind, tag, options, in walk.Path, index), output);
+                MaskOrStars(reader.ValueSpan, kind, tag, strategy, output, ref walk, index);
                 return;
         }
+    }
+
+    private static void MaskOrStars(scoped ReadOnlySpan<byte> value, ValueKind kind, MaskTag tag, ValueMaskStrategy strategy, JsonMaskValueWriter output, ref JsonWalk walk, long index)
+    {
+        if (value.Length > Math.Max(walk.Options.MaxMaskValueBytes, 0))
+        {
+            walk.ValueTooLarge = true;
+            output.String("***"u8);
+            return;
+        }
+
+        strategy.Mask(new MaskContext(value, kind, tag, walk.Options, in walk.Path, index), output);
     }
 
     public static ValueKind KindOf(JsonTokenType tokenType) => tokenType switch

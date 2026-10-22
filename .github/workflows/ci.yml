@@ -14,11 +14,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Until DragoAnt.Observer.Core 1.0.0 is on nuget.org this job builds it from source: it checks out
+# Until DragoAnt.Observer.Core and DragoAnt.Observer.Conformance 1.0.0-beta.2 are on nuget.org this job builds them from source: it checks out
 # DragoAnt/Observer next to this repository (a PR body line `Observer-Ref: <branch>`, else the branch of
 # the same name, else main)
 # and builds with DragoAntObserverLocal=true. Switch back to the shared dotnet-build.yml caller once
-# the package is published.
+# the packages are published.
 jobs:
   build:
     name: Build and test (Observer from source, ${{ matrix.os }})

@@ -51,7 +51,7 @@ sealed class Order
 
 ## Cut-off JSON and the UTF-8 API
 
-`MaskResult.Status` is `Masked`, `Truncated` (the payload ended early, hit `MaxOutputBytes`, or a string was cut to `MaxValueBytes`), `Invalid` or `Unrecognized`. Whatever the status, the output is valid JSON holding only masked values. The string and the UTF-8 API produce the same output.
+`MaskResult.Status` is `Masked`, `Truncated` (the payload ended early, hit `MaxOutputBytes`, a string was cut to `MaxValueBytes`, or a value longer than `MaxMaskValueBytes` was written as `***` with `ValueTooLarge`), `Invalid` or `Unrecognized`. Whatever the status, the output is valid JSON holding only masked values. The string and the UTF-8 API produce the same output.
 
 ```csharp
 using System.Buffers;

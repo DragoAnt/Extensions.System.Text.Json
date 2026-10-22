@@ -1,7 +1,8 @@
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
+using DragoAnt.Observer.Formats;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Diagnostics.CodeAnalysis;
 using DragoAnt.System.Text.Json.Observer.Builders;
 
 // ReSharper disable MemberCanBePrivate.Global
@@ -135,6 +136,50 @@ public sealed class JsonObserver
         ArgumentNullException.ThrowIfNull(shape);
         var walker = new ShapeWalker(shape, options ?? JsonShapeOptions.Default);
         return new JsonObserver(new JsonObserver<NoContext>(walker.Invoke<NoContext>, walker, hasCommentRules: false));
+    }
+
+    /// <summary>
+    /// Creates an observer from format-neutral rules, so that one declaration masks the same members in JSON and in
+    /// the other formats. A Match rule applies at any depth, a Path rule from the root object, and a Path rule wins over
+    /// a Match rule; under a root array only the Match rules and the unmatched policy apply.
+    /// </summary>
+    /// <remarks>Among rules of one kind, the first that matches wins.</remarks>
+    /// <param name="rules">The rules, see <see cref="MaskRules.Create"/>.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="rules"/> is <c>null</c>.</exception>
+    [Experimental("DAOEXP001", UrlFormat = "https://github.com/DragoAnt/Observer/blob/main/docs/experimental.md")]
+    public static JsonObserver From(MaskRules rules)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        var paths = rules.Rules.Where(r => r.Scope == MaskRuleScope.FromRoot).ToArray();
+        var matches = rules.Rules.Where(r => r.Scope == MaskRuleScope.AnyDepth).ToArray();
+        JsonValuePolicy<NoContext> unmatched = rules.Unmatched;
+        var defaultPolicy = matches.Length == 0
+            ? unmatched
+            : JsonValuePolicy.AnyDepth(b =>
+            {
+                foreach (var rule in matches)
+                {
+                    var pending = b.Match(rule.Levels[0]);
+                    var next = rule.Action == MaskRuleAction.Mask ? pending.Mask(rule.Tag) : pending.Unmasked();
+                    if (rule.CommentRule is not null)
+                    {
+                        next.Comment(rule.CommentKinds, rule.CommentRule);
+                    }
+                }
+            }, unmatched);
+
+        return Any(o =>
+        {
+            foreach (var rule in paths)
+            {
+                var pending = o.Path([.. rule.Levels]);
+                var next = rule.Action == MaskRuleAction.Mask ? pending.Mask(rule.Tag) : pending.Unmasked();
+                if (rule.CommentRule is not null)
+                {
+                    next.Comment(rule.CommentKinds, rule.CommentRule);
+                }
+            }
+        }, _ => { }, defaultPolicy);
     }
 
     /// <summary>
@@ -295,7 +340,7 @@ public sealed class JsonObserver<TContext>
     /// <param name="options">The call's options, for <see cref="ObserverOptions.NameCaseInsensitive"/>.</param>
     /// <returns>The deciding rule, its action, the outcome and the steps that lead there.</returns>
     /// <exception cref="ArgumentException"><paramref name="path"/> is not a concrete JSON path.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="valueKind"/> is not a defined value.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="valueKind"/> is <see cref="ValueKind.Binary"/>, which JSON does not have, or not a defined value.</exception>
     public PathExplanation Explain([StringSyntax(JsonObserver.PathSyntax)] string path, ValueKind valueKind = ValueKind.String, JsonObserverOptions? options = null)
         => _explainer.Explain(path, valueKind, (options ?? JsonObserverOptions.Default).NameCaseInsensitive);
 
@@ -674,28 +719,31 @@ public sealed class JsonObserver<TContext>
             UpdateMaxDepth(propPath.MaxLength);
             if (writer.Stopped)
             {
-                return (MaskStatus.Truncated, reader.BytesConsumed, MaskFlags.OutputCapped);
+                return WithWalkFlags(MaskStatus.Truncated, reader.BytesConsumed, MaskFlags.OutputCapped, propPath.ValueTooLarge);
             }
 
             if (propPath.Stopped)
             {
-                return (MaskStatus.Truncated, reader.BytesConsumed, MaskFlags.InputTruncated);
+                return WithWalkFlags(MaskStatus.Truncated, reader.BytesConsumed, MaskFlags.InputTruncated, propPath.ValueTooLarge);
             }
 
             return HasTrailingData(ref reader, writer, ref propPath)
-                ? (MaskStatus.Truncated, -1, MaskFlags.TrailingData)
-                : (MaskStatus.Masked, -1, MaskFlags.None);
+                ? WithWalkFlags(MaskStatus.Truncated, -1, MaskFlags.TrailingData, propPath.ValueTooLarge)
+                : WithWalkFlags(MaskStatus.Masked, -1, MaskFlags.None, propPath.ValueTooLarge);
         }
         catch (Exception)
         {
             var depth = reader.CurrentDepth >= Math.Max(options.MaxDepth, 1) - 1 ? MaskFlags.Depth : MaskFlags.None;
-            return (MaskStatus.Invalid, reader.BytesConsumed, depth);
+            return WithWalkFlags(MaskStatus.Invalid, reader.BytesConsumed, depth, propPath.ValueTooLarge);
         }
         finally
         {
             propPath.Dispose();
         }
     }
+
+    private static (MaskStatus Status, long FailedAt, MaskFlags Flags) WithWalkFlags(MaskStatus status, long failedAt, MaskFlags flags, bool valueTooLarge) =>
+        valueTooLarge ? (status == MaskStatus.Masked ? MaskStatus.Truncated : status, failedAt, flags | MaskFlags.ValueTooLarge) : (status, failedAt, flags);
 
     /// <summary>
     /// Whether anything but whitespace follows the root, which the reader reports as a second token or an error.

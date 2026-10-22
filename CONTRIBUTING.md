@@ -19,7 +19,7 @@ dotnet build -c Release --no-restore
 dotnet test --solution DragoAnt.System.Text.Json.slnx -c Release --no-build
 ```
 
-Until DragoAnt.Observer.Core 1.0.0 is on nuget.org, clone [DragoAnt/Observer](https://github.com/DragoAnt/Observer) next to this repository and add `-p:DragoAntObserverLocal=true` to each command (or `-p:DragoAntObserverRoot=<path>/` for another location).
+Until DragoAnt.Observer.Core and DragoAnt.Observer.Conformance 1.0.0-beta.2 are on nuget.org, clone [DragoAnt/Observer](https://github.com/DragoAnt/Observer) next to this repository and add `-p:DragoAntObserverLocal=true` to each command (or `-p:DragoAntObserverRoot=<path>/` for another location).
 
 CI runs these steps on Ubuntu and Windows.
 
