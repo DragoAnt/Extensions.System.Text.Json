@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(IsNET8)'=='True'">
-    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">8.0.2</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsVersion Condition="'$(MicrosoftExtensionsVersion)'==''">8.0.3</MicrosoftExtensionsVersion>
     <MicrosoftExtensionsHttpVersion Condition="'$(MicrosoftExtensionsHttpVersion)'==''">8.0.1</MicrosoftExtensionsHttpVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(IsNET9)'=='True'">
@@ -59,6 +59,6 @@
 
   <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(MicrosoftAspNetCoreMvcTestingVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Compliance.Redaction" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.Extensions.Compliance.Redaction" Version="10.11.0" />
   </ItemGroup>
 </Project>
