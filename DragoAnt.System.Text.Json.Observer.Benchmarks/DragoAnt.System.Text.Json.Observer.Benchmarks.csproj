@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="JsonMasking" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" VersionOverride="6.0.4" />
   </ItemGroup>
 
   <ItemGroup>
