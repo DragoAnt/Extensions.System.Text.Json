@@ -64,6 +64,9 @@ public class ExtractBenchmarks
         Check(ctx);
         var dom = JsonDocumentLookup();
         Check(dom);
+#if NET10_0_OR_GREATER
+        Check(RedoxJsonDocumentLookup());
+#endif
         Check(LowerBoundScan());
         ctx = new ExtractContext();
         var masked = _maskAndExtract.Mask(_json, ctx)!;
@@ -134,6 +137,11 @@ public class ExtractBenchmarks
             CustomerId = root.GetProperty("customer").GetProperty("customerId").GetInt32(),
         };
     }
+
+#if NET10_0_OR_GREATER
+    [Benchmark(Description = "REDox JsonDocument.Parse + lookup (bytes, DOM)")]
+    public ExtractContext RedoxJsonDocumentLookup() => Baselines.RedoxExtract(_utf8.AsMemory());
+#endif
 
     [Benchmark(Description = "Lib JsonObserver.Read (bytes, extract only)")]
     public ExtractContext LibraryRead()

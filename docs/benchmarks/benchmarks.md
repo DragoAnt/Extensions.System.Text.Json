@@ -42,6 +42,28 @@ Figures from the raw table below (bytes path = `ReadOnlySpan<byte>` into a reuse
 
 ---
 
+## REDox DOM Benchmarks
+
+REDox 1.0.1 is a `net10.0`-only DOM competitor. Its baselines enable strict value validation and report warm steady-state results only. The suite contains:
+
+- `REDox JsonDocument.Parse + lookup (bytes, DOM)`
+- `REDox JsonDocument.Parse->replace->EncodeToString (DOM)`
+- `REDox JsonDocument.Parse->replace->pooled IBufferWriter (bytes, DOM)`
+
+**Results are pending a run on a quiet machine.** With a sibling checkout of `DragoAnt/Observer`, run:
+
+```sh
+dotnet run -c Release -f net10.0 --project DragoAnt.System.Text.Json.Observer.Benchmarks -p:DragoAntObserverLocal=true -p:DragoAntObserverRoot=../Observer/ -- --filter "*Redox*"
+```
+
+REDox accepts and preserves malformed UTF-8 inside JSON strings even with strict value validation enabled; the correctness probe covers overlong, lone-continuation, and truncated multi-byte sequences. Run it with:
+
+```sh
+dotnet run -c Release -f net10.0 --project DragoAnt.System.Text.Json.Observer.Benchmarks -p:DragoAntObserverLocal=true -p:DragoAntObserverRoot=../Observer/ -- redox-probes
+```
+
+---
+
 ## Full BenchmarkDotNet Results
 
 ```

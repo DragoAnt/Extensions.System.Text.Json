@@ -11,6 +11,11 @@ switch (args.FirstOrDefault())
     case "soak":
         Soak.Run(args.Skip(1).ToArray());
         break;
+#if NET10_0_OR_GREATER
+    case "redox-probes":
+        Probes.RunRedox();
+        break;
+#endif
     default:
         BenchmarkSwitcher.FromAssembly(typeof(MaskBenchmarks).Assembly).Run(args);
         break;

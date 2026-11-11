@@ -14,12 +14,14 @@ public sealed class AuditConfig : ManualConfig
     public AuditConfig()
     {
         var fast = Environment.GetEnvironmentVariable("AUDIT_FAST") == "1";
-        AddJob(Job.Default
+        var smoke = Environment.GetEnvironmentVariable("AUDIT_SMOKE") == "1";
+        var job = smoke ? Job.Dry : Job.Default;
+        AddJob(job
             .WithToolchain(InProcessEmitToolchain.Instance)
             .WithLaunchCount(1)
-            .WithWarmupCount(fast ? 2 : 3)
-            .WithIterationCount(fast ? 5 : 8)
-            .WithId("Audit"));
+            .WithWarmupCount(smoke ? 1 : fast ? 2 : 3)
+            .WithIterationCount(smoke ? 1 : fast ? 5 : 8)
+            .WithId(smoke ? "Smoke" : "Audit"));
         AddDiagnoser(MemoryDiagnoser.Default);
         AddExporter(CsvExporter.Default);
         AddColumn(BenchmarkDotNet.Columns.StatisticColumn.Median);
@@ -76,6 +78,14 @@ public class MaskBenchmarks
         {
             throw new InvalidOperationException("Library output leaks a sensitive value; benchmark setup is wrong.");
         }
+
+#if NET10_0_OR_GREATER
+        var redoxMasked = Baselines.RedoxMask(_json);
+        if (redoxMasked.Contains(Payloads.SensitiveMarker, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("REDox output leaks a sensitive value; benchmark setup is wrong.");
+        }
+#endif
     }
 
     [GlobalCleanup]
@@ -116,6 +126,19 @@ public class MaskBenchmarks
 
     [Benchmark(Description = "DOM JsonNode.Parse->replace->ToJsonString")]
     public string Dom() => Baselines.Dom(_json);
+
+#if NET10_0_OR_GREATER
+    [Benchmark(Description = "REDox JsonDocument.Parse->replace->EncodeToString (DOM)")]
+    public string RedoxDom() => Baselines.RedoxMask(_json);
+
+    [Benchmark(Description = "REDox JsonDocument.Parse->replace->pooled IBufferWriter (bytes, DOM)")]
+    public int RedoxDomBytes()
+    {
+        ResetOutput();
+        Baselines.RedoxMask(_utf8.AsMemory(), _output);
+        return _output.WrittenCount;
+    }
+#endif
 
     [Benchmark(Description = "JsonMasking 2.0.0 (DOM ThiagoBarradas)")]
     public string JsonMaskingLib() => _json.MaskFields(_jsonMaskingPatterns, Baselines.Mask);

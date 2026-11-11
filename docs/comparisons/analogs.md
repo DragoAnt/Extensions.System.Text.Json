@@ -22,7 +22,7 @@ A common question is: **"Should we switch to an existing open-source library, or
 | Category | Typical Libraries | How it works | Suitability for HTTP Body Logging |
 | :--- | :--- | :--- | :--- |
 | **Streaming Reader → Writer** | **[DragoAnt.System.Text.Json.Observer](https://github.com/DragoAnt/Extensions.System.Text.Json)** | Single forward pass `Utf8JsonReader` to `Utf8JsonWriter` over UTF-8 bytes. | **Optimal.** Small constant allocation, linear $O(N)$ speed, stream-friendly. |
-| **DOM-based Tree Walk** | [ThiagoBarradas/jsonmasking](https://github.com/ThiagoBarradas/jsonmasking), [sw0/Slin.Masking](https://github.com/sw0/Slin.Masking), [raramer/Felt.Redactor.Json](https://github.com/raramer/Felt.Redactor.Json) | Parses JSON string into a DOM (`JsonNode`, `JsonElement`, `JToken`), traverses nodes, replaces values, re-serializes. | **Poor.** Allocates 4× payload size, causes heavy GC Gen0/Gen1/Gen2 churn. |
+| **DOM-based Tree Walk** | [CAPCOM REDox](https://github.com/CAPCOM-TD-OSS/REDox), [ThiagoBarradas/jsonmasking](https://github.com/ThiagoBarradas/jsonmasking), [sw0/Slin.Masking](https://github.com/sw0/Slin.Masking), [raramer/Felt.Redactor.Json](https://github.com/raramer/Felt.Redactor.Json) | Parses JSON into a token or object DOM, traverses nodes, replaces values, re-serializes. | **Poor for bounded HTTP logging.** Holds the complete input and DOM; cannot emit a safe partial result. |
 | **DTO Serialization Converters** | [myarichuk/Json.Masker](https://github.com/myarichuk/Json.Masker), [Byndyusoft/Byndyusoft.MaskedSerialization](https://github.com/Byndyusoft/Byndyusoft.MaskedSerialization), [luizaes/json-data-masking](https://github.com/luizaes/json-data-masking) | Modifies `JsonSerializer` type info or converters when serializing C# DTOs. | **Inapplicable to raw streams.** Requires 2× roundtrips (deserialize bytes → object → serialize masked). |
 | **Log Destructuring / Regex** | [destructurama/attributed](https://github.com/destructurama/attributed), [serilog-contrib/Serilog.Enrichers.Sensitive](https://github.com/serilog-contrib/Serilog.Enrichers.Sensitive) | Reflection over `{@Object}` parameters or regex scanning over logged message text. | **Unsafe & slow.** Regex misses escaped quotes, non-string primitives, and has CPU backtracking overhead. |
 | **Value / Span Redactors** | [dotnet/extensions (Compliance.Redaction)](https://github.com/dotnet/extensions), [nikouu/ZeroRedact](https://github.com/nikouu/ZeroRedact) | Redacts a single string or span value based on taxonomy/data classification. | **Incomplete.** Cannot parse JSON structures or match property paths. |
@@ -31,22 +31,24 @@ A common question is: **"Should we switch to an existing open-source library, or
 
 ## Detailed Comparison Matrix
 
-| Feature | **DragoAnt Observer 2.0** | **MS Compliance Redaction** | **JsonMasking 2.0.0** | **Slin.Masking 0.2.11** | **Json.Masker.STJ 1.1.25** |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Links** | [📦 nuget](https://www.nuget.org/packages/DragoAnt.System.Text.Json.Observer) | [📦 nuget](https://www.nuget.org/packages/Microsoft.Extensions.Compliance.Redaction) · [🔗 source](https://github.com/dotnet/extensions) | [📦 nuget](https://www.nuget.org/packages/JsonMasking) · [🔗 source](https://github.com/ThiagoBarradas/jsonmasking) | [📦 nuget](https://www.nuget.org/packages/Slin.Masking) · [🔗 source](https://github.com/sw0/Slin.Masking) | [📦 nuget](https://www.nuget.org/packages/Json.Masker.SystemTextJson) · [🔗 source](https://github.com/myarichuk/Json.Masker) |
-| **NuGet Downloads** | ~1.4k | **~4.56M** | **~876k** | ~32k | ~4.8k |
-| **Author / Vendor** | DragoAnt | Microsoft | Thiago Barradas | wizardlsw | Michael Yarichuk |
-| **License** | **MIT** | **MIT** | **MIT** | ⚠️ **GPL-3.0** | **MIT** |
-| **Input Type** | `ReadOnlySpan<byte>`, `string` | `ReadOnlySpan<char>` | `string` | `string`, `object` | C# DTO |
-| **Processing Engine** | `Utf8JsonReader` → `Utf8JsonWriter` | Custom `Redactor` | `JsonNode.Parse` (DOM) | `JsonElement` (DOM) | STJ `JsonTypeInfoModifier` |
-| **[Streaming UTF-8 API](../benchmarks/benchmarks.md)**<br>*(example: [`BytesApiTests.cs`](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/BytesApiTests.cs))* | **Yes** (`IBufferWriter<byte>`) | ✅ Yes (scalar values) | ❌ No | ❌ No | ❌ No |
-| **[Allocations (8 KB payload)](../benchmarks/benchmarks.md)** | **~0.2–7.6 KB** (bytes path) | N/A (value only) | ~87 KB – 112 KB | ~45 KB – 90 KB | N/A (requires DTO) |
-| **[Allocations (64 KB payload)](../benchmarks/benchmarks.md)** | **~0.2–61 KB** (bytes path) | N/A (value only) | ~710 KB – 924 KB (LOH) | ~350 KB – 700 KB (LOH) | N/A (requires DTO) |
-| **[Pre-encoded UTF-8 Matching](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/NameMatchingTests.cs)** | **Yes** (zero name allocations) | N/A | ❌ No (`Regex` per property) | ❌ No (strings) | N/A |
-| **[Truncated JSON & Container Synthesis](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/BytesApiTests.cs#L63-L135)** | **Fail-closed** (synthesizes closing brackets) | N/A | ❌ Throws `JsonException` | 🚨 **Leaks raw body unmasked** | N/A |
-| **[Type-Agnostic Masking (`MaskAny`)](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/WholeValueMaskingTests.cs)** | **Yes** (string, num, bool, obj, arr) | N/A | ❌ String values only | Partial | Per property attribute |
-| **[Mask & Extract in 1 Pass](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/MaskAndExtractTests.cs)** | **Yes** (one pass) | ❌ No | ❌ No | ❌ No | ❌ No |
-| **[HTTP Body DelegatingHandler](../../DragoAnt.System.Text.Json.Observer.Http.Tests/JsonBodyLoggingHandlerTests.cs)** | **Yes** (`.Observer.Http`) | ❌ (Header/path only) | ❌ No | ❌ No | ❌ No |
+| Feature | **DragoAnt Observer 2.0** | **REDox 1.0.1** | **MS Compliance Redaction** | **JsonMasking 2.0.0** | **Slin.Masking 0.2.11** | **Json.Masker.STJ 1.1.25** |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Links** | [📦 nuget](https://www.nuget.org/packages/DragoAnt.System.Text.Json.Observer) | [📦 nuget](https://www.nuget.org/packages/CAPCOM.REDox) · [🔗 source](https://github.com/CAPCOM-TD-OSS/REDox) | [📦 nuget](https://www.nuget.org/packages/Microsoft.Extensions.Compliance.Redaction) · [🔗 source](https://github.com/dotnet/extensions) | [📦 nuget](https://www.nuget.org/packages/JsonMasking) · [🔗 source](https://github.com/ThiagoBarradas/jsonmasking) | [📦 nuget](https://www.nuget.org/packages/Slin.Masking) · [🔗 source](https://github.com/sw0/Slin.Masking) | [📦 nuget](https://www.nuget.org/packages/Json.Masker.SystemTextJson) · [🔗 source](https://github.com/myarichuk/Json.Masker) |
+| **NuGet Downloads** | ~1.4k | Not measured | **~4.56M** | **~876k** | ~32k | ~4.8k |
+| **Author / Vendor** | DragoAnt | CAPCOM | Microsoft | Thiago Barradas | wizardlsw | Michael Yarichuk |
+| **License** | **MIT** | **Apache-2.0** | **MIT** | **MIT** | ⚠️ **GPL-3.0** | **MIT** |
+| **Target Framework** | `net8.0`, `net10.0` | `net10.0` only | `net462`, `net8.0`+ | .NET Standard 2.0 | .NET Standard 2.0 | `net8.0` |
+| **Input Type** | `ReadOnlySpan<byte>`, `string` | `string`, UTF-8 memory, `Stream` | `ReadOnlySpan<char>` | `string` | `string`, `object` | C# DTO |
+| **Processing Engine** | `Utf8JsonReader` → `Utf8JsonWriter` | Mutable token DOM | Custom `Redactor` | `JsonNode.Parse` (DOM) | `JsonElement` (DOM) | STJ `JsonTypeInfoModifier` |
+| **[Streaming UTF-8 API](../benchmarks/benchmarks.md)**<br>*(example: [`BytesApiTests.cs`](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/BytesApiTests.cs))* | **Yes** (`IBufferWriter<byte>`) | ❌ No public pull reader; `Parse(Stream)` buffers all input | ✅ Yes (scalar values) | ❌ No | ❌ No | ❌ No |
+| **[Allocations (8 KB payload)](../benchmarks/benchmarks.md)** | **~0.2–7.6 KB** (bytes path) | Results pending | N/A (value only) | ~87 KB – 112 KB | ~45 KB – 90 KB | N/A (requires DTO) |
+| **[Allocations (64 KB payload)](../benchmarks/benchmarks.md)** | **~0.2–61 KB** (bytes path) | Results pending | N/A (value only) | ~710 KB – 924 KB (LOH) | ~350 KB – 700 KB (LOH) | N/A (requires DTO) |
+| **[Pre-encoded UTF-8 Matching](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/NameMatchingTests.cs)** | **Yes** (zero name allocations) | DOM property lookup | N/A | ❌ No (`Regex` per property) | ❌ No (strings) | N/A |
+| **[Truncated JSON & Container Synthesis](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/BytesApiTests.cs#L63-L135)** | **Fail-closed** (synthesizes closing brackets) | ❌ No bounded partial writer | N/A | ❌ Throws `JsonException` | 🚨 **Leaks raw body unmasked** | N/A |
+| **UTF-8 validation on parse** | **Yes** | ❌ No, including strict value validation | N/A | STJ validation | STJ validation | STJ validation |
+| **[Type-Agnostic Masking (`MaskAny`)](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/WholeValueMaskingTests.cs)** | **Yes** (string, num, bool, obj, arr) | Yes (DOM mutation adapter) | N/A | ❌ String values only | Partial | Per property attribute |
+| **[Mask & Extract in 1 Pass](../../DragoAnt.System.Text.Json.Observer.Tests.Shared/MaskAndExtractTests.cs)** | **Yes** (one pass) | ❌ No (parse then DOM traversal) | ❌ No | ❌ No | ❌ No | ❌ No |
+| **[HTTP Body DelegatingHandler](../../DragoAnt.System.Text.Json.Observer.Http.Tests/JsonBodyLoggingHandlerTests.cs)** | **Yes** (`.Observer.Http`) | ❌ No | ❌ (Header/path only) | ❌ No | ❌ No | ❌ No |
 
 ---
 
